@@ -9,6 +9,9 @@
 - **With every change you commit:** bump `__version__` (major.minor.patch: patch for fixes, minor for new
   features such as a new visitor or item, major for a big rework) and add a `## <version>` section at the top
   of `CHANGELOG.md` saying what changed. `tests/test_pixelfox.py` checks the two match.
+- This matters for more than record keeping: `update.ps1` (run by `start.ps1`) only installs an update when
+  the version on GitHub's `main` is higher than the one on the computer. Forget the bump and nobody gets it.
+  Keep `__version__ = "x.y.z"` in exactly that form; the updater reads it with a pattern.
 
 ## Branches: push straight to main, no other branches
 

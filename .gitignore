@@ -1,5 +1,7 @@
 # Your settings (which foxes and items are out, where the tree stands)
 user-data/
+# Put an empty file with this name in the app's folder to stop it updating itself
+no-update
 __pycache__/
 *.pyc
 *.log

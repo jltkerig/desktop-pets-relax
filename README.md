@@ -16,6 +16,10 @@ Double-click **Pixel Fox.cmd** (or run `.\start.ps1` in PowerShell).
 It installs PySide6 and Pillow the first time (just for you, if installing for everyone isn't allowed),
 then runs with no console window. Starting it again while it's running does nothing.
 
+**Updates:** each time you start it, it first checks GitHub for a newer version and installs it, keeping
+your settings. If you're offline it just starts the version you have. To turn this off, put an empty file
+named `no-update` in the Pixel Fox folder. The current version shows when you hover over the tray icon.
+
 ## Works on
 
 - **Windows 10 and Windows 11**, with **Python 3.9 or newer**, from python.org, the Microsoft Store or the
@@ -57,6 +61,7 @@ Clicks on empty parts of the screen go straight through to your desktop and wind
 
 ```
 pixelfox.py        start here
+start.ps1          checks for updates (update.ps1), installs what's needed, starts it
 pet/world.py       everything on the desktop, what appears when, how things meet
 pet/fox.py         a fox's moods (playful, bored, sleepy; no hunger) and how it picks what to do
 pet/items.py       the oak, falling leaves, acorns, the squirrel's dirt mound

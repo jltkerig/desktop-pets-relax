@@ -854,6 +854,15 @@ class Version(unittest.TestCase):
         self.assertRegex(pet.__version__, r"^\d+\.\d+\.\d+$")
         self.assertIn(f"## {pet.__version__}", (ROOT / "CHANGELOG.md").read_text(encoding="utf-8"))
 
+    def test_the_updater_can_read_the_version(self):
+        import pet
+        import re
+        script = (ROOT / "update.ps1").read_text(encoding="utf-8")
+        pattern = re.search(r"-match '(.+?)'", script).group(1)  # the pattern update.ps1 uses
+        found = re.search(pattern, (ROOT / "pet" / "__init__.py").read_text(encoding="utf-8"))
+        self.assertEqual(found.group(1), pet.__version__)
+        self.assertIn("Update-PixelFox", (ROOT / "start.ps1").read_text(encoding="utf-8"))
+
 
 if __name__ == "__main__":
     unittest.main()

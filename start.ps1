@@ -1,6 +1,18 @@
 # Starts Pixel Fox with no console window. Run it again any time; a second copy just exits.
+# First it checks GitHub for a newer version and installs it (see update.ps1). -NoUpdate skips that.
+param([switch]$NoUpdate)
 $ErrorActionPreference = "Stop"
 $ProjectPath = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+if (-not $NoUpdate -and (Test-Path (Join-Path $ProjectPath "update.ps1"))) {
+    . (Join-Path $ProjectPath "update.ps1")
+    if (Update-PixelFox $ProjectPath) {
+        # start again with the freshly updated start.ps1, in case it changed too
+        & (Join-Path $ProjectPath "start.ps1") -NoUpdate
+        return
+    }
+}
+
 . (Join-Path $ProjectPath "find-python.ps1")
 $PythonPath = Find-Python
 if (-not $PythonPath) { throw "Python was not found. Install Python 3.12+ and try again." }

@@ -3,6 +3,14 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.2.0
+
+- **Updates itself:** starting Pixel Fox (Pixel Fox.cmd or start.ps1) first checks GitHub for a newer version
+  and installs it, then starts. A git clone is updated with `git pull`; a downloaded ZIP by downloading the
+  newest ZIP over the top. Settings in `user-data` are kept. Offline or anything going wrong: it just starts
+  the version you have. Skipped while Pixel Fox is running, or if a file named `no-update` is in its folder,
+  or with `.\start.ps1 -NoUpdate`. See `update.ps1`.
+
 ## 1.1.2
 
 - `CLAUDE.md`: Claude sessions push straight to `main`; a pull request (merged at once) only if that's refused.

@@ -19,7 +19,7 @@ class Tree(Thing):
 
     def update(self, dt):
         self.shaking = max(0.0, self.shaking - dt)
-        super().update(dt * (7 if self.shaking else 1))  # a shake makes the crown rustle fast
+        super().update(dt * (7 if self.shaking else 1 + self.world.wind * 6))  # shaken, or tossed by the wind
 
     def click(self):
         """Shake the tree: a flurry of leaves, and sometimes an acorn."""
@@ -70,16 +70,25 @@ class Leaf(Thing):
         return self.landed_for is None
 
     def update(self, dt):
-        s = self.world.scale
+        w = self.world
+        s = w.scale
+        blow = w.wind * w.wind_dir
         if self.falling:
-            super().update(dt)
-            self.phase += dt * 2.2
-            self.x += math.cos(self.phase) * self.sway * s * dt
-            self.y += self.fall * s * dt
-            if self.y >= self.world.ground - 1:
-                self.y = self.world.ground - 1
+            super().update(dt * (1 + w.wind * 2))  # tumbles faster in the wind
+            self.phase += dt * (2.2 + w.wind * 3)
+            self.x += (math.cos(self.phase) * self.sway + blow * 150) * s * dt
+            self.y += (self.fall - w.wind * 6 * math.sin(self.phase * 1.7)) * s * dt
+            if self.y >= w.ground - 1:
+                self.y = w.ground - 1
                 self.landed_for = 0.0
+            if self.x < -40 or self.x > w.width + 40:
+                self.gone = True  # blown away off the screen
         else:
+            if w.wind > 0.55 and w.rng.random() < dt * w.wind * 1.2:
+                self.landed_for = None             # a gust picks it up again
+                self.y -= 6 * s
+                self.alpha = 1.0
+                return
             self.landed_for += dt
             if self.landed_for > self.rest:
                 self.alpha -= dt / 3
@@ -283,7 +292,7 @@ class Prop(Thing):
             self.anim.play(reaction)
 
     def update(self, dt):
-        super().update(dt)
+        super().update(dt * (1 + self.world.wind * 4))
         if self.anim.name != self.variant and self.anim.done:
             self.anim.play(self.variant)  # back to normal
 
@@ -320,7 +329,7 @@ class Corn(Thing):
         name = f"corn_{self.stage}"
         if self.anim.name != name:
             self.anim.name = name
-        super().update(dt)
+        super().update(dt * (1 + self.world.wind * 5))  # the stalks thrash in a gale
 
 
 class Den(Thing):

@@ -707,5 +707,47 @@ class DiscordInUse(unittest.TestCase):
         self.assertFalse(world.of("message"))
 
 
+class Blustery(unittest.TestCase):
+    def test_a_blustery_spell_gusts_then_dies_down(self):
+        world, clock = make_world(orange=False, grey=False)
+        self.assertEqual(world.wind, 0.0)
+        world.blustery(minutes=2)
+        strongest = 0.0
+        for _ in range(130 * 10):
+            run(world, clock, 0.1, fps=10)
+            strongest = max(strongest, world.wind)
+        self.assertGreater(strongest, 0.6)
+        run(world, clock, 30, fps=10)
+        self.assertLess(world.wind, 0.05)  # calm again
+
+    def test_leaves_blow_downwind_and_more_of_them_fall(self):
+        from pet.items import Leaf
+        world, clock = make_world(orange=False, grey=False)
+        world.timers["leaf"] = 0
+        calm = world.add(Leaf(world, 900.0, 200.0, "red"))
+        calm.sway = 0
+        run(world, clock, 3, fps=10)
+        calm_drift = calm.x - 900
+        world.blustery(minutes=5)
+        world.wind_dir = 1
+        world._gust_phase = 20.0  # straight into the thick of it
+        world.wind = 0.9
+        windy = world.add(Leaf(world, 900.0, 200.0, "red"))
+        windy.sway = 0
+        run(world, clock, 3, fps=10)
+        self.assertGreater(windy.x - 900, calm_drift + 200)
+        self.assertGreater(len(world.of("leaf")), 5)
+
+    def test_blustery_days_happen_by_themselves_sometimes(self):
+        started = 0
+        for seed in range(12):
+            world, clock = make_world(orange=False, grey=False, seed=seed)
+            self.assertGreater(world.weather_timer, 10 * 60)  # never straight away
+            world.weather_timer = 0.5                          # skip ahead to the next chance of wind
+            run(world, clock, 1, fps=10)
+            started += world.blustery_left > 0
+        self.assertTrue(2 <= started <= 11)  # some of the time, not every time
+
+
 if __name__ == "__main__":
     unittest.main()

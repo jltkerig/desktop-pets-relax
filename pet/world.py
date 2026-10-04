@@ -1,5 +1,6 @@
 """Everything on the desktop and the rules between them. No Qt here, so it can be tested."""
 import datetime
+import math
 import random
 
 from pet import daylight, seasons
@@ -23,6 +24,10 @@ class World:
         self.cursor_still = 0.0
         self.timers = {"leaf": 1.0, "acorn": self.rng.uniform(20, 50), "visitor": self.rng.uniform(25, 60)}
         self.paused = False
+        self.wind = 0.0             # 0 calm .. 1 a strong gust
+        self.wind_dir = 1           # which way it blows: 1 left to right, -1 right to left
+        self.blustery_left = 0.0    # seconds of blustery weather still to come
+        self.weather_timer = self.rng.uniform(15 * 60, 60 * 60)  # until the next chance of a blustery spell
         self.seams = list(seams)
         self.dirty = False  # settings changed here (pumpkins planted); the window saves them
         # self.seams: where one monitor ends and the next begins, along the strip
@@ -226,20 +231,52 @@ class World:
             moved = abs(cursor[0] - self.cursor[0]) + abs(cursor[1] - self.cursor[1]) > 3
             self.cursor_still = 0.0 if moved else self.cursor_still + dt
             self.cursor = cursor
+        self._weather(dt)
         self._spawn(dt)
         for thing in list(self.things):
             thing.update(dt)
         self.things = [t for t in self.things if not t.gone]
+
+    def blustery(self, minutes=None):
+        """Start a blustery spell now (a few minutes of gusty wind)."""
+        self.blustery_left = (minutes or self.rng.uniform(3, 8)) * 60
+        self.wind_dir = self.rng.choice((-1, 1))
+        self._gust_phase = 0.0
+
+    def _weather(self, dt):
+        """Every so often (about once in an hour or two) the wind gets up for a few minutes, in gusts."""
+        self.weather_timer -= dt
+        if self.weather_timer <= 0:
+            self.weather_timer = self.rng.uniform(20 * 60, 70 * 60)
+            if self.blustery_left <= 0 and self.rng.random() < 0.6:
+                self.blustery()
+        if self.blustery_left > 0:
+            self.blustery_left -= dt
+            self._gust_phase = getattr(self, "_gust_phase", 0.0) + dt
+            p = self._gust_phase
+            # gusts come and go: a few slow waves on top of each other, never quite still
+            gust = 0.55 + 0.25 * math.sin(p * 0.9) + 0.2 * math.sin(p * 2.3 + 1) + 0.1 * math.sin(p * 5.1)
+            ease = min(1.0, p / 8, self.blustery_left / 8)  # builds up and dies away gently
+            target = max(0.0, min(1.0, gust)) * ease
+        else:
+            target = 0.0
+        self.wind += (target - self.wind) * min(1.0, dt * 2)
 
     def _spawn(self, dt):
         rng, tree = self.rng, self.tree()
         for key in self.timers:
             self.timers[key] -= dt
         if tree is not None and self.timers["leaf"] <= 0:
-            self.timers["leaf"] = rng.uniform(0.7, 2.6)
-            if len(self.of("leaf")) < 28:
+            # the wind strips leaves off the oak much faster
+            self.timers["leaf"] = rng.uniform(0.7, 2.6) / (1 + self.wind * 6)
+            if len(self.of("leaf")) < 28 + int(self.wind * 30):
                 x, y = tree.crown_point()
                 self.add(Leaf(self, x, y, rng.choice(LEAF_COLOURS)))
+        if self.wind > 0.4 and self.season == "autumn" and rng.random() < dt * self.wind * 1.5 and \
+                len(self.of("leaf")) < 60:
+            # leaves blowing in from somewhere off the screen, on the upwind side
+            x = -20.0 if self.wind_dir > 0 else self.width + 20.0
+            self.add(Leaf(self, x, self.ground - rng.uniform(40, 260) * self.scale, rng.choice(LEAF_COLOURS)))
         if tree is not None and self.timers["acorn"] <= 0:
             self.timers["acorn"] = rng.uniform(40, 120)
             if len(self.of("acorn")) < 4:
@@ -470,8 +507,8 @@ class World:
         """Follow the friend on a little stroll, then sit down beside it."""
         apart = self._together(fox, friend)
         stroll = max(60.0, min(self.width - 60.0, friend.x + self.rng.choice((-1, 1)) * self.rng.uniform(120, 260) * self.scale))
-        friend.do(Step("walk", to_x=stroll, speed=WALK), Step("idle", 4.0), Step("look"))
-        fox.do(Step("look", face=friend.x), Step("walk", follow=friend, speed=WALK * 1.15),
+        friend.do(Step("walk", to_x=stroll, speed=WALK), Step("idle", 8.0), Step("look"))
+        fox.do(Step("look", face=friend.x), Step("trot", follow=friend, speed=TROT),
                Step("idle", 4.0, face=friend.x, then=apart))
 
     def watch_friend(self, fox, friend):

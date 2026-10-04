@@ -146,6 +146,7 @@ class Fox(Thing):
             self.anim.update(dt)
             return
         self._notice_leaves(dt)
+        self._notice_wind(dt)
         self._notice_discord(dt)
         if self.step is None:
             if not self.plan:
@@ -160,6 +161,15 @@ class Fox(Thing):
     def up_high(self):
         """Standing on top of something (barrels, a haystack)."""
         return self.y < self.world.ground - 1 and not self.held and not self.vy
+
+    def _notice_wind(self, dt):
+        """A strong gust: the fox hunkers down, ears back, until it passes."""
+        w = self.world
+        if w.wind < 0.75 or self.asleep or self.held or self.vy or self.up_high or self.carrying is not None:
+            return
+        if self.step is not None and self.step.anim in self.CALM and self.rng.random() < dt * 0.25:
+            self.do(Step("crouch", self.rng.uniform(1.5, 3.0), face=self.x - w.wind_dir * 50),
+                    Step("look"), Step("happy", 0.8))
 
     def _notice_discord(self, dt):
         """You're chatting on Discord: very tempting. It may leave what it's doing (even a nap) to steal."""
@@ -176,7 +186,7 @@ class Fox(Thing):
             return
         if self.step is not None and self.step.anim not in self.CALM:
             return
-        if self.rng.random() < dt * (0.04 + self.playful * 0.12):  # now and then, not every leaf
+        if self.rng.random() < dt * (0.04 + self.playful * 0.12) * (1 + self.world.wind * 3):  # more in the wind
             leaf = self.world.leaf_near(self, 700)
             if leaf is not None:
                 self.world.chase_leaf(self, leaf)
@@ -233,7 +243,7 @@ class Fox(Thing):
                 if abs(distance) > gap:
                     move = min(abs(distance) - gap, step.speed * self.world.scale * dt)
                     self.x += move if distance > 0 else -move
-                elif target.kind == "fox" and (target.step is None or target.step.anim != "walk"):
+                elif target.kind == "fox" and (target.step is None or target.step.anim not in ("walk", "trot")):
                     finished = True  # caught up with a friend who has stopped: done following
                 elif target.kind == "message":
                     finished = True  # reached the message

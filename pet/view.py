@@ -541,6 +541,7 @@ class ToyBox:
         if self.world.taskbar_spots:
             m.addAction("Dig up a taskbar treasure", self._dig)
         m.addAction("Zoomies!", self._zoomies)
+        m.addAction("Make it blustery", lambda: self.world.blustery())
         m.addAction("Steal a Discord message", self._steal_discord)
         visit = m.addMenu("Invite a visitor")
         for kind in seasons.VISITORS.get(self.world.season, ()):

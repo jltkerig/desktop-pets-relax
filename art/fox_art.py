@@ -133,7 +133,8 @@ def stand(c, step=0.0, bob=0.0, tail_lift=0.0, swish=0.0, eyes="open", head_dx=0
     c.ellipse(41, y + 1.5, 4.2, 4.6, "white", angle=-10)
     c.ellipse(36, y + 4.5, 4.0, 1.8, "white", bias=-0.25, clip=lambda px, py: py >= y + 3.5)
     # tail: grows out of the rump, held out behind and a little up
-    tail(c, (19, y - 1.5), (4, y - 2 - tail_lift * 4 + swish), (-8 + swish * 0.3, y - 7 - tail_lift * 7 + swish * 1.5),
+    # carried level behind, drooping gently in the middle; swish sways it up and down
+    tail(c, (19, y - 1), (5, y + 4 - tail_lift * 4 + swish * 0.6), (-8, y + 1 - tail_lift * 7 + swish * 1.4),
          thick=3.8)
     # near legs
     leg(c, (24, y + 3), (23 + stride * s2 * 0.6, GROUND - lift(step * 2 * math.pi + math.pi)))

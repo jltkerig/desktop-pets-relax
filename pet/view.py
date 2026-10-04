@@ -538,8 +538,13 @@ class ToyBox:
         if not items:
             disabled = m.addAction("Nothing for this season yet")
             disabled.setEnabled(False)
-        if self.world.tree() is not None:
+        if self.world.tree() is not None and self.world.season == "autumn":
             m.addAction("Shake down an acorn", lambda: self.world.drop_acorn(self.world.tree()))
+        if self.world.season == "winter":
+            snow = m.addAction("Snow on the oak")
+            snow.setCheckable(True)
+            snow.setChecked(self.world.snowy)
+            snow.toggled.connect(self._set_snow)
         if self.world.of("pumpkin"):
             m.addAction("Plant new pumpkins", self._replant)
         if self.world.of("corn"):
@@ -553,7 +558,8 @@ class ToyBox:
         for kind in seasons.VISITORS.get(self.world.season, ()):
             label = {"jay": "Blue jay", "woolly": "Woolly bear caterpillar", "migrants": "Geese flying south",
                      "geese": "Geese stopping by to honk", "squirrel": "Squirrel",
-                     "turkeys": "Wild turkeys", "crows": "Crows"}.get(kind, kind.title())
+                     "turkeys": "Wild turkeys", "crows": "Crows", "junebug": "June beetle",
+                     "ladybug": "Ladybug", "cicada": "Cicada"}.get(kind, kind.title())
             visit.addAction(label, lambda k=kind: self.world.invite_visitor(k))
 
         m.addSeparator()
@@ -629,6 +635,10 @@ class ToyBox:
 
     def _replant_corn(self):
         self.world.plant_corn(replant=True)
+        save.store(self.settings)
+
+    def _set_snow(self, on):
+        self.settings["snow"] = bool(on)
         save.store(self.settings)
 
     def _replant(self):

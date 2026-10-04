@@ -30,6 +30,7 @@ DEFAULTS = {
               "barrels": {"out": True, "x": None}, "haystack": {"out": True, "x": None}},
     "mischief": {"discord": True, "treasure": True},  # Discord message stealing, taskbar treasure digging
     "season": "auto",
+    "snow": "auto",  # snow on the winter oak: "auto" (some days), or true / false as chosen from the tray menu
     "scale": 2,
 }
 
@@ -42,7 +43,7 @@ def load(path=None):
         saved = {}
     data = json.loads(json.dumps(DEFAULTS))  # a deep copy
     if isinstance(saved, dict):
-        for key in ("season", "scale"):
+        for key in ("season", "scale", "snow"):
             if key in saved:
                 data[key] = saved[key]
         for key in ("foxes", "items", "mischief"):
@@ -54,6 +55,8 @@ def load(path=None):
         data["season"] = "auto"
     if data["scale"] not in (1, 2, 3):
         data["scale"] = 2
+    if data["snow"] not in ("auto", True, False):
+        data["snow"] = "auto"
     return data
 
 

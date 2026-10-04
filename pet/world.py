@@ -6,7 +6,7 @@ import random
 from pet import daylight, seasons
 from pet.fox import TROT, WALK, ZOOM, Fox, Step
 from pet.items import Acorn, Climbable, Corn, CornCob, Den, Leaf, Message, Prop, Pumpkin, Treasure, Tree
-from pet.visitors import Goose, Jay, Squirrel, Woolly, crow_party, migrating_v, turkey_flock
+from pet.visitors import Beetle, Cicada, Goose, Jay, Squirrel, Woolly, crow_party, migrating_v, turkey_flock
 
 LEAF_COLOURS = ("red", "orange", "yellow", "brown")
 
@@ -57,6 +57,15 @@ class World:
     def season(self):
         chosen = self.settings.get("season", "auto")
         return seasons.season_for(self.now().date()) if chosen == "auto" else chosen
+
+    @property
+    def snowy(self):
+        """Is there snow on the oak? You can choose from the tray menu; otherwise it snows on some winter days
+        and not others (the same all day)."""
+        chosen = self.settings.get("snow", "auto")
+        if chosen in (True, False):
+            return chosen
+        return random.Random(self.now().date().toordinal()).random() < 0.6
 
     def resize(self, width, height):
         """The monitors changed: stretch or shrink the strip, keep everything on the ground and on screen."""
@@ -172,7 +181,8 @@ class World:
                 self.add(Tree(self, x, name))
         if "oak" not in wanted_items:  # autumn leftovers go when the tree does
             for thing in self.things:
-                if thing.kind in ("leaf", "acorn", "squirrel", "jay"):
+                if thing.kind in ("leaf", "acorn", "squirrel", "jay", "twig", "snow", "inchworm", "butterfly",
+                                  "beetle", "cicada", "spider", "silk"):
                     thing.gone = True
         for palette, out in self.settings["foxes"].items():
             have = [f for f in self.of("fox") if f.palette == palette]
@@ -275,17 +285,23 @@ class World:
         for key in self.timers:
             self.timers[key] -= dt
         if tree is not None and self.timers["leaf"] <= 0:
-            # the wind strips leaves off the oak much faster
-            self.timers["leaf"] = rng.uniform(0.7, 2.6) / (1 + self.wind * 6)
-            if len(self.of("leaf")) < 28 + int(self.wind * 30):
-                x, y = tree.crown_point()
-                self.add(Leaf(self, x, y, rng.choice(LEAF_COLOURS)))
+            if self.season == "autumn":
+                # the wind strips leaves off the oak much faster
+                self.timers["leaf"] = rng.uniform(0.7, 2.6) / (1 + self.wind * 6)
+                if len(self.of("leaf")) < 28 + int(self.wind * 30):
+                    x, y = tree.crown_point()
+                    self.add(Leaf(self, x, y, rng.choice(LEAF_COLOURS)))
+            elif self.season == "summer":  # a green leaf now and then, but rarely
+                self.timers["leaf"] = rng.uniform(40, 120) / (1 + self.wind * 4)
+                self.add(Leaf(self, *tree.crown_point(), "green"))
+            else:
+                self.timers["leaf"] = 30.0  # bare branches: no leaves to fall
         if self.wind > 0.4 and self.season == "autumn" and rng.random() < dt * self.wind * 1.5 and \
                 len(self.of("leaf")) < 60:
             # leaves blowing in from somewhere off the screen, on the upwind side
             x = -20.0 if self.wind_dir > 0 else self.width + 20.0
             self.add(Leaf(self, x, self.ground - rng.uniform(40, 260) * self.scale, rng.choice(LEAF_COLOURS)))
-        if tree is not None and self.timers["acorn"] <= 0:
+        if tree is not None and self.timers["acorn"] <= 0 and self.season == "autumn":
             self.timers["acorn"] = rng.uniform(40, 120)
             if len(self.nuts()) < 4:
                 self.drop_acorn(tree)
@@ -311,8 +327,12 @@ class World:
         acorns = [a for a in self.of("acorn") if a.on_ground and not a.taken]
         if "squirrel" in choices and not acorns:
             choices.remove("squirrel")
-        if "jay" in choices and self.tree() is None:
-            choices.remove("jay")
+        for needs_oak in ("jay", "junebug", "ladybug", "cicada"):
+            if needs_oak in choices and self.tree() is None:
+                choices.remove(needs_oak)
+        for bug in ("junebug", "ladybug", "cicada"):
+            if bug in choices and (self.of("beetle") or self.of("cicada")):
+                choices.remove(bug)  # one little creature on the trunk at a time
         if "geese" in choices and self.of("goose"):
             choices.remove("geese")
         if "migrants" in choices and self.of("migrant"):
@@ -342,6 +362,10 @@ class World:
             return [self.add(turkey) for turkey in turkey_flock(self)][0]
         if pick == "crows":
             return [self.add(crow) for crow in crow_party(self)][0]
+        if pick in ("junebug", "ladybug"):
+            return self.add(Beetle(self, self.tree(), pick))
+        if pick == "cicada":
+            return self.add(Cicada(self, self.tree()))
         if pick == "geese":
             foxes = self.of("fox")
             centre = self.rng.choice(foxes).x if foxes else self.width * 0.5
@@ -424,7 +448,8 @@ class World:
                     pumpkin.anim.time += 0.7
 
     def visitor_to_watch(self, fox):
-        for kind in ("squirrel", "jay", "woolly", "goose", "frog", "turkey", "crow"):
+        for kind in ("squirrel", "jay", "woolly", "goose", "frog", "turkey", "crow", "inchworm", "butterfly",
+                     "beetle", "cicada", "spider"):
             for v in self.of(kind):
                 if v not in fox.watched and abs(v.x - fox.x) < 600 * self.scale / 2 and 0 < v.x < self.width:
                     return v

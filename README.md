@@ -4,7 +4,8 @@
 
 Two pixel foxes, one orange and one grey, live along the top of your taskbar. They wander, nap,
 play together and chase leaves. You can pet them, pick them up and give them toys. The seasons change
-what's around them. In autumn there's an oak tree dropping colourful leaves and acorns, plus a squirrel,
+what's around them. The oak changes with the seasons: bare (or snowy) in winter, budding with flowers
+underneath in spring, deep green in summer. In autumn it drops colourful leaves and acorns, and there's a squirrel,
 a blue jay, a woolly bear caterpillar, geese and a flock of wild turkeys who come by. Crows visit all year
 round: they perch in the tree, on things or on the ground, and if they stay a while they play with what's
 lying about.
@@ -46,7 +47,8 @@ Right-click the icon for the menu:
 
 - **Foxes** and this season's items, as checkboxes.
 - **Shake down an acorn**, **Plant new pumpkins / corn**, **Dig up a taskbar treasure**, **Zoomies!**, and
-  **Invite a visitor** (squirrel, blue jay, caterpillar, geese, wild turkeys, crows).
+  **Invite a visitor** (squirrel, blue jay, caterpillar, geese, wild turkeys, crows, cicada, June beetle,
+  ladybug, depending on the season). In winter, **Snow on the oak** turns the snow on or off.
 - **Season:** follows the date (northern hemisphere), or preview any season.
 - **Size:** 1x, 2x or 3x.
 - **Pause**, and **Quit**.
@@ -56,6 +58,8 @@ Right-click the icon for the menu:
 - **Pet:** move the cursor back and forth over a fox. It only ever reacts happily.
 - **Click:** a happy hop. A napping fox wakes up and stretches.
 - **Drag a fox:** you pick it up, and it lands when you let go.
+- **Click the oak:** something different falls out each season: a branch, snow, a caterpillar, a butterfly,
+  autumn leaves (and now and then a spider on its thread).
 - **Drag the oak:** you can move it anywhere along the bottom of the screen, and it remembers the spot.
 - **Drag the hoe onto a ripe pumpkin:** it carves a jack-o'-lantern.
 - **Click ripe corn:** an ear drops from every stalk, and the crows will soon be round for it.
@@ -73,7 +77,7 @@ pixelfox.py        start here
 start.ps1          checks for updates (update.ps1), installs what's needed, starts it
 pet/world.py       everything on the desktop, what appears when, how things meet
 pet/fox.py         a fox's moods (playful, bored, sleepy; no hunger) and how it picks what to do
-pet/items.py       the oak, falling leaves, acorns, the squirrel's dirt mound
+pet/items.py       the oak (all four seasons), falling leaves, branches, snow, acorns, pumpkins, the scarecrow's hat
 pet/visitors.py    the squirrel, blue jay, woolly bear, geese, frog, wild turkeys and crows
 pet/seasons.py     which season it is and what belongs to it
 pet/view.py        the see-through window, the mouse, the tray menu

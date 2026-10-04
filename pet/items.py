@@ -8,28 +8,77 @@ GRAVITY = 700  # sprite pixels per second squared (scaled)
 
 
 class Tree(Thing):
+    """The oak, all year round: autumn colours, bare in winter (or snowy), budding in spring with flowers
+    underneath, and vibrant green in summer. Click it and something falls out, depending on the season."""
     kind = "tree"
     draggable = True
     z = 5
+    LOOKS = {"spring": "oak_spring", "summer": "oak_summer", "autumn": "oak"}
 
     def __init__(self, world, x, variant="oak"):
         super().__init__(world, x, world.ground, variant)
         self.variant = variant
         self.shaking = 0.0
+        self.anim.name = self.look
+
+    @property
+    def look(self):
+        """Which oak to show for the season (and, in winter, the weather)."""
+        season = self.world.season
+        if season == "winter":
+            return "oak_snow" if self.world.snowy else "oak_winter"
+        return self.LOOKS.get(season, "oak")
+
+    @property
+    def bare(self):
+        return self.look in ("oak_winter", "oak_snow", "oak_spring")
 
     def update(self, dt):
+        if self.anim.name != self.look:
+            self.anim.name = self.look  # the season changed (they all sway in step, so no jump)
         self.shaking = max(0.0, self.shaking - dt)
         super().update(dt * (7 if self.shaking else 1 + self.world.wind * 6))  # shaken, or tossed by the wind
 
     def click(self):
-        """Shake the tree: a flurry of leaves, and sometimes an acorn."""
-        w = self.world
+        """Shake the tree. Autumn: a flurry of leaves, sometimes an acorn, now and then a spider on its thread.
+        Winter: a branch falls (or, under snow, clumps of snow). Spring: a caterpillar drops out and runs off.
+        Summer: a few green leaves, and a butterfly flies out."""
+        from pet import visitors  # (visitors uses items, so not at the top)
+        w, rng = self.world, self.world.rng
         self.shaking = 0.8
-        for _ in range(8):
-            x, y = self.crown_point()
-            w.add(Leaf(w, x, y, w.rng.choice(("red", "orange", "yellow", "brown"))))
-        if w.rng.random() < 0.4 and len(w.nuts()) < 4:
-            w.drop_acorn(self)
+        look = self.look
+        if look == "oak_winter":
+            w.add(Twig(w, *self.branch_point()))
+        elif look == "oak_snow":
+            for _ in range(rng.randint(4, 7)):
+                x, y = self.branch_point()
+                w.add(SnowClump(w, x + rng.uniform(-6, 6) * w.scale, y))
+        elif look == "oak_spring":
+            w.add(visitors.Inchworm(w, *self.branch_point()))
+        elif look == "oak_summer":
+            for _ in range(rng.randint(2, 4)):
+                w.add(Leaf(w, *self.crown_point(), "green"))
+            w.add(visitors.Butterfly(w, *self.crown_point()))
+        else:
+            for _ in range(8):
+                x, y = self.crown_point()
+                w.add(Leaf(w, x, y, rng.choice(("red", "orange", "yellow", "brown"))))
+            if rng.random() < 0.4 and len(w.nuts()) < 4:
+                w.drop_acorn(self)
+            if rng.random() < 0.3 and not w.of("spider"):
+                w.add(visitors.Spider(w, *self.crown_bottom()))
+
+    def crown_bottom(self):
+        """A spot along the underside of the crown, for a spider to let itself down from."""
+        s, rng = self.world.scale, self.world.rng
+        return self.x + rng.uniform(-55, 55) * s, self.y - rng.uniform(100, 108) * s
+
+    def branch_point(self):
+        """Somewhere out along the branches (on a leafless oak, on an actual branch)."""
+        if self.bare:
+            x, y = self.world.rng.choice(self.perch_points())
+            return x, y + self.world.rng.uniform(0, 30) * self.world.scale
+        return self.crown_point()
 
     def crown_point(self):
         """A random spot in the crown, for leaves and acorns to start from."""
@@ -39,9 +88,13 @@ class Tree(Thing):
         return self.x + math.cos(a) * r * 80 * s, self.y - (143 - math.sin(a) * r * 52) * s
 
     def perch_points(self):
-        """Branch spots where a bird can sit (screen coordinates of its feet)."""
+        """Branch spots where a bird can sit (screen coordinates of its feet). A leafless oak's are in its
+        sprite's JSON (forks high up in the branches); a leafy one's are along the top of the crown."""
         s = self.world.scale
-        # spots along the top of the crown
+        m = sprites.meta(self.look)
+        if m.get("perches"):
+            ax, ay = m["anchor"]
+            return [(self.x + (px - ax) * s, self.y - (ay - py) * s) for px, py in m["perches"]]
         return [(self.x - 45 * s, self.y - 188 * s), (self.x + 32 * s, self.y - 192 * s),
                 (self.x + 68 * s, self.y - 176 * s), (self.x - 74 * s, self.y - 168 * s)]
 
@@ -98,6 +151,67 @@ class Leaf(Thing):
     def landing_x(self):
         """Roughly where it will come down (for a fox lining up a pounce)."""
         return self.x
+
+
+class Twig(Thing):
+    """A dead branch knocked off the winter oak: it tumbles down, lies there a while, and fades away."""
+    kind = "twig"
+    z = 30
+
+    def __init__(self, world, x, y):
+        super().__init__(world, x, y, "twig")
+        self.vy = 0.0
+        self.vx = world.rng.uniform(-20, 20)
+        self.landed_for = None
+        self.rest = world.rng.uniform(15, 25)
+
+    def update(self, dt):
+        w, s = self.world, self.world.scale
+        if self.landed_for is None:
+            super().update(dt)  # turning over as it falls
+            self.vy = min(self.vy + GRAVITY * 0.6 * s * dt, 260 * s)
+            self.x += self.vx * s * dt
+            self.y += self.vy * dt
+            if self.y >= w.ground:
+                self.y, self.landed_for = w.ground, 0.0
+                self.anim.time = 0.0  # it settles lying flat
+        else:
+            self.landed_for += dt
+            if self.landed_for > self.rest:
+                self.alpha -= dt / 3
+                if self.alpha <= 0:
+                    self.gone = True
+
+
+class SnowClump(Thing):
+    """A clump of snow shaken off the oak's branches: it drops, lands with a puff, and melts away."""
+    kind = "snow"
+    z = 31
+
+    def __init__(self, world, x, y):
+        super().__init__(world, x, y, "snow_clump")
+        self.vy = world.rng.uniform(-20, 10)
+        self.landed_for = None
+        self.delay = world.rng.uniform(0, 0.5)  # not all at once
+
+    def update(self, dt):
+        w, s = self.world, self.world.scale
+        super().update(dt)
+        if self.delay > 0:
+            self.delay -= dt
+            return
+        if self.landed_for is None:
+            self.vy += GRAVITY * s * dt
+            self.y += self.vy * dt
+            if self.y >= w.ground:
+                self.y, self.landed_for = w.ground, 0.0
+                self.anim.play("snow_puff")
+        else:
+            self.landed_for += dt
+            if self.landed_for > 4:
+                self.alpha -= dt / 2
+                if self.alpha <= 0:
+                    self.gone = True
 
 
 class Acorn(Thing):

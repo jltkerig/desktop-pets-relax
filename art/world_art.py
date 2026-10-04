@@ -1,7 +1,8 @@
 """Everything that isn't a fox: the oak, its leaves and acorns, and the autumn visitors.
 
-SPRITES: name -> (frames, ms per frame, loop, anchor). The anchor is the frame point that sits on the
-item's position (the trunk base, a paw on the ground...).
+SPRITES: name -> (frames, ms per frame, loop, anchor[, extra]). The anchor is the frame point that sits on the
+item's position (the trunk base, a paw on the ground...). extra: more to write into the sprite's JSON, such as
+"perches" (frame points where a bird can sit).
 """
 import math
 import random
@@ -40,10 +41,8 @@ def _branch(c, x1, y1, x2, y2, width):
             _px(c, x, y + k, "bark", level)
 
 
-def oak(sway=0.0, seed=7):
-    """220 x 232. Flat pixel-art trunk and branches; a big leafy crown. sway moves the crown a little."""
-    c = Canvas(OAK_W, OAK_H)
-    rng = random.Random(seed)
+def _oak_trunk(c, rng, sway):
+    """The oak's trunk, roots, bark and big branches (the same in every season)."""
     # the trunk: straight stepped sides, tapering upward, with a flared base
     for y in range(120, OAK_GROUND + 1):
         rise = OAK_GROUND - y
@@ -78,6 +77,21 @@ def oak(sway=0.0, seed=7):
                               (OAK_X, 136, OAK_X - 6, 86, 5), (OAK_X - 30, 120, OAK_X - 60, 100, 3),
                               (OAK_X + 30, 116, OAK_X + 62, 96, 3)):
         _branch(c, x1, y1, x2 + sway, y2, w)
+
+
+# the crown's colours: (cut-off, leaf colour) from the top of the crown to the bottom
+CROWN_COLOURS = {
+    "autumn": ((0.3, "leaf_yellow"), (0.62, "leaf_orange"), (0.8, "leaf_red"), (9.0, "leaf_brown")),
+    "summer": ((0.3, "leaf_summer_light"), (0.58, "leaf_green"), (0.8, "leaf_summer_dark"), (9.0, "leaf_summer_blue")),
+}
+
+
+def oak(sway=0.0, seed=7, season="autumn"):
+    """220 x 232. Flat pixel-art trunk and branches; a big leafy crown. sway moves the crown a little.
+    season: "autumn" (gold, orange, red and brown) or "summer" (vibrant greens, shading to blue, green acorns)."""
+    c = Canvas(OAK_W, OAK_H)
+    rng = random.Random(seed)
+    _oak_trunk(c, rng, sway)
     # the crown: one leafy mass with a bumpy oak outline, lit as a single rounded shape
     cx0, cy0 = OAK_CROWN[0] + sway, OAK_CROWN[1]
     rx0, ry0 = 74, 50  # the core; lobes of different sizes make the outline
@@ -122,7 +136,7 @@ def oak(sway=0.0, seed=7):
             wave = (math.sin(kx * 0.045 + 1.3) + math.sin(ky * 0.06 + 0.4)) / 4  # gentle, wide drifts
             v = top * 0.42 + side * 0.06 + wave * 1.1 + 0.12 + rng.uniform(-0.07, 0.07)
             v = 0.5 + (v - 0.5) * 0.7  # fewer extremes: mostly warm orange and red, a little gold and brown
-            cuts = ((0.3, "leaf_yellow"), (0.62, "leaf_orange"), (0.8, "leaf_red"), (9.0, "leaf_brown"))
+            cuts = CROWN_COLOURS[season]
             mat = next(m for cut, m in cuts if v < cut)
             # near a boundary, mix the two colours in a checkerboard so the change is soft
             for cut, m in cuts[:-1]:
@@ -165,6 +179,156 @@ def oak(sway=0.0, seed=7):
             dx, dy = rng.choice(((1, 0), (-1, 0), (0, -1), (1, -1), (-1, -1)))
             if c.mat[y + dy][x + dx] is None:
                 c.mat[y + dy][x + dx], c.lum[y + dy][x + dx], c.fixed[y + dy][x + dx] = c.mat[y][x], c.lum[y][x], None
+    if season == "summer":  # green acorns here and there, hanging under the leaves
+        arng = random.Random(seed + 100)
+        for _ in range(9):
+            x, y = arng.randrange(50, 172), arng.randrange(60, 130)
+            if (c.mat[y][x] or "").startswith("leaf") and (c.mat[y + 6][x] or "").startswith("leaf"):
+                c.ellipse(x + sway * 0.3, y + 1.6, 1.4, 1.8, "acorn_green")
+                c.ellipse(x + sway * 0.3, y, 1.7, 1.0, "cap")
+    return c.to_image()
+
+
+COMMON.update({
+    "leaf_summer_light": ("#4c8a1c", "#6cae26", "#8ccc3a", "#b4e466", "#28500c"),
+    "leaf_summer_dark": ("#1e4a1c", "#2e6a26", "#3e8634", "#5ea84c", "#0e2a0c"),
+    "leaf_summer_blue": ("#1a3a3e", "#245458", "#2e6c6c", "#4a8c84", "#0c2224"),  # cool blue shade underneath
+    "acorn_green": ("#4e6a1a", "#6c8c24", "#8cac36", "#b0cc5c", "#28380a"),
+    "leaf_spring": ("#5a8a1e", "#7cb02c", "#9cd040", "#c4ec78", "#2e4e0c"),
+    "bud": ("#7a2a2a", "#a8443a", "#cc6a50", "#e8987a", "#401010"),
+    "snow": ("#a8b8cc", "#d4deea", "#eef3f8", "#ffffff", "#6c7c90"),
+    "violet": ("#3a1e6a", "#5a32a0", "#7c50c8", "#a87ce6", "#1e0c3a"),
+    "daffodil": ("#b8860c", "#e8b81a", "#f8d838", "#fff080", "#6a4a04"),
+    "daffodil_cup": ("#b8500c", "#e07418", "#f49a2c", "#fcc060", "#5a2604"),
+    "stalk": ("#2e5a14", "#447e1e", "#5c9e2a", "#80c048", "#183208"),
+})
+
+def _twig(c, x1, y1, x2, y2, mat="bark", level=1):
+    """A 1-pixel twig."""
+    steps = int(max(abs(x2 - x1), abs(y2 - y1))) + 1
+    for i in range(steps + 1):
+        _px(c, round(x1 + (x2 - x1) * i / steps), round(y1 + (y2 - y1) * i / steps), mat, level)
+
+
+def bare_oak_shape(seed=7):
+    """The branching of a leafless oak (the same in every frame and every bare season), worked out without any
+    sway: a list of (x1, y1, x2, y2, width) segments, the twig tips, and fork points high in the crown where a
+    bird can sit."""
+    rng = random.Random(seed + 31)
+    segments, tips, forks = [], [], []
+    cx, cy, rx, ry = OAK_CROWN[0], OAK_CROWN[1] - 6, 92, 74  # stay inside roughly the autumn crown's outline
+
+    def inside(x, y):
+        return ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1
+
+    def grow(x, y, angle, length, width, depth):
+        x2, y2 = x + math.cos(angle) * length, y - math.sin(angle) * length
+        if not inside(x2, y2) or depth == 0:
+            # the end: a little fan of fine twigs
+            for turn in rng.sample((-0.45, 0.0, 0.45), 2):
+                a = angle + turn + rng.uniform(-0.15, 0.15)
+                l = rng.uniform(4, 8)
+                segments.append((x, y, x + math.cos(a) * l, y - math.sin(a) * l, 1))
+                tips.append((x + math.cos(a) * l, y - math.sin(a) * l))
+            return
+        segments.append((x, y, x2, y2, width))
+        if width >= 2 and y2 < 80:
+            forks.append((x2, y2))
+        # carry on, bending a little upward toward the light
+        bend = (math.pi / 2 - angle) * 0.12
+        grow(x2, y2, angle + bend + rng.uniform(-0.25, 0.25), length * rng.uniform(0.78, 0.9),
+             max(1, width - 1), depth - 1)
+        if rng.random() < (0.75 if width >= 3 else 0.5):  # and a side branch
+            side = rng.choice((-1, 1))
+            grow(x2, y2, angle + side * rng.uniform(0.45, 0.85), length * rng.uniform(0.6, 0.75),
+                 max(1, width - 1), depth - 1)
+
+    for angle in (2.55, 2.05, 1.62, 1.2, 0.68):  # five main limbs from the top of the trunk, fanned out
+        sx = OAK_X + math.cos(angle) * 4
+        grow(sx, 132, angle + rng.uniform(-0.08, 0.08), rng.uniform(28, 34), 5, 7)
+    # perches: a few forks spread across the top of the crown
+    perches = []
+    for x, y in sorted(forks, key=lambda p: p[1]):
+        if all(abs(x - px) > 24 for px, _ in perches):
+            perches.append((x, y))
+        if len(perches) == 5:
+            break
+    return segments, tips, perches
+
+
+BARE_SEGMENTS, BARE_TIPS, BARE_PERCHES = bare_oak_shape()
+
+
+def oak_bare(sway=0.0, seed=7, snow=False, spring=False):
+    """220 x 232: the oak without its leaves: a winter tree of bare, branching limbs and twigs. snow: snow
+    lying along the branches and in a drift round the roots. spring: buds, small new leaves and tiny acorns on
+    the twigs, and violets and daffodils growing underneath."""
+    c = Canvas(OAK_W, OAK_H)
+    rng = random.Random(seed)
+    _oak_trunk(c, rng, sway)
+
+    def lean(y):
+        return sway * max(0.0, (140 - y) / 140) * 1.6  # higher up sways more
+
+    for x1, y1, x2, y2, width in BARE_SEGMENTS:
+        if width >= 2:
+            _branch(c, x1 + lean(y1), y1, x2 + lean(y2), y2, width)
+        else:
+            _twig(c, x1 + lean(y1), y1, x2 + lean(y2), y2)
+    tips = [(x + lean(y), y) for x, y in BARE_TIPS]
+    if spring:
+        for x, y in tips:
+            roll = rng.random()
+            if roll < 0.45:  # small new leaves, fresh and pale
+                c.ellipse(x + rng.uniform(-1, 1), y - 1, rng.uniform(1.6, 2.6), rng.uniform(1.0, 1.6), "leaf_spring",
+                          angle=rng.uniform(-40, 40))
+            elif roll < 0.85:  # a fat bud
+                c.ellipse(x, y, 1.0, 1.2, "bud")
+            elif roll < 0.93:  # a tiny new acorn
+                c.ellipse(x, y + 1.4, 0.9, 1.1, "acorn_green")
+                c.pixel(x, y, "cap", 1)
+        # violets and daffodils growing round the roots
+        frng = random.Random(seed + 7)
+        for _ in range(18):
+            fx = OAK_X + frng.choice((-1, 1)) * frng.uniform(20, 92)
+            if frng.random() < 0.55:  # a violet: a low clump of heart-shaped leaves and purple flowers
+                c.ellipse(fx - 1.5, OAK_GROUND - 1.2, 2.2, 1.6, "stalk")
+                c.ellipse(fx + 1.8, OAK_GROUND - 1.0, 2.0, 1.4, "stalk", bias=-0.2)
+                for k, (dx, h) in enumerate(((-1.5, 5), (1.5, 6.5))[: 1 + (frng.random() < 0.6)]):
+                    _twig(c, fx + dx, OAK_GROUND - 2, fx + dx + sway * 0.2, OAK_GROUND - h, "stalk", 1)
+                    for a in range(5):
+                        ang = a / 5 * 2 * math.pi - math.pi / 2
+                        c.ellipse(fx + dx + sway * 0.2 + math.cos(ang) * 1.3, OAK_GROUND - h - 1 + math.sin(ang) * 1.1,
+                                  0.9, 0.9, "violet")
+                    c.pixel(fx + dx + sway * 0.2, OAK_GROUND - h - 1, "daffodil", 3)
+            else:  # a daffodil: a tall stem and leaf, six petals, and an orange trumpet
+                h = frng.uniform(11, 16)
+                top = OAK_GROUND - h
+                _twig(c, fx, OAK_GROUND, fx + sway * 0.4, top, "stalk", 1)
+                _twig(c, fx - 1, OAK_GROUND, fx - 3, OAK_GROUND - h * 0.7, "stalk", 2)
+                _twig(c, fx + 1, OAK_GROUND, fx + 2, OAK_GROUND - h * 0.5, "stalk", 1)
+                tx = fx + sway * 0.4
+                for a in range(6):
+                    ang = a / 6 * 2 * math.pi
+                    c.ellipse(tx + math.cos(ang) * 1.8, top + math.sin(ang) * 1.5, 1.2, 1.0, "daffodil")
+                c.ellipse(tx + 1.0, top + 0.3, 1.3, 1.2, "daffodil_cup")
+    if snow:
+        # snow lying along the tops of the branches
+        for y in range(1, 228):
+            for x in range(OAK_W):
+                if c.mat[y][x] == "bark" and c.mat[y - 1][x] is None and (y < 200 or rng.random() < 0.15):
+                    if rng.random() < 0.8:
+                        _px(c, x, y - 1, "snow", 3 if rng.random() < 0.5 else 2)
+                        if rng.random() < 0.35 and y > 2 and c.mat[y - 2][x] is None:
+                            _px(c, x, y - 2, "snow", 3)
+        # a deep, lumpy drift round the roots
+        for x in range(OAK_W):
+            d = abs(x - OAK_X) / 100
+            if d > 1:
+                continue
+            depth = int(round((1 - d * d) ** 0.7 * 9 + math.sin(x * 0.21) * 1.2 + math.sin(x * 0.07 + 1) * 1.0 + 1))
+            for k in range(depth):
+                _px(c, x, OAK_GROUND - k, "snow", 3 if k == depth - 1 else 2 if k > depth - 3 else 1)
     return c.to_image()
 
 
@@ -1262,6 +1426,7 @@ PIXEL_LETTERS = {
     "E": ["111", "100", "110", "100", "111"], "C": ["111", "100", "100", "100", "111"],
     "A": ["010", "101", "111", "101", "101"], "W": ["10001", "10001", "10101", "10101", "01010"],
     "?": ["111", "001", "011", "000", "010"], " ": ["0", "0", "0", "0", "0"],
+    "Z": ["111", "001", "010", "100", "111"],
 }
 
 
@@ -1293,6 +1458,166 @@ def word_bubble(text):
     return img
 
 
+# -- the oak through the year: what falls from it, and the small creatures on it --------------------------
+
+COMMON.update({
+    "inchworm": ("#3e6a14", "#5a9020", "#7cb432", "#a6d65e", "#203a08"),
+    "monarch": ("#a8400a", "#e06a14", "#f48c28", "#fbb456", "#5a1e04"),
+    "beetle_brown": ("#3a2008", "#5c3412", "#82501e", "#a8723a", "#1e1004"),
+    "ladybug": ("#8a0e0e", "#c41a16", "#e8322a", "#f6705e", "#4a0606"),
+    "bug_black": ("#08080a", "#141418", "#22222a", "#363640", "#020203"),
+    "cicada": ("#2a3a14", "#3e5a1c", "#5a7c2a", "#7ea046", "#141e08"),
+    "wing_clear": ("#8aa0a8", "#b4c8cc", "#d4e2e4", "#f0f8f8", "#5a6e74"),
+    "silk": ("#c8ccd0", "#e4e8ec", "#f4f6f8", "#ffffff", "#9a9ea4"),
+})
+
+
+def _rot_pts(points, angle, cx, cy):
+    ca, sa = math.cos(angle), math.sin(angle)
+    return [(cx + (x - cx) * ca - (y - cy) * sa, cy + (x - cx) * sa + (y - cy) * ca) for x, y in points]
+
+
+def twig(spin=0):
+    """16 x 16: a small fallen branch with a fork and a couple of side twigs, turning as it falls."""
+    c = Canvas(16, 16)
+    a = spin * math.pi / 4
+    main = _rot_pts([(2, 8), (14, 8)], a, 8, 8)
+    fork = _rot_pts([(9, 8), (13, 4)], a, 8, 8)
+    side = _rot_pts([(5, 8), (7, 11)], a, 8, 8)
+    c.capsule(*main[0], *main[1], 1.0, 0.6, "bark")
+    c.capsule(*fork[0], *fork[1], 0.7, 0.4, "bark")
+    c.capsule(*side[0], *side[1], 0.6, 0.4, "bark")
+    return c.to_image()
+
+
+def snow_clump(spin=0):
+    """8 x 8: a clump of snow falling off a branch."""
+    c = Canvas(8, 8)
+    for dx, dy, r in ((0, 0, 2.4), (1.6 if spin else -1.4, -0.8, 1.6), (-1.2 if spin else 1.4, 1.0, 1.5)):
+        c.ellipse(4 + dx, 4 + dy, r, r * 0.9, "snow")
+    return c.to_image()
+
+
+def snow_puff(t=0.0):
+    """16 x 8: snow landing: a puff of powder that settles into a little heap."""
+    c = Canvas(16, 8)
+    rng = random.Random(3)
+    c.ellipse(8, 7, 3 + t * 2, 1.2 + (1 - t) * 0.8, "snow")
+    for _ in range(int(8 * (1 - t)) + 1):
+        a = rng.uniform(math.pi, 2 * math.pi)
+        d = rng.uniform(2, 3 + t * 5)
+        c.pixel(8 + math.cos(a) * d * 1.3, 6 + math.sin(a) * d * (1 - t * 0.5), "snow", 3)
+    return c.to_image(outline=False)
+
+
+def inchworm(pose="crawl", t=0.0):
+    """14 x 8: a little green inchworm. crawl: looping along, back end up to front; fall: curled up."""
+    c = Canvas(14, 8)
+    if pose == "fall":
+        c.ellipse(7, 4, 3.0, 2.6, "inchworm")
+        c.ellipse(7, 4, 1.4, 1.1, "inchworm", bias=-0.5)
+        c.pixel(9, 3, "eye")
+        return c.to_image()
+    arch = math.sin(t * math.pi)  # 0 flat .. 1 a tall loop
+    length = 10 - arch * 4
+    left = 2 + (10 - length) * (t if t < 0.5 else 1 - t) * 2
+    pts = [(left + length * i / 6, 6 - math.sin(i / 6 * math.pi) * arch * 4) for i in range(7)]
+    c.chain(pts, [1.3] * 7, ["inchworm"] * 7)
+    c.pixel(pts[-1][0] + 0.5, pts[-1][1] - 0.5, "eye")
+    return c.to_image()
+
+
+def butterfly(t=0.0):
+    """14 x 12: a monarch butterfly seen from the front, wings beating (wide open .. edge on)."""
+    c = Canvas(14, 12)
+    span = 0.25 + 0.75 * abs(math.cos(t * math.pi))  # how open the wings look
+    for side in (-1, 1):
+        upper = [(7, 5), (7 + side * 6.2 * span, 1.2), (7 + side * 6.0 * span, 5.6)]
+        lower = [(7, 6), (7 + side * 4.4 * span, 6.4), (7 + side * 3.2 * span, 10)]
+        c.polygon(upper, "monarch", lum=0.6)
+        c.polygon(lower, "monarch", lum=0.45)
+        if span > 0.5:  # black edges with white dots, black veins
+            c.pixel(7 + side * 5.6 * span, 2, "bug_black", 0)
+            c.pixel(7 + side * 5.6 * span, 4.4, "bug_black", 0)
+            c.pixel(7 + side * 4.8 * span, 2.8, "white", 3)
+            c.pixel(7 + side * 3 * span, 3.6, "bug_black", 0)
+            c.pixel(7 + side * 2.6 * span, 8, "bug_black", 0)
+    c.capsule(7, 3.5, 7, 9, 0.6, 0.5, "bug_black")  # body
+    for side in (-1, 1):
+        c.capsule(7, 3.5, 7 + side * 1.8, 0.8, 0.2, 0.2, "bug_black")  # antennae
+    return c.to_image()
+
+
+def beetle(kind="junebug", pose="crawl", t=0.0):
+    """10 x 12: a June beetle or a ladybug, head up, climbing the trunk. fly: wing cases up, wings out."""
+    c = Canvas(10, 12)
+    body = "beetle_brown" if kind == "junebug" else "ladybug"
+    step = math.sin(t * 2 * math.pi)
+    for side in (-1, 1):  # legs, three a side, scrabbling
+        for k, y in enumerate((5, 7, 9)):
+            reach = 3.0 + (step if (k % 2) ^ (side > 0) else -step) * 0.8
+            c.capsule(5 + side * 1.5, y, 5 + side * reach, y + (k - 1) * 1.2, 0.35, 0.3, "bug_black")
+    if pose == "fly":
+        for side in (-1, 1):  # the wing cases lifted, and the thin wings whirring behind
+            c.ellipse(5 + side * (3.5 + abs(step)), 8, 2.4, 3.2, "wing_clear", angle=side * 25)
+            c.ellipse(5 + side * 2.4, 6, 1.8, 2.6, body, angle=side * 35)
+    c.ellipse(5, 7.5, 2.6, 3.4 if kind == "junebug" else 2.9, body)
+    if kind == "ladybug":
+        for dx, dy in ((-1.2, 6.5), (1.2, 6.5), (-1.4, 8.8), (1.4, 8.8), (0, 10)):
+            c.pixel(5 + dx, dy, "bug_black", 0)
+        c.ellipse(5, 3.6, 1.6, 1.2, "bug_black")  # the head
+        c.pixel(4.4, 3.4, "white", 3)
+        c.pixel(5.6, 3.4, "white", 3)
+    else:
+        c.capsule(5, 5, 5, 10.5, 0.3, 0.3, "beetle_brown", bias=-0.6)  # the line down its back
+        c.ellipse(5, 3.6, 1.6, 1.3, "beetle_brown", bias=-0.2)
+    for side in (-1, 1):
+        c.capsule(5 + side * 0.8, 2.8, 5 + side * 2.2, 1.2, 0.25, 0.2, "bug_black")  # feelers
+    return c.to_image()
+
+
+def cicada(pose="sit", t=0.0):
+    """10 x 14: a cicada on the trunk, head up. buzz: its body thrums. fly: wings out."""
+    c = Canvas(10, 14)
+    shake = (0.5 if int(t * 8) % 2 else -0.5) if pose == "buzz" else 0.0
+    if pose == "fly":
+        for side in (-1, 1):
+            c.ellipse(5 + side * 3.5, 7 + math.sin(t * 2 * math.pi) * 1.5, 2.6, 4.4, "wing_clear", angle=side * 30)
+    else:  # clear wings folded like a roof over its back
+        for side in (-1, 1):
+            c.polygon([(5 + shake, 4), (5 + side * 3.2 + shake, 7), (5 + side * 2.2 + shake, 13), (5 + shake, 12)],
+                      "wing_clear", lum=0.5 if side < 0 else 0.7)
+    c.ellipse(5 + shake, 7, 2.0, 3.2, "cicada")
+    c.ellipse(5 + shake, 3.2, 2.6, 1.6, "cicada", bias=0.1)  # the broad head
+    for side in (-1, 1):
+        c.pixel(5 + side * 2.2 + shake, 3, "ladybug", 2)  # red eyes
+    return c.to_image()
+
+
+def spider(t=0.0):
+    """13 x 11: a little garden spider hanging from its thread, long legs wiggling."""
+    c = Canvas(13, 11)
+    wig = math.sin(t * 2 * math.pi) * 0.7
+    cx = 6.5
+    for side in (-1, 1):  # four long, bent legs a side: out to a knee, then down
+        for k, (ky, fy) in enumerate(((2.0, 0.5), (2.8, 3.0), (3.6, 6.0), (4.2, 9.0))):
+            knee = (cx + side * (3.4 + (k in (1, 2)) * 0.8), ky - 1.6 + (wig if k % 2 else -wig))
+            foot = (cx + side * (5.6 - abs(k - 1.5) * 0.4), fy + (wig if k % 2 else -wig) * 0.5)
+            _twig(c, cx, 3.6, *knee, "bug_black", 1)
+            _twig(c, *knee, *foot, "bug_black", 0)
+    c.ellipse(cx, 6.2, 2.0, 2.3, "beetle_brown", bias=-0.2)  # the round abdomen
+    c.pixel(cx, 6, "daffodil", 2)                             # a little gold mark
+    c.ellipse(cx, 3.4, 1.3, 1.1, "bug_black")
+    return c.to_image(outline=False)  # thin legs, no outline to thicken them
+
+
+def silk():
+    """1 x 6: a length of spider silk (the thread is a stack of these)."""
+    from PIL import Image
+    img = Image.new("RGBA", (1, 6), (236, 240, 244, 210))
+    return img
+
+
 def tray_icon():
     """32 x 32 fox face for the tray."""
     import fox_art
@@ -1301,10 +1626,17 @@ def tray_icon():
     return c.to_image()
 
 
-LEAF_COLOURS = ("leaf_red", "leaf_orange", "leaf_yellow", "leaf_brown")
+LEAF_COLOURS = ("leaf_red", "leaf_orange", "leaf_yellow", "leaf_brown", "leaf_green")
 
 SPRITES = {
     "oak": ([oak(s) for s in (0, 1, 1, 0, -1, -1)], 600, True, (OAK_X, OAK_GROUND)),
+    "oak_summer": ([oak(s, season="summer") for s in (0, 1, 1, 0, -1, -1)], 600, True, (OAK_X, OAK_GROUND)),
+    "oak_winter": ([oak_bare(s) for s in (0, 1, 1, 0, -1, -1)], 600, True, (OAK_X, OAK_GROUND),
+                   {"perches": BARE_PERCHES}),
+    "oak_snow": ([oak_bare(s, snow=True) for s in (0, 1, 1, 0, -1, -1)], 600, True, (OAK_X, OAK_GROUND),
+                 {"perches": BARE_PERCHES}),
+    "oak_spring": ([oak_bare(s, spring=True) for s in (0, 1, 1, 0, -1, -1)], 600, True, (OAK_X, OAK_GROUND),
+                   {"perches": BARE_PERCHES}),
     "acorn": ([acorn(r) for r in range(4)], 90, True, (6, 9)),
     "dirt_mound": ([dirt_mound(s) for s in (0.2, 0.5, 0.8, 1.0)], 200, False, (8, 7)),
     "squirrel_run": ([squirrel("run", i / 4) for i in range(4)], 70, True, (16, 29)),
@@ -1352,6 +1684,22 @@ SPRITES = {
     "crow_tilt": ([crow("tilt", i / 4) for i in range(2)], 500, True, (12, 22)),
     "crow_caw": ([crow("caw", f) for f in (0.0, 0.3, 0.6, 0.9)], 120, False, (12, 22)),
     "caw_bubble": ([word_bubble("CAW!")], 1000, False, (4, 13)),
+    "twig": ([twig(k) for k in range(8)], 90, True, (8, 9)),
+    "snow_clump": ([snow_clump(k) for k in range(2)], 120, True, (4, 4)),
+    "snow_puff": ([snow_puff(t) for t in (0.0, 0.3, 0.6, 1.0)], 110, False, (8, 7)),
+    "inchworm": ([inchworm("crawl", t) for t in (0.0, 0.25, 0.5, 0.75)], 160, True, (7, 7)),
+    "inchworm_fall": ([inchworm("fall")], 1000, False, (7, 6)),
+    "butterfly": ([butterfly(t) for t in (0.0, 0.25, 0.5, 0.75)], 70, True, (7, 7)),
+    "junebug_crawl": ([beetle("junebug", "crawl", t) for t in (0.0, 0.25, 0.5, 0.75)], 120, True, (5, 11)),
+    "junebug_fly": ([beetle("junebug", "fly", t) for t in (0.0, 0.25, 0.5, 0.75)], 50, True, (5, 11)),
+    "ladybug_crawl": ([beetle("ladybug", "crawl", t) for t in (0.0, 0.25, 0.5, 0.75)], 120, True, (5, 11)),
+    "ladybug_fly": ([beetle("ladybug", "fly", t) for t in (0.0, 0.25, 0.5, 0.75)], 50, True, (5, 11)),
+    "cicada_sit": ([cicada("sit")], 1000, False, (5, 13)),
+    "cicada_buzz": ([cicada("buzz", t) for t in (0.0, 0.125, 0.25, 0.375)], 40, True, (5, 13)),
+    "cicada_fly": ([cicada("fly", t) for t in (0.0, 0.25, 0.5, 0.75)], 50, True, (5, 13)),
+    "buzz_bubble": ([word_bubble("BZZZZZ!")], 1000, False, (4, 13)),
+    "spider": ([spider(t) for t in (0.0, 0.25, 0.5, 0.75)], 140, True, (6, 2)),
+    "silk": ([silk()], 1000, False, (0, 0)),
     "caw2_bubble": ([word_bubble("CAW CAW!")], 1000, False, (4, 13)),
     "kraa_bubble": ([word_bubble("KRAA!")], 1000, False, (4, 13)),
     "cawq_bubble": ([word_bubble("CAW?")], 1000, False, (4, 13)),

@@ -45,12 +45,24 @@ class Seasons(unittest.TestCase):
         self.assertEqual(seasons.season_for(datetime.date(2026, 4, 1)), "spring")
         self.assertEqual(seasons.season_for(datetime.date(2026, 7, 4)), "summer")
 
-    def test_the_oak_is_out_in_autumn_only(self):
-        world, _ = make_world("autumn")
-        self.assertIsNotNone(world.tree())
-        world.settings["season"] = "winter"
+    def test_the_oak_is_out_all_year_dressed_for_the_season(self):
+        looks = {}
+        for season in seasons.SEASONS:
+            world, _ = make_world(season)
+            world.settings["snow"] = False
+            self.assertIsNotNone(world.tree(), season)
+            looks[season] = world.tree().look
+        self.assertEqual(looks, {"autumn": "oak", "winter": "oak_winter", "spring": "oak_spring",
+                                 "summer": "oak_summer"})
+
+    def test_the_oak_changes_with_the_season_in_place(self):
+        world, clock = make_world("autumn")
+        tree = world.tree()
+        world.settings["season"] = "summer"
         world.rebuild()
-        self.assertIsNone(world.tree())
+        run(world, clock, 0.1)
+        self.assertIs(world.tree(), tree)
+        self.assertEqual(tree.anim.name, "oak_summer")
 
 
 class Sprites(unittest.TestCase):
@@ -1036,6 +1048,146 @@ class DenSnouts(unittest.TestCase):
                    if empty.getpixel((x, y)) != full.getpixel((x, y))]
         self.assertTrue(changed)
         self.assertTrue(all(y >= 40 for _, y in changed))  # low down in the doorway, chin on the ground
+
+
+class OakThroughTheYear(unittest.TestCase):
+    def oak(self, season, snow=False):
+        world, clock = make_world(season, orange=False, grey=False)
+        world.settings["snow"] = snow
+        run(world, clock, 0.1)
+        return world, clock, world.tree()
+
+    def test_winter_snow_comes_and_goes_or_can_be_chosen(self):
+        world, clock, tree = self.oak("winter", snow="auto")
+        days = set()
+        for day in range(30):
+            clock[0] = datetime.datetime(2027, 1, 1, 12) + datetime.timedelta(days=day)
+            days.add(world.snowy)
+        self.assertEqual(days, {True, False})
+        world.settings["snow"] = True
+        self.assertEqual(tree.look, "oak_snow")
+        world.settings["snow"] = False
+        self.assertEqual(tree.look, "oak_winter")
+
+    def test_the_snow_choice_is_saved(self):
+        path = Path(os.environ["PIXELFOX_USER_DIR"]) / "snow.json"
+        settings = save.load(path)
+        settings["snow"] = True
+        save.store(settings, path)
+        self.assertIs(save.load(path)["snow"], True)
+
+    def test_clicking_the_bare_oak_drops_a_branch_that_fades(self):
+        world, clock, tree = self.oak("winter")
+        tree.click()
+        twigs = world.of("twig")
+        self.assertEqual(len(twigs), 1)
+        run(world, clock, 5)
+        self.assertEqual(twigs[0].y, world.ground)
+        run(world, clock, 35)
+        self.assertFalse(world.of("twig"))
+
+    def test_clicking_the_snowy_oak_drops_clumps_of_snow(self):
+        world, clock, tree = self.oak("winter", snow=True)
+        tree.click()
+        self.assertGreaterEqual(len(world.of("snow")), 4)
+        run(world, clock, 3)
+        self.assertTrue(all(c.anim.name == "snow_puff" for c in world.of("snow")))
+        run(world, clock, 10)
+        self.assertFalse(world.of("snow"))
+
+    def test_clicking_the_spring_oak_drops_a_caterpillar_that_runs_off(self):
+        world, clock, tree = self.oak("spring")
+        tree.click()
+        worm = world.of("inchworm")[0]
+        run(world, clock, 3)
+        self.assertEqual(worm.y, world.ground)
+        self.assertEqual(worm.anim.name, "inchworm")
+        run(world, clock, 120, fps=10)
+        self.assertTrue(worm.gone)
+
+    def test_clicking_the_summer_oak_drops_green_leaves_and_out_flies_a_butterfly(self):
+        world, clock, tree = self.oak("summer")
+        tree.click()
+        self.assertTrue(all(l.anim.name == "leaf_green" for l in world.of("leaf")))
+        self.assertGreaterEqual(len(world.of("leaf")), 2)
+        fly = world.of("butterfly")[0]
+        run(world, clock, 60, fps=10)
+        self.assertTrue(fly.gone)
+
+    def test_clicking_the_autumn_oak_sometimes_lets_down_a_spider(self):
+        spun = False
+        for seed in range(12):
+            world, clock = make_world("autumn", seed=seed, orange=False, grey=False)
+            world.tree().click()
+            spiders = world.of("spider")
+            if not spiders:
+                continue
+            spun = True
+            run(world, clock, 2)
+            self.assertTrue(world.of("silk"))  # hanging on its thread
+            run(world, clock, 30)
+            self.assertFalse(world.of("spider"))
+            self.assertFalse(world.of("silk"))  # and the thread's gone with it
+        self.assertTrue(spun)
+
+    def test_only_autumn_drops_acorns_and_coloured_leaves(self):
+        for season in ("winter", "spring", "summer"):
+            world, clock, _ = self.oak(season)
+            world.timers.update(leaf=0, acorn=0)
+            run(world, clock, 30, fps=10)
+            self.assertEqual(world.nuts(), [], season)
+            self.assertTrue(all(l.anim.name == "leaf_green" for l in world.of("leaf")), season)
+
+    def test_summer_leaves_fall_rarely(self):
+        world, clock, _ = self.oak("summer")
+        world.timers["leaf"] = 0
+        run(world, clock, 60, fps=10)
+        self.assertLessEqual(len(world.of("leaf")), 3)
+
+    def test_a_june_beetle_or_ladybug_climbs_the_summer_oak_and_flies_off(self):
+        for bug in ("junebug", "ladybug"):
+            world, clock, tree = self.oak("summer")
+            beetle = world.invite_visitor(bug)
+            self.assertEqual(beetle.species, bug)
+            highest = world.ground
+            flew = False
+            for _ in range(60 * 10):
+                run(world, clock, 0.1, fps=10)
+                highest = min(highest, beetle.y)
+                flew = flew or beetle.anim.name == f"{bug}_fly"
+                if beetle.gone:
+                    break
+            self.assertLess(highest, world.ground - 70 * world.scale)  # climbed well up the trunk
+            self.assertTrue(flew)
+            self.assertTrue(beetle.gone)
+
+    def test_a_cicada_buzzes_on_the_autumn_oak(self):
+        world, clock, _ = self.oak("autumn")
+        cicada = world.invite_visitor("cicada")
+        buzzed = False
+        for _ in range(90 * 10):
+            run(world, clock, 0.1, fps=10)
+            buzzed = buzzed or any(b.anim.name == "buzz_bubble" for b in world.of("bubble"))
+            if cicada.gone:
+                break
+        self.assertTrue(buzzed)
+        self.assertTrue(cicada.gone)
+
+    def test_tree_creatures_need_the_oak(self):
+        world, _, _ = self.oak("summer")
+        world.settings["items"]["oak"]["out"] = False
+        world.rebuild()
+        self.assertIsNone(world.invite_visitor("ladybug"))
+
+    def test_birds_sit_on_real_branches_of_the_bare_oak(self):
+        from PIL import Image
+        for look in ("oak_winter", "oak_snow", "oak_spring"):
+            m = sprites.meta(look)
+            img = Image.open(sprites.SPRITE_DIR / f"{look}.png").convert("RGBA")
+            self.assertGreaterEqual(len(m["perches"]), 4)
+            for x, y in m["perches"]:
+                near = [img.getpixel((round(x) + dx, round(y) + dy))[3] for dx in (-1, 0, 1) for dy in (-1, 0, 1)]
+                self.assertTrue(any(a > 0 for a in near), (look, x, y))
 
 
 class Version(unittest.TestCase):

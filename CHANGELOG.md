@@ -3,6 +3,23 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.5.0
+
+- **An oak for every season**, out all year and changing in place when the season does:
+  - **Winter:** bare, branching limbs and twigs. On some days it's snowy instead: snow along the branches and a
+    drift round the roots. Choose for yourself with **Snow on the oak** in the tray menu (winter only).
+  - **Spring:** buds, small new leaves and tiny acorns, with violets and daffodils growing underneath.
+  - **Summer:** vibrant green, shading to blue underneath, with green acorns here and there. A green leaf falls
+    now and then, but rarely. Sometimes a **June beetle** or a **ladybug** climbs the trunk and flies off.
+  - **Autumn:** as before. Now and then a **cicada** lands on the trunk and buzzes (the foxes notice).
+- **Clicking the oak:**
+  - Winter: a single branch falls, lies there a while and fades. Snowy: clumps of snow fall and puff on the ground.
+  - Spring: a caterpillar drops out and runs off.
+  - Summer: a few green leaves fall and a butterfly flies out.
+  - Autumn: as before, and sometimes a spider lets itself down on a thread and climbs back up.
+- Acorns and coloured leaves fall in autumn only. Birds perch on real branches of the leafless oak.
+- Sprite JSON files can carry extra data: the leafless oaks list their `perches`.
+
 ## 1.4.0
 
 - **Crows stay longer and talk to each other:** visits last about 35 seconds to 4 minutes. They chat back and

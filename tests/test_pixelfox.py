@@ -749,5 +749,22 @@ class Blustery(unittest.TestCase):
         self.assertTrue(2 <= started <= 11)  # some of the time, not every time
 
 
+class MessageAlwaysGoesHome(unittest.TestCase):
+    def test_a_distracted_fox_cannot_keep_a_message_forever(self):
+        world, clock = make_world(orange=True, grey=False)
+        fox = world.of("fox")[0]
+        world.discord_spot = {"x": fox.x + 100, "y": 600.0}
+        world.steal_message(fox)
+        world.screen_requests.clear()
+        run(world, clock, 8)
+        fox.do(Step("sleep", 999))  # it wanders off to nap, message and all
+        for _ in range(120 * 30):
+            run(world, clock, 1 / 30)
+            if not world.of("message"):
+                break
+        self.assertFalse(world.of("message"))
+        self.assertIn(("restore", "message1"), world.screen_requests)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -607,6 +607,7 @@ class World:
                 msg.carried_by, msg.state = None, "returning"
 
         if self.discord_active:  # you're chatting: a quick grab, a victory hop, and straight back
+            msg.limit = 25.0
             fox.do(Step("trot", to_x=under, speed=TROT), Step("crouch", 0.5, face=spot["x"]),
                    Step("hop", face=spot["x"], then=yank), Step("happy", 1.5), Step("hop"), Step("happy", 1.0),
                    Step("hop", face=spot["x"], then=send_home), Step("tilt", face=spot["x"]))

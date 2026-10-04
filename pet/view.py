@@ -165,7 +165,12 @@ class Stage:
         self.update()
 
     def guard_covers(self):
-        """If the Discord window moves, closes or gets covered, the gap disappears at once."""
+        """If the Discord window moves, closes or gets covered, the gap disappears at once. A cover whose
+        message no longer exists (for whatever reason) is taken away too, so a gap can never get stuck."""
+        alive = {m.key for m in self.world.of("message")}
+        for key in [k for k in self.covers if k not in alive]:
+            self.covers.pop(key, None)
+            self.update()
         for key, (band, _, hwnd, bounds) in list(self.covers.items()):
             ratio = QApplication.primaryScreen().devicePixelRatio()
             centre = band.center()

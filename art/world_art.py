@@ -204,6 +204,173 @@ def woolly(t=0.0):
     return c.to_image()
 
 
+# -- pumpkins ----------------------------------------------------------------------------------------
+
+COMMON.update({
+    "pumpkin": ("#93380a", "#d0600f", "#ef8722", "#fbb556", "#4e1e04"),
+    "pumpkin_young": ("#8a6a10", "#c49a1c", "#e2bd34", "#f2d872", "#4a3806"),
+    "pumpkin_green": ("#38501a", "#557624", "#759a32", "#9cbc58", "#1e2e0a"),
+    "vine": ("#2c4a14", "#43681e", "#5f8a2c", "#86ae4c", "#16280a"),
+    "stem": ("#4a3a16", "#6e5826", "#8e7638", "#ae9652", "#271e0a"),
+    "flower": ("#b07c0e", "#e0a818", "#f6cc3a", "#fde67e", "#5e3e04"),
+})
+
+
+def _pumpkin_body(c, cx, base, size, mat):
+    """A ribbed pumpkin sitting on the ground: side ribs first (darker), the front rib last."""
+    w, h = 9.0 * size, 6.4 * size
+    cy = base - h
+    for dx, rx, bias in ((-0.55, 0.5, -0.25), (0.55, 0.5, -0.25), (-0.28, 0.55, -0.08), (0.28, 0.55, -0.08),
+                         (0.0, 0.5, 0.08)):
+        c.ellipse(cx + dx * w, cy, rx * w, h, mat, bias=bias)
+    return cy - h
+
+
+def pumpkin(stage, sway=0.0):
+    """40 x 32. Stages: 0 sprout, 1 vine with a flower, 2 small green, 3 yellow-orange, 4 big ripe."""
+    c = Canvas(40, 32)
+    ground = 30
+    if stage == 0:  # a sprout: a little stem with two seed leaves
+        c.ellipse(20, ground + 0.5, 3.5, 1.2, "dirt")
+        tip = (20 + sway * 0.5, ground - 6)
+        c.capsule(20, ground, tip[0], tip[1], 0.8, 0.7, "vine")
+        c.ellipse(tip[0] - 2.4, tip[1] - 0.6, 2.4, 1.3, "vine", angle=-20)
+        c.ellipse(tip[0] + 2.4, tip[1] - 0.6, 2.4, 1.3, "vine", angle=20)
+        return c.to_image()
+    # the vine along the ground, with leaves (grows longer each stage)
+    reach = (4, 13, 15, 16, 17)[stage]
+    c.capsule(20 - reach, ground, 20 + reach * 0.8, ground - 0.5, 0.9, 0.8, "vine")
+    leaves = [(-reach + 2, 1.0), (reach * 0.7, 1.0)] if stage else [(-2.5, 0.8), (2.5, 0.8)]
+    if stage >= 2:
+        leaves.append((-reach * 0.5, 1.2))
+    for dx, size in leaves:
+        lx, ly = 20 + dx, ground - 3.2 * size + sway * 0.4
+        c.ellipse(lx, ly, 3.4 * size, 2.6 * size, "vine", angle=-20 if dx < 0 else 20)
+        c.capsule(lx, ly + 1.5 * size, lx, ground, 0.5, 0.5, "vine", bias=-0.3)
+    if stage == 0:
+        c.capsule(20, ground, 20 + sway * 0.5, ground - 5, 0.8, 0.7, "vine")
+        return c.to_image()
+    if stage == 1:  # a yellow flower on a curl of vine
+        c.capsule(22, ground, 23 + sway * 0.5, ground - 9, 0.7, 0.6, "vine")
+        fx, fy = 23 + sway * 0.5, ground - 11
+        for a in range(5):
+            ang = a / 5 * 2 * math.pi
+            c.ellipse(fx + math.cos(ang) * 2.0, fy + math.sin(ang) * 2.0, 1.6, 1.6, "flower")
+        c.pixel(fx, fy, "stem", 1)
+        return c.to_image()
+    size, mat = {2: (0.55, "pumpkin_green"), 3: (0.8, "pumpkin_young"), 4: (1.15, "pumpkin")}[stage]
+    top = _pumpkin_body(c, 20, ground + 0.5, size, mat)
+    # the stem, and a curly tendril on the ripe one
+    c.capsule(20, top + 2, 21 + size, top - 1.5 * size, 1.2 * size, 0.9 * size, "stem")
+    if stage == 4:
+        for i in range(6):
+            a = i * 1.1
+            c.pixel(23 + math.cos(a) * 2 + i * 0.6, top - 2 + math.sin(a) * 1.6, "vine", 2)
+    return c.to_image()
+
+
+# -- geese ---------------------------------------------------------------------------------------------
+
+COMMON.update({
+    "goose": ("#4a3c30", "#6c5a48", "#8c7862", "#ab9882", "#241c14"),
+    "goose_black": ("#0c0a0a", "#1a1616", "#2a2424", "#3e3636", "#040303"),
+    "goose_pale": ("#a8a090", "#cfc8b8", "#e8e2d4", "#ffffff", "#5c564a"),
+    "bubble": ("#d8d8d8", "#ffffff", "#ffffff", "#ffffff", "#2a2a2a"),
+})
+
+
+def goose(pose="walk", t=0.0):
+    """32 x 32 Canada goose facing right. pose: walk, honk (neck up, beak open), fly."""
+    c = Canvas(32, 32)
+    s = math.sin(t * 2 * math.pi)
+    if pose == "fly":
+        y = 16
+        c.capsule(9, y, 3, y - 1, 2.2, 1.6, "goose_pale")              # white rump and tail
+        c.ellipse(14, y, 7.5, 3.6, "goose")
+        c.ellipse(15, y + 2, 5.0, 1.6, "goose_pale", bias=-0.2)
+        c.capsule(20, y - 1, 27, y - 3, 1.5, 1.2, "goose_black")         # neck stretched forward
+        c.ellipse(28, y - 3.4, 2.2, 1.7, "goose_black")
+        c.ellipse(27.6, y - 2.3, 1.2, 0.8, "goose_pale")                 # chin strap
+        c.capsule(29.5, y - 3.2, 31.2, y - 2.8, 0.7, 0.5, "goose_black")
+        wy = y - 1 - s * 8
+        c.polygon([(10, y - 1), (17, y - 1), (13 - s, wy - 1), (9, wy)], "goose", lum=0.6)
+        return c.to_image()
+    step = s if pose == "walk" else 0.0
+    # legs
+    c.capsule(14, 22, 13 - step * 2, 29, 0.6, 0.6, "goose_black")
+    c.capsule(17, 22, 18 + step * 2, 29, 0.6, 0.6, "goose_black")
+    c.capsule(13 - step * 2, 29.5, 15.5 - step * 2, 29.5, 0.6, 0.6, "goose_black")
+    c.capsule(18 + step * 2, 29.5, 20.5 + step * 2, 29.5, 0.6, 0.6, "goose_black")
+    # body, folded wing, white rump
+    c.capsule(8, 18, 4, 16, 2.2, 1.4, "goose_pale")
+    c.ellipse(15, 18 + abs(step) * 0.5, 8.0, 5.0, "goose", angle=-8)
+    c.ellipse(16, 21, 5.5, 2.0, "goose_pale", bias=-0.2)
+    c.ellipse(13, 17, 5.5, 3.0, "goose", bias=-0.25, angle=-10)
+    # neck and head: tall when honking
+    if pose == "honk":
+        top = (24, 3 + t * 2)
+        c.capsule(21, 15, top[0], top[1] + 3, 1.7, 1.4, "goose_black")
+        c.ellipse(top[0] + 1, top[1] + 1, 2.4, 1.9, "goose_black", angle=-25)
+        c.ellipse(top[0] + 0.4, top[1] + 2.2, 1.2, 0.8, "goose_pale")
+        open_by = 1.2 if t < 0.6 else 0.3
+        c.capsule(top[0] + 3, top[1], top[0] + 6, top[1] - 2.0, 0.6, 0.5, "goose_black")
+        c.capsule(top[0] + 3, top[1] + 0.8, top[0] + 6, top[1] + 0.8 + open_by - 1.0, 0.5, 0.4, "goose_black")
+        c.pixel(top[0] + 1, top[1], "eye")
+    else:
+        bob = s * 1.2
+        c.capsule(21, 15, 24 + bob * 0.5, 7 + abs(bob) * 0.4, 1.7, 1.4, "goose_black")
+        hx, hy = 25 + bob * 0.5, 6 + abs(bob) * 0.4
+        c.ellipse(hx, hy, 2.4, 1.8, "goose_black")
+        c.ellipse(hx - 0.4, hy + 1.1, 1.2, 0.8, "goose_pale")
+        c.capsule(hx + 2, hy + 0.2, hx + 4.5, hy + 0.5, 0.7, 0.5, "goose_black")
+    return c.to_image()
+
+
+def goose_far(t=0.0):
+    """12 x 8 distant goose silhouette for a migrating V, flying left (drawn facing right; mirrored)."""
+    c = Canvas(14, 10)
+    s = math.sin(t * 2 * math.pi)
+    c.capsule(2, 5, 10, 5, 1.2, 0.9, "goose_black")
+    c.ellipse(11.5, 4.8, 1.2, 1.0, "goose_black")
+    c.capsule(6.5, 5, 4.5, 5 - s * 4.2, 1.1, 0.6, "goose")  # wing beating up and down
+    c.capsule(7.5, 5, 6.0, 5 - s * 3.6, 0.9, 0.5, "goose", bias=-0.3)
+    return c.to_image(outline=False)
+
+
+def honk_bubble():
+    """A little speech bubble that says HONK! in a hand-made pixel font."""
+    letters = {
+        "H": ["101", "101", "111", "101", "101"],
+        "O": ["111", "101", "101", "101", "111"],
+        "N": ["1001", "1101", "1011", "1001", "1001"],
+        "K": ["101", "110", "100", "110", "101"],
+        "!": ["1", "1", "1", "0", "1"],
+    }
+    from PIL import Image
+    w, h = 30, 14
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    px = img.load()
+    edge, fill, ink = (42, 42, 42, 255), (255, 255, 255, 255), (30, 30, 30, 255)
+    for y in range(1, h - 4):
+        for x in range(1, w - 1):
+            px[x, y] = fill
+    for x in range(1, w - 1):
+        px[x, 0], px[x, h - 4] = edge, edge
+    for y in range(1, h - 4):
+        px[0, y], px[w - 1, y] = edge, edge
+    for (x, y) in ((4, h - 3), (5, h - 3), (4, h - 2)):  # the tail of the bubble
+        px[x, y] = edge
+    px[5, h - 4] = fill
+    x0 = 3
+    for ch in "HONK!":
+        for row, bits in enumerate(letters[ch]):
+            for col, bit in enumerate(bits):
+                if bit == "1":
+                    px[x0 + col, 2 + row] = ink
+        x0 += len(letters[ch][0]) + 1
+    return img
+
+
 def tray_icon():
     """32 x 32 fox face for the tray."""
     import fox_art
@@ -227,6 +394,12 @@ SPRITES = {
     "jay_hop": ([jay("hop", i / 4) for i in range(4)], 110, True, (12, 22)),
     "woolly": ([woolly(i / 6) for i in range(6)], 140, True, (12, 8)),
     "tray_icon": ([tray_icon()], 1000, False, (16, 31)),
+    "goose_walk": ([goose("walk", i / 4) for i in range(4)], 140, True, (16, 30)),
+    "goose_honk": ([goose("honk", f) for f in (0.0, 0.3, 0.5, 0.8)], 110, False, (16, 30)),
+    "goose_fly": ([goose("fly", i / 4) for i in range(4)], 110, True, (16, 22)),
+    "goose_far": ([goose_far(i / 4) for i in range(4)], 140, True, (7, 5)),
+    "honk_bubble": ([honk_bubble()], 1000, False, (4, 13)),
+    **{f"pumpkin_{s}": ([pumpkin(s, sw) for sw in (0, 1, 0, -1)], 700, True, (20, 30)) for s in range(5)},
 }
 for colour in LEAF_COLOURS:
     SPRITES[f"leaf_{colour.split('_')[1]}"] = ([leaf(colour, s) for s in range(4)], 160, True, (4, 4))

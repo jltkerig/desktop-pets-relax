@@ -8,7 +8,8 @@ WORLD_FILE = USER_DIR / "world.json"
 
 DEFAULTS = {
     "foxes": {"orange": True, "grey": True},
-    "items": {"oak": {"out": True, "x": None}},  # x None: placed automatically
+    # x None: placed automatically. The pumpkin patch keeps each pumpkin's place and planting time.
+    "items": {"oak": {"out": True, "x": None}, "pumpkins": {"out": True, "x": None, "patch": []}},
     "season": "auto",
     "scale": 2,
 }

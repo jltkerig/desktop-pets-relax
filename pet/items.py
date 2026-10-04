@@ -134,3 +134,75 @@ class Mound(Thing):
             self.alpha -= dt / 4
             if self.alpha <= 0:
                 self.gone = True
+
+
+class Pumpkin(Thing):
+    """A pumpkin that grows from a sprout to a big ripe pumpkin while you work.
+
+    Its stage comes from when it was planted, so it keeps growing between runs (the time is saved).
+    """
+    kind = "pumpkin"
+    draggable = True
+    z = 6
+    STAGE_SECONDS = 10 * 60  # about 40 minutes from sprout to ripe
+    STAGES = 5
+
+    def __init__(self, world, x, planted, pace=1.0, record=None):
+        super().__init__(world, x, world.ground, "pumpkin_0")
+        self.planted = planted
+        self.pace = pace
+        self.record = record  # its entry in the saved patch, kept up to date when it is moved
+        self.anim.time = world.rng.uniform(0, 2)
+
+    @property
+    def stage(self):
+        age = self.world.now().timestamp() - self.planted
+        return max(0, min(self.STAGES - 1, int(age / (self.STAGE_SECONDS * self.pace))))
+
+    @property
+    def ripe(self):
+        return self.stage >= 3
+
+    def update(self, dt):
+        name = f"pumpkin_{self.stage}"
+        if self.anim.name != name:
+            self.anim.name = name
+        super().update(dt)
+
+
+class Treasure(Thing):
+    """A picture of a taskbar icon that a fox "dug up". Only a picture: nothing on the computer is touched.
+
+    The window fills in world.images[key] with the copied icon. Carried in the fox's mouth, then dropped,
+    and it fades away after a while.
+    """
+    kind = "treasure"
+    z = 27
+    SIZE = 12  # sprite pixels square (the icon is shrunk to this, so it looks pixelated like everything else)
+
+    def __init__(self, world, fox, key):
+        super().__init__(world, fox.x, world.ground, "acorn")  # the sprite is unused; the window draws the icon
+        self.key = key
+        self.carried_by = fox
+        self.on_ground_for = 0.0
+
+    def rect(self):
+        s = self.world.scale
+        size = self.SIZE * s
+        return self.x - size / 2, self.y - size, size, size
+
+    def update(self, dt):
+        fox = self.carried_by
+        if fox is not None and not fox.gone:
+            s = self.world.scale
+            self.facing = fox.facing
+            self.x = fox.x + fox.facing * 25 * s
+            self.y = fox.y - 13 * s  # in its mouth
+            return
+        self.carried_by = None
+        self.y = min(self.world.ground, self.y + 400 * self.world.scale * dt)  # drops to the ground
+        self.on_ground_for += dt
+        if self.on_ground_for > 35:
+            self.alpha -= dt / 4
+            if self.alpha <= 0:
+                self.gone = True

@@ -4,8 +4,8 @@ import random
 
 from pet import seasons
 from pet.fox import TROT, WALK, Fox, Step
-from pet.items import Acorn, Leaf, Tree
-from pet.visitors import Jay, Squirrel, Woolly
+from pet.items import Acorn, Leaf, Pumpkin, Treasure, Tree
+from pet.visitors import Goose, Jay, Squirrel, Woolly, migrating_v
 
 LEAF_COLOURS = ("red", "orange", "yellow", "brown")
 
@@ -23,6 +23,11 @@ class World:
         self.cursor_still = 0.0
         self.timers = {"leaf": 1.0, "acorn": self.rng.uniform(20, 50), "visitor": self.rng.uniform(25, 60)}
         self.paused = False
+        self.dirty = False  # settings changed here (pumpkins planted); the window saves them
+        self.taskbar_spots = []   # x of each taskbar icon, filled in by the window
+        self.images = {}          # treasure key -> picture of the icon (set by the window)
+        self.grab_requests = []   # (treasure key, x) the window should copy the icon for
+        self._treasures = 0
         self.rebuild()
 
     # -- setup -----------------------------------------------------------------------------------------
@@ -54,7 +59,13 @@ class World:
         for thing in self.of("tree"):
             if thing.variant not in wanted_items:
                 thing.gone = True
-        for name in wanted_items:
+        if "pumpkins" in wanted_items:
+            if not self.of("pumpkin"):
+                self.grow_pumpkins()
+        else:
+            for thing in self.of("pumpkin"):
+                thing.gone = True
+        for name in wanted_items - {"pumpkins"}:
             if not any(t.variant == name for t in self.of("tree")):
                 x = self.settings["items"][name].get("x")
                 x = x if isinstance(x, (int, float)) and 0 < x < self.width else self.width * 0.72
@@ -72,6 +83,25 @@ class World:
                 for fox in have:
                     fox.gone = True
         self.things = [t for t in self.things if not t.gone]
+
+    def grow_pumpkins(self, replant=False):
+        """Put out the pumpkin patch: the saved pumpkins, or three new sprouts."""
+        item = self.settings["items"].setdefault("pumpkins", {"out": True, "x": None, "patch": []})
+        for thing in self.of("pumpkin"):
+            thing.gone = True
+        patch = [p for p in item.get("patch", []) if isinstance(p, dict)
+                 and isinstance(p.get("x"), (int, float)) and isinstance(p.get("planted"), (int, float))]
+        if replant or not patch:
+            centre = item.get("x") if isinstance(item.get("x"), (int, float)) else self.width * 0.25
+            now = self.now().timestamp()
+            patch = [{"x": round(max(40, min(self.width - 40, centre + (i - 1) * 46 * self.scale))),
+                      "planted": now - self.rng.uniform(0, 90), "pace": round(self.rng.uniform(0.85, 1.2), 2)}
+                     for i in range(3)]
+            self.dirty = True
+        item["patch"] = patch
+        for record in patch:
+            x = max(20.0, min(self.width - 20.0, float(record["x"])))
+            self.add(Pumpkin(self, x, record["planted"], float(record.get("pace", 1.0)), record))
 
     # -- every frame -------------------------------------------------------------------------------------
 
@@ -123,6 +153,10 @@ class World:
             choices.remove("squirrel")
         if "jay" in choices and self.tree() is None:
             choices.remove("jay")
+        if "geese" in choices and self.of("goose"):
+            choices.remove("geese")
+        if "migrants" in choices and self.of("migrant"):
+            choices.remove("migrants")
         if kind is not None:
             choices = [kind] if kind in choices else []
         if not choices:
@@ -132,6 +166,17 @@ class World:
             return self.add(Squirrel(self, self.rng.choice(acorns)))
         if pick == "jay":
             return self.add(Jay(self, self.tree()))
+        if pick == "migrants":
+            return [self.add(goose) for goose in migrating_v(self)][0]
+        if pick == "geese":
+            foxes = self.of("fox")
+            centre = self.rng.choice(foxes).x if foxes else self.width * 0.5
+            gaggle = []
+            for i in range(self.rng.randint(2, 3)):
+                land = centre + (90 + i * 34) * self.scale * self.rng.choice((-1, 1))
+                land = max(50.0, min(self.width - 50.0, land))
+                gaggle.append(self.add(Goose(self, land, delay=i * 0.7)))
+            return gaggle[0]
         return self.add(Woolly(self))
 
     # -- questions a fox asks ----------------------------------------------------------------------------
@@ -158,8 +203,18 @@ class World:
                     return fox
         return None
 
+    def nearest_fox(self, x):
+        foxes = self.of("fox")
+        return min(foxes, key=lambda f: abs(f.x - x)) if foxes else None
+
+    def honk(self, goose):
+        """Foxes near a honking goose react, happily."""
+        for fox in self.of("fox"):
+            if abs(fox.x - goose.x) < 500 * self.scale / 2:
+                fox.hear_honk(goose.x)
+
     def visitor_to_watch(self, fox):
-        for kind in ("squirrel", "jay", "woolly"):
+        for kind in ("squirrel", "jay", "woolly", "goose"):
             for v in self.of(kind):
                 if v not in fox.watched and abs(v.x - fox.x) < 600 * self.scale / 2 and 0 < v.x < self.width:
                     return v
@@ -204,6 +259,44 @@ class World:
                   Step("boop", face=fox.x), Step("happy", 1.2, face=fox.x))
         fox.do(Step("playbow", 1.4, face=friend.x), Step("trot", to_x=meet, speed=TROT),
                Step("boop", face=run_to), Step("roll", 1.6), Step("happy", 1.0, then=done))
+
+    def pumpkin_near(self, fox, reach):
+        ripe = [p for p in self.of("pumpkin") if p.ripe and abs(p.x - fox.x) < reach * self.scale / 2]
+        return min(ripe, key=lambda p: abs(p.x - fox.x)) if ripe else None
+
+    def treasure_spot(self, fox):
+        """A taskbar icon to dig at, not too far away."""
+        near = [x for x in self.taskbar_spots if abs(x - fox.x) < 700 * self.scale / 2]
+        spots = near or self.taskbar_spots
+        return self.rng.choice(spots) if spots else None
+
+    def dig_for_treasure(self, fox, spot=None):
+        """Walk over an icon, dig, "find" a copy of it and run off with it."""
+        spot = spot if spot is not None else self.treasure_spot(fox)
+        if spot is None:
+            return False
+        side = 1 if spot >= fox.x else -1
+        stand = spot - side * 24 * self.scale
+        run_to = max(60.0, min(self.width - 60.0, stand - side * self.rng.uniform(160, 320) * self.scale))
+        if abs(run_to - stand) < 80:
+            run_to = max(60.0, min(self.width - 60.0, stand + side * 200 * self.scale))
+        fox.do(Step("walk", to_x=stand, speed=WALK), Step("sniff", face=spot), Step("sniff", face=spot),
+               Step("dig", self.rng.uniform(2.0, 3.2), face=spot, then=lambda: self.find_treasure(fox, spot)),
+               Step("hop", face=spot), Step("trot", to_x=run_to, speed=TROT * 1.2, then=lambda: self.drop_treasure(fox)),
+               Step("playbow", 1.0), Step("roll", 1.6), Step("happy", 1.2))
+        return True
+
+    def find_treasure(self, fox, spot):
+        self._treasures += 1
+        key = f"treasure{self._treasures}"
+        self.grab_requests.append((key, spot))
+        fox.carrying = self.add(Treasure(self, fox, key))
+
+    def drop_treasure(self, fox):
+        treasure = getattr(fox, "carrying", None)
+        if treasure is not None:
+            treasure.carried_by = None
+            fox.carrying = None
 
     def wander_target(self, fox):
         reach = self.rng.uniform(80, 360) * self.scale / 2

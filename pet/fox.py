@@ -46,6 +46,7 @@ class Fox(Thing):
         self.just_woke = False
         self.watched = set()  # visitors it has already sat and watched
         self.busy_with = None  # another fox it is playing with
+        self.carrying = None   # a dug-up treasure in its mouth
         self.rng = world.rng
 
     # -- what other things call ------------------------------------------------------------------------
@@ -70,6 +71,16 @@ class Fox(Thing):
         elif not self.held:
             self.do(Step("tilt"), Step("happy", 1.0))
 
+    def hear_honk(self, goose_x):
+        """A goose honked nearby: a head tilt and a happy hop. A sleeping fox wakes up cheerful."""
+        if self.held or self.vy:
+            return
+        if self.asleep:
+            self.do(Step("wake"), Step("tilt", face=goose_x), Step("happy", 1.0, face=goose_x))
+            self.just_woke = True
+        elif self.step is None or self.step.anim not in ("tilt", "hop", "pounce", "trot"):
+            self.do(Step("tilt", face=goose_x), Step("hop", face=goose_x), Step("watch", 2.0, face=goose_x))
+
     def pet(self):
         """The cursor is stroking it: happy wiggles. A sleeping fox keeps sleeping (still content)."""
         if self.held or self.asleep or self.vy:
@@ -90,6 +101,9 @@ class Fox(Thing):
             self.do(Step("hop"), Step("happy", 1.0))
 
     def pick_up(self):
+        if self.carrying is not None:  # it lets go of its treasure
+            self.carrying.carried_by = None
+            self.carrying = None
         self.held = True
         self.do(Step("held", 10 ** 9))
 
@@ -204,6 +218,19 @@ class Fox(Thing):
         if visitor is not None:
             self.watched.add(visitor)
             self.plan.extend([Step("watch", rng.uniform(4, 7), face=visitor.x), Step("tilt", face=visitor.x)])
+            return
+
+        # bored? dig at a taskbar icon for treasure
+        if w.taskbar_spots and self.boredom > 0.3 and rng.random() < 0.15 and w.dig_for_treasure(self):
+            return  # dig_for_treasure filled in the plan
+
+        # a ripe pumpkin to inspect
+        pumpkin = w.pumpkin_near(self, 700)
+        if pumpkin is not None and rng.random() < 0.25:
+            side = -1 if pumpkin.x > self.x else 1
+            self.plan.extend([Step("walk", to_x=pumpkin.x + side * 30 * w.scale, speed=WALK),
+                              Step("sniff", face=pumpkin.x), Step("boop", face=pumpkin.x),
+                              Step("tilt", face=pumpkin.x), Step("happy", 1.0)])
             return
 
         # play: acorns, falling leaves, the cursor, the other fox

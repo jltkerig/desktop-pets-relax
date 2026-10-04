@@ -28,20 +28,20 @@ def head(c, cx, cy, tilt=0.0, eyes="open", mouth=0.0, ear=0.0, ears_down=False, 
 
     # skull, cheek ruff, snout
     hx, hy = p(0, 0)
-    c.ellipse(hx, hy, 7.6, 7.0, "fur", angle=tilt)
-    ch = p(1.5, 4.2)
-    c.ellipse(ch[0], ch[1], 6.0, 3.0, "white", angle=tilt - 8)
-    sx, sy = p(7.5, 2.0)
-    c.ellipse(sx, sy, 5.6, 3.1, "fur", angle=tilt + 4)
-    lx, ly = p(7.8, 3.6)
-    c.ellipse(lx, ly, 4.8, 1.7, "white", angle=tilt + 4)
+    c.ellipse(hx, hy, 6.8, 5.9, "fur", angle=tilt)
+    ch = p(1.0, 3.6)
+    c.ellipse(ch[0], ch[1], 5.2, 2.4, "white", angle=tilt - 8)
+    s1, s2 = p(3.0, 1.0), p(12.5, 1.9)
+    c.capsule(s1[0], s1[1], s2[0], s2[1], 3.4, 1.3, "fur")      # a long, tapering snout
+    j1, j2 = p(3.5, 3.4), p(11.5, 3.0)
+    c.capsule(j1[0], j1[1], j2[0], j2[1], 1.9, 0.8, "white")    # the white jaw underneath
     if mouth > 0:
         mx, my = p(7.0, 4.2 + mouth * 1.5)
         c.ellipse(mx, my, 3.6, 0.8 + mouth * 2.4, "mouth", angle=tilt + 4)
         tx, ty = p(6.6, 5.0 + mouth * 2.2)
         c.ellipse(tx, ty, 2.2, 0.7 + mouth * 0.9, "tongue", angle=tilt)
-    nx, ny = p(12.6, 1.2)
-    c.ellipse(nx, ny, 1.7, 1.4, "nose")
+    nx, ny = p(13.2, 1.5)
+    c.ellipse(nx, ny, 1.4, 1.2, "nose")
     c.pixel(nx - 0.6, ny - 0.8, "shine", 3)
 
     # eye (look shifts the pupil: -1 back, +1 forward)
@@ -69,21 +69,21 @@ def neck(c, base, head_at):
     """Joins the head to the body: a furry neck with the white throat running up the front."""
     hx, hy = head_at
     bx, by = base
-    c.capsule(bx, by, hx - 1.5, hy + 2.5, 5.0, 4.4, "fur")
-    c.capsule(bx + 2.2, by + 1.0, hx + 1.0, hy + 4.5, 2.8, 2.6, "white")
+    c.capsule(bx, by, hx - 1.5, hy + 2.0, 4.2, 3.6, "fur")
+    c.capsule(bx + 1.8, by + 1.0, hx + 0.8, hy + 3.8, 2.3, 2.0, "white")
 
 
-def leg(c, hip, paw, r_top=2.8, r_paw=2.1, far=False):
+def leg(c, hip, paw, r_top=2.3, r_paw=1.7, far=False):
     bias = -0.28 if far else 0.0
     c.capsule(hip[0], hip[1], paw[0], paw[1], r_top, r_paw, "side", bias)
     # dark "socks" on the lower half
     mid = (hip[0] + (paw[0] - hip[0]) * 0.5, hip[1] + (paw[1] - hip[1]) * 0.5)
-    c.capsule(mid[0], mid[1], paw[0], paw[1], r_paw + 0.35, r_paw, "dark", bias)
+    c.capsule(mid[0], mid[1], paw[0], paw[1], r_paw + 0.25, r_paw, "dark", bias)
 
 
-def tail(c, base, ctrl, tip, thick=5.2, far=False):
+def tail(c, base, ctrl, tip, thick=4.3, far=False):
     pts = bezier(base, ctrl, tip, 12)
-    radii = [2.4 + thick * math.sin(math.pi * (0.15 + 0.8 * i / 11)) * (0.9 if i < 10 else 0.75) for i in range(12)]
+    radii = [1.8 + thick * math.sin(math.pi * (0.15 + 0.8 * i / 11)) * (0.9 if i < 10 else 0.75) for i in range(12)]
     radii[-1] = 1.6
     mats = ["fur"] * 8 + ["tip"] * 3
     c.chain(pts, radii, mats, bias=-0.2 if far else 0.0)
@@ -101,7 +101,7 @@ def fox(pose="stand", **k):
 def stand(c, step=0.0, bob=0.0, tail_lift=0.0, swish=0.0, eyes="open", head_dx=0.0, head_dy=0.0, tilt=0.0,
           mouth=0.0, ear=0.0, stride=5.0, paw_lift=None, look=0.0, crouch=0.0):
     """step: walk cycle 0..1. crouch 0..1 lowers the body (pounce wind-up)."""
-    y = 43 + bob + crouch * 6
+    y = 42 + bob + crouch * 6
     s = math.sin(step * 2 * math.pi)
     s2 = math.sin(step * 2 * math.pi + math.pi)
 
@@ -114,9 +114,9 @@ def stand(c, step=0.0, bob=0.0, tail_lift=0.0, swish=0.0, eyes="open", head_dx=0
     # tail
     tail(c, (17, y - 1), (8, y - 6 - tail_lift * 4 + swish), (3 + swish * 0.3, y - 12 - tail_lift * 8 + swish * 1.5))
     # body
-    c.ellipse(30, y, 14.5, 8.2 - crouch * 1.2, "fur", angle=-3 + crouch * 6)
-    c.ellipse(41, y + 2, 5.2, 5.6, "white", angle=-10)
-    c.ellipse(30, y + 5.5, 9.5, 2.6, "white", bias=-0.25, clip=lambda px, py: py >= y + 4)
+    c.ellipse(30, y, 15.0, 6.6 - crouch * 1.0, "fur", angle=-3 + crouch * 6)
+    c.ellipse(41, y + 1.5, 4.2, 4.6, "white", angle=-10)
+    c.ellipse(30, y + 4.5, 9.0, 2.0, "white", bias=-0.25, clip=lambda px, py: py >= y + 3.5)
     # near legs
     leg(c, (24, y + 3), (23 + stride * s2 * 0.6, GROUND - lift(step * 2 * math.pi + math.pi)))
     if paw_lift is not None:  # one front paw reaching forward (batting)
@@ -132,9 +132,9 @@ def sit(c, eyes="open", tilt=0.0, mouth=0.0, ear=0.0, swish=0.0, head_dx=0.0, he
         scratch=None, breathe=0.0, ears_down=False, groom=None):
     """scratch: None, or 0..1 phase of the hind paw scratching behind the ear."""
     # haunch and body leaning back
-    c.ellipse(27, 50, 9.5, 8.5 + breathe * 0.3, "fur")
-    c.ellipse(31, 44, 9.0, 13.0 + breathe * 0.4, "fur", angle=-18)
-    c.ellipse(37, 44, 5.0, 8.0, "white", angle=-14)
+    c.ellipse(28, 51, 8.6, 7.4 + breathe * 0.3, "fur")
+    c.ellipse(32, 44, 7.4, 12.5 + breathe * 0.4, "fur", angle=-16)
+    c.ellipse(37, 44, 3.8, 7.4, "white", angle=-12)
     if scratch is None:
         c.capsule(22, 59, 31, 59.5, 2.6, 2.3, "dark")  # hind paw on the ground
     # front legs
@@ -156,7 +156,7 @@ def sit(c, eyes="open", tilt=0.0, mouth=0.0, ear=0.0, swish=0.0, head_dx=0.0, he
 
 def curl(c, breathe=0.0, eyes="closed", lift=0.0):
     """Asleep, curled up with the tail over the nose. lift raises the head (waking)."""
-    c.ellipse(31, 53 - breathe * 0.4, 17.0, 8.5 + breathe * 0.5, "fur")
+    c.ellipse(31, 54 - breathe * 0.4, 17.0, 7.2 + breathe * 0.5, "fur")
     c.ellipse(26, 56, 11, 3.2, "white", bias=-0.3, clip=lambda px, py: py >= 56)
     c.capsule(40, 59, 47, 59.5, 2.5, 2.2, "dark")  # tucked front paws
     head(c, 44, 50 - lift * 6, tilt=12 - lift * 14, eyes=eyes, ears_down=lift < 0.5)
@@ -183,7 +183,7 @@ def leap(c, rise=0.0, eyes="wide", reach=1.0):
     tail(c, (15, y), (6, y + 2), (1, y - 4), thick=4.8)
     leg(c, (20, y + 2), (11, y + 8), far=True)
     leg(c, (23, y + 2), (14, y + 10))
-    c.ellipse(29, y, 15.5, 7.2, "fur", angle=-14 * reach)
+    c.ellipse(29, y, 16.0, 6.0, "fur", angle=-14 * reach)
     c.ellipse(38, y + 1, 3.6, 3.4, "white", angle=-20)
     leg(c, (39, y - 1), (50, y - 2 + 4 * (1 - reach)), far=True)
     leg(c, (41, y), (53, y + 3 * (1 - reach)))
@@ -196,7 +196,7 @@ def bow(c, wiggle=0.0, eyes="open", stretch=1.0, mouth=0.0):
     tail(c, (15, 40), (8 + wiggle, 30), (6 + wiggle * 1.6, 22), thick=5.0)
     leg(c, (20, 44), (18, GROUND), far=True)
     leg(c, (23, 44), (22 + wiggle * 0.3, GROUND))
-    c.ellipse(29, 46, 14.0, 7.4, "fur", angle=16 * stretch)
+    c.ellipse(29, 46, 14.5, 6.2, "fur", angle=16 * stretch)
     c.ellipse(39, 51, 5.0, 4.0, "white", angle=10)
     c.capsule(38, 55, 52, 59.5, 2.8, 2.2, "fur", -0.28)
     c.capsule(46, 59, 52, 59.5, 2.6, 2.2, "dark", -0.28)
@@ -212,7 +212,7 @@ def dig(c, phase=0.0):
     tail(c, (15, 40), (8, 33), (5 + a, 26), thick=5.0)
     leg(c, (20, 44), (18, GROUND), far=True)
     leg(c, (23, 44), (22, GROUND))
-    c.ellipse(30, 46, 14.0, 7.6, "fur", angle=14)
+    c.ellipse(30, 46, 14.5, 6.3, "fur", angle=14)
     leg(c, (39, 50), (45 + a * 3, GROUND - max(0, a) * 3), far=True)
     leg(c, (41, 51), (46 - a * 3, GROUND - max(0, -a) * 3))
     neck(c, (40, 47), (49, 47))

@@ -172,5 +172,91 @@ class Saving(unittest.TestCase):
         self.assertTrue(fixed["foxes"]["orange"])
 
 
+class Pumpkins(unittest.TestCase):
+    def test_pumpkins_grow_from_sprout_to_ripe_and_stop(self):
+        world, clock = make_world(orange=False, grey=False)
+        pumpkins = world.of("pumpkin")
+        self.assertEqual(len(pumpkins), 3)
+        self.assertTrue(all(p.stage == 0 for p in pumpkins))
+        first = pumpkins[0]
+        seen = set()
+        for _ in range(12):
+            clock[0] += datetime.timedelta(minutes=10)
+            world.update(0.1)
+            seen.add(first.stage)
+        self.assertTrue({1, 2, 3, 4} <= seen, seen)
+        self.assertTrue(first.ripe)
+        self.assertEqual(first.anim.name, "pumpkin_4")
+
+    def test_the_patch_keeps_growing_after_a_restart(self):
+        world, clock = make_world(orange=False, grey=False)
+        planted = sorted(p["planted"] for p in world.settings["items"]["pumpkins"]["patch"])
+        self.assertTrue(world.dirty)  # new sprouts get saved
+        again = World(1920, 1040, world.settings, rng=random.Random(5), clock=lambda: clock[0])
+        self.assertEqual(sorted(p.planted for p in again.of("pumpkin")), planted)
+
+    def test_replanting_starts_new_sprouts(self):
+        world, clock = make_world(orange=False, grey=False)
+        clock[0] += datetime.timedelta(hours=2)
+        world.update(0.1)
+        self.assertTrue(all(p.ripe for p in world.of("pumpkin")))
+        world.grow_pumpkins(replant=True)
+        world.update(0.1)
+        self.assertTrue(all(p.stage == 0 for p in world.of("pumpkin")))
+        self.assertEqual(len(world.of("pumpkin")), 3)
+
+    def test_pumpkins_are_autumn_only(self):
+        world, _ = make_world("winter")
+        self.assertFalse(world.of("pumpkin"))
+
+
+class Geese(unittest.TestCase):
+    def test_a_v_of_geese_flies_south_right_to_left_and_leaves(self):
+        world, clock = make_world(orange=False, grey=False)
+        world.invite_visitor("migrants")
+        flock = world.of("migrant")
+        self.assertIn(len(flock), (5, 7, 9))
+        start = [g.x for g in flock]
+        run(world, clock, 3)
+        self.assertTrue(all(g.x < x for g, x in zip(flock, start)))
+        run(world, clock, 200, fps=10)
+        self.assertFalse(world.of("migrant"))
+
+    def test_geese_land_honk_at_the_foxes_and_fly_on(self):
+        world, clock = make_world(orange=True, grey=False)
+        fox = world.of("fox")[0]
+        fox.do(Step("idle", 999))
+        world.invite_visitor("geese")
+        honked = reacted = False
+        for _ in range(60 * 30):
+            run(world, clock, 1 / 30)
+            honked = honked or bool(world.of("bubble"))
+            reacted = reacted or (fox.step is not None and fox.step.anim in ("tilt", "hop"))
+        self.assertTrue(honked)
+        self.assertTrue(reacted)
+        self.assertFalse(world.of("goose"))  # they flew on
+
+
+class Treasure(unittest.TestCase):
+    def test_a_fox_digs_up_an_icon_runs_off_with_it_and_drops_it(self):
+        world, clock = make_world(orange=True, grey=False)
+        world.taskbar_spots = [700.0]
+        fox = world.of("fox")[0]
+        self.assertTrue(world.dig_for_treasure(fox))
+        carried = False
+        for _ in range(40 * 30):
+            run(world, clock, 1 / 30)
+            treasure = world.of("treasure")
+            carried = carried or bool(treasure and treasure[0].carried_by is fox)
+        self.assertTrue(carried)
+        self.assertEqual(world.grab_requests[0][1], 700.0)  # the window copies that icon's picture
+        self.assertIsNone(world.of("treasure")[0].carried_by)  # dropped after running off
+        self.assertIsNone(fox.carrying)
+
+    def test_no_taskbar_icons_means_no_digging(self):
+        world, _ = make_world(orange=True, grey=False)
+        self.assertFalse(world.dig_for_treasure(world.of("fox")[0]))
+
+
 if __name__ == "__main__":
     unittest.main()

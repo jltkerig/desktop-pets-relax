@@ -3,13 +3,18 @@
 The window covers the desktop above the taskbar. It is transparent, so clicks on empty pixels go straight
 to the desktop; only the foxes, the tree and the other things catch the mouse.
 """
-from PySide6.QtCore import QElapsedTimer, QPoint, QRect, Qt, QTimer
+import json
+from pathlib import Path
+
+from PySide6.QtCore import QElapsedTimer, QPoint, QProcess, QRect, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QCursor, QIcon, QPainter, QPixmap, QTransform
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon, QWidget
 
 from pet import save, seasons, sprites
 
 FRAME_MS = 33
+TASKBAR_SCRIPT = Path(__file__).resolve().parent / "taskbar_buttons.ps1"
+TASKBAR_REFRESH_MS = 3 * 60 * 1000
 DRAG_START = 6  # pixels the mouse must move before a press becomes a drag
 
 
@@ -54,6 +59,82 @@ class Desktop(QWidget):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.tick)
         self.timer.start(FRAME_MS)
+        # where the taskbar icons are (for digging up "treasure"); checked now and every few minutes
+        self.taskbar_strip = None
+        self.finder = QProcess(self)
+        self.finder.finished.connect(self._taskbar_found)
+        self.find_taskbar()
+        self.taskbar_timer = QTimer(self)
+        self.taskbar_timer.timeout.connect(self.find_taskbar)
+        self.taskbar_timer.start(TASKBAR_REFRESH_MS)
+
+    # -- the taskbar icons ------------------------------------------------------------------------------
+
+    def find_taskbar(self):
+        if self.finder.state() == QProcess.NotRunning:
+            self.finder.start("powershell", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(TASKBAR_SCRIPT)])
+
+    def _taskbar_found(self):
+        try:
+            strip = json.loads(bytes(self.finder.readAllStandardOutput()).decode("utf-8", "replace") or "{}")
+            ratio = self.screen().devicePixelRatio()
+            strip = {k: strip[k] / ratio for k in ("x", "y", "w", "h")}
+        except (ValueError, KeyError, TypeError):
+            return
+        if strip["w"] < 20 or strip["h"] < 10:
+            return
+        self.taskbar_strip = strip
+        self.world.taskbar_spots = self._icon_spots(strip)
+
+    def _icon_spots(self, strip):
+        """The x (in this window) of the centre of each icon in the strip.
+
+        Columns where the middle of the bar differs from the plain bar colour are part of an icon; runs of
+        such columns about an icon wide are icons.
+        """
+        image = self.screen().grabWindow(0, int(strip["x"]), int(strip["y"]), int(strip["w"]), int(strip["h"])).toImage()
+        if image.isNull():
+            return []
+        ratio = image.width() / max(1.0, strip["w"])
+        h = image.height()
+        bg = image.pixelColor(image.width() - 2, 2)  # the far end of the bar is empty
+        def busy(px):
+            for py in range(int(h * 0.25), int(h * 0.75), 2):
+                c = image.pixelColor(px, py)
+                if abs(c.red() - bg.red()) + abs(c.green() - bg.green()) + abs(c.blue() - bg.blue()) > 90:
+                    return True
+            return False
+        spots, run_start, gap = [], None, 0
+        for px in range(image.width() + 4):
+            if px < image.width() and busy(px):
+                if run_start is None:
+                    run_start = px
+                gap = 0
+            elif run_start is not None:
+                gap += 1
+                if gap > 3:
+                    width = (px - gap) - run_start + 1
+                    if h * 0.3 <= width <= h * 1.0:
+                        centre = (run_start + width / 2) / ratio
+                        spots.append(strip["x"] + centre - self.geometry().x())
+                    run_start, gap = None, 0
+        return spots
+
+    def _grab_icons(self):
+        """Copy the icons the foxes just dug up (a picture only), shrunk so they look pixelated."""
+        while self.world.grab_requests and self.taskbar_strip:
+            key, x = self.world.grab_requests.pop(0)
+            strip = self.taskbar_strip
+            size = int(strip["h"] * 0.62)
+            gx = int(self.geometry().x() + x - size / 2)
+            gy = int(strip["y"] + (strip["h"] - size) / 2)
+            picture = self.screen().grabWindow(0, gx, gy, size, size)
+            from pet.items import Treasure
+            small = picture.scaled(Treasure.SIZE, Treasure.SIZE, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+            s = self.world.scale
+            self.world.images[key] = small.scaled(Treasure.SIZE * s, Treasure.SIZE * s, Qt.IgnoreAspectRatio,
+                                                  Qt.FastTransformation)
+        self.world.grab_requests.clear()
 
     # -- the loop --------------------------------------------------------------------------------------
 
@@ -63,8 +144,13 @@ class Desktop(QWidget):
         local = self.mapFromGlobal(QCursor.pos())
         before = self._area()
         self.world.update(dt, (float(local.x()), float(local.y())))
+        if self.world.grab_requests:
+            self._grab_icons()
         if self.dragging is not None and self.dragging.kind == "fox":
             self.dragging.x, self.dragging.y = float(local.x()), float(local.y()) + 22 * self.world.scale
+        if self.world.dirty:
+            self.world.dirty = False
+            save.store(self.settings)
         after = self._area()
         self.update(before.united(after))
 
@@ -83,7 +169,12 @@ class Desktop(QWidget):
         painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
         for thing in self.world.drawing_order():
             left, top, _, _ = thing.rect()
-            pixmap = self.frames.get(thing.anim.name, thing.anim.frame, self.world.scale, thing.facing)
+            if thing.kind == "treasure":
+                pixmap = self.world.images.get(thing.key)
+                if pixmap is None:
+                    continue
+            else:
+                pixmap = self.frames.get(thing.anim.name, thing.anim.frame, self.world.scale, thing.facing)
             painter.setOpacity(max(0.0, min(1.0, thing.alpha)))
             painter.drawPixmap(int(round(left)), int(round(top)), pixmap)
         painter.end()
@@ -106,7 +197,7 @@ class Desktop(QWidget):
                 self.dragging = thing
                 if thing.kind == "fox":
                     thing.pick_up()
-        if self.dragging is not None and self.dragging.kind == "tree":
+        if self.dragging is not None and self.dragging.kind in ("tree", "pumpkin"):
             thing, start, start_x = self.press
             thing.x = max(40.0, min(self.world.width - 40.0, start_x + p.x() - start.x()))
         elif self.dragging is None and not event.buttons():
@@ -124,6 +215,9 @@ class Desktop(QWidget):
                 self.dragging.drop()
             elif self.dragging.kind == "tree":
                 self.settings["items"][self.dragging.variant]["x"] = round(self.dragging.x)
+                save.store(self.settings)
+            elif self.dragging.kind == "pumpkin" and self.dragging.record is not None:
+                self.dragging.record["x"] = round(self.dragging.x)
                 save.store(self.settings)
         elif self.press is not None and self.press[0].kind == "fox":
             self.press[0].poke()
@@ -163,10 +257,15 @@ class ToyBox:
             disabled.setEnabled(False)
         if self.world.tree() is not None:
             m.addAction("Shake down an acorn", lambda: self.world.drop_acorn(self.world.tree()))
+        if self.world.of("pumpkin"):
+            m.addAction("Plant new pumpkins", self._replant)
+        if self.world.taskbar_spots:
+            m.addAction("Dig up a taskbar treasure", self._dig)
         visit = m.addMenu("Invite a visitor")
         for kind in seasons.VISITORS.get(self.world.season, ()):
-            visit.addAction(kind.replace("jay", "blue jay").replace("woolly", "woolly bear caterpillar").capitalize(),
-                            lambda k=kind: self.world.invite_visitor(k))
+            label = {"jay": "Blue jay", "woolly": "Woolly bear caterpillar", "migrants": "Geese flying south",
+                     "geese": "Geese stopping by to honk", "squirrel": "Squirrel"}.get(kind, kind.title())
+            visit.addAction(label, lambda k=kind: self.world.invite_visitor(k))
 
         m.addSeparator()
         season_menu = m.addMenu("Season")
@@ -210,6 +309,15 @@ class ToyBox:
     def _set_item(self, name, on):
         self.settings["items"][name]["out"] = on
         self._changed()
+
+    def _dig(self):
+        foxes = [f for f in self.world.of("fox") if not f.held]
+        if foxes:
+            self.world.dig_for_treasure(self.world.rng.choice(foxes))
+
+    def _replant(self):
+        self.world.grow_pumpkins(replant=True)
+        save.store(self.settings)
 
     def _set_season(self, key):
         self.settings["season"] = key

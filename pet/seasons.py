@@ -8,11 +8,12 @@ _BY_MONTH = {12: "winter", 1: "winter", 2: "winter", 3: "spring", 4: "spring", 5
 # Items you can put out from the toy box, and the season(s) they belong to.
 ITEMS = {
     "oak": {"label": "Oak tree", "seasons": ("autumn",)},
+    "pumpkins": {"label": "Pumpkin patch", "seasons": ("autumn",)},
 }
 
 # Visitors that drop by on their own, per season. Winter, spring and summer come next.
 VISITORS = {
-    "autumn": ("squirrel", "jay", "woolly"),
+    "autumn": ("squirrel", "jay", "woolly", "migrants", "geese"),
     "winter": (),
     "spring": (),
     "summer": (),

@@ -3,6 +3,10 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.1.2
+
+- `CLAUDE.md`: Claude sessions push straight to `main`; a pull request (merged at once) only if that's refused.
+
 ## 1.1.1
 
 - `CLAUDE.md`: Claude sessions merge their work into `main` through a pull request, so no extra branches

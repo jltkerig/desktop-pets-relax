@@ -103,14 +103,14 @@ def tail(c, base, ctrl, tip, thick=4.3, far=False):
         else:
             radii.append(0.5 + (peak - 0.5) * (1 - ((f - 0.55) / 0.45) ** 1.5))
     mats = ["fur"] * 11 + ["tip"] * (n - 1 - 11)
-    c.chain(pts, radii, mats, bias=-0.2 if far else 0.0)
+    c.chain(pts, radii, mats, bias=-0.2 if far else 0.18)  # a touch brighter: fluffy fur catches light
 
 
 def fox(pose="stand", **k):
     """Returns a 64 x 64 PIL image. See the pose functions below for the knobs each takes."""
     c = Canvas(WIDTH, SIZE, k.pop("palette", "orange"), shift=ROOM)
     POSES[pose](c, **k)
-    return c.to_image(flat=True)
+    return c.to_image()
 
 
 # -- poses -----------------------------------------------------------------------------------------
@@ -364,3 +364,18 @@ ANIMATIONS = {
     "groom": ([dict(pose="sit", groom=i / 6, eyes="closed", tilt=24 + (i % 2) * 4, mouth=0.25 if i % 2 else 0.0,
                     head_dy=3) for i in range(6)], 150, True),
 }
+
+
+def _add_sway():
+    """Give every sitting or standing frame a gentle tail sway, unless the animation already moves the tail."""
+    for name, (frames, ms, loop) in ANIMATIONS.items():
+        if any("swish" in f for f in frames):
+            continue
+        n = len(frames)
+        for i, f in enumerate(frames):
+            if f.get("pose") in ("stand", "sit"):
+                f["swish"] = round(math.sin(i / max(1, n) * 2 * math.pi) * 1.6, 2)
+
+
+_add_sway()
+

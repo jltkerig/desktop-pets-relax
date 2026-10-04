@@ -28,33 +28,52 @@ def oak(sway=0.0, seed=7):
     for x1, y1, x2, y2, r in ((79, 140, 50, 100, 4.0), (81, 132, 112, 96, 4.0), (80, 120, 74, 78, 4.5),
                               (60, 112, 40, 92, 2.5), (104, 104, 124, 88, 2.5)):
         c.capsule(x1, y1, x2 + sway, y2, r, r * 0.6, "bark")
-    # bark texture: a few darker grooves
-    for i in range(9):
-        y = 128 + i * 7
-        c.capsule(76 + (i % 3), y, 77 + (i % 3), y + 4, 0.7, 0.7, "bark", bias=-0.6)
-    # the crown: overlapping clumps, back ones darker, colours mixed like an oak in October
-    colours = ["leaf_orange"] * 5 + ["leaf_red"] * 4 + ["leaf_yellow"] * 4 + ["leaf_brown"] * 2 + ["leaf_green"] * 1
-    clumps = []
-    for _ in range(150):
-        a = rng.uniform(0, 2 * math.pi)
-        r = rng.uniform(0, 1) ** 0.55
-        cx = 80 + math.cos(a) * r * 64
-        cy = 70 + math.sin(a) * r * 46
-        clumps.append((cy, cx, rng.uniform(5.5, 9.5), rng.choice(colours)))
-    for cy, cx, size, mat in sorted(clumps):  # back (higher) clumps first
-        depth = (cy - 26) / 90  # lower clumps are nearer, so a little brighter
-        c.ellipse(cx + sway * (1 - depth), cy, size, size * 0.8, mat, bias=-0.25 + depth * 0.25)
-    # leafy speckle: scattered darker and lighter pixels break up the clumps
-    for _ in range(900):
-        x, y = rng.randrange(10, 150), rng.randrange(14, 124)
-        if c.mat[y][x] and c.mat[y][x].startswith("leaf"):
-            c.fixed[y][x] = rng.choice((0, 0, 2, 3))
-    # loose leaf flecks on the crown's edge
-    for _ in range(70):
-        a = rng.uniform(0, 2 * math.pi)
-        x = 80 + math.cos(a) * rng.uniform(55, 74) + sway
-        y = 70 + math.sin(a) * rng.uniform(38, 54)
-        c.ellipse(x, y, 1.6, 1.2, rng.choice(colours))
+    # bark texture: long vertical furrows, broken in a few places
+    for x, y1, y2 in ((75, 126, 160), (75, 166, 190), (79, 122, 148), (79, 154, 186), (83, 130, 172), (86, 140, 188),
+                      (72, 150, 184)):
+        for y in range(y1, y2):
+            if 0 <= x < 160 and c.mat[y][x] == "bark":
+                c.fixed[y][x] = 0
+    # the crown: one leafy mass with a bumpy oak outline, lit as a single rounded shape
+    cx0, cy0, rx0, ry0 = 80 + sway, 70, 62, 44
+    lumps = [(cx0, cy0, rx0, ry0)]
+    for i in range(14):  # bumps around the edge give the oak its lobed silhouette
+        a = i / 14 * 2 * math.pi + rng.uniform(-0.15, 0.15)
+        lumps.append((cx0 + math.cos(a) * rx0 * 0.86, cy0 + math.sin(a) * ry0 * 0.86 - (4 if math.sin(a) < 0 else 0),
+                      rng.uniform(13, 18), rng.uniform(11, 15)))
+    def in_crown(x, y):
+        return any(((x - lx) / lrx) ** 2 + ((y - ly) / lry) ** 2 <= 1 for lx, ly, lrx, lry in lumps)
+    # leaf colours come in small clusters, warmer toward the bottom, more yellow on top
+    cell = {}
+    def colour(x, y):
+        key = ((x + (y // 3) % 2) // 4, y // 3)
+        if key not in cell:
+            # smooth patches of colour (overlapping waves) with a little randomness on top
+            kx, ky = key[0] * 4, key[1] * 3
+            wave = (math.sin(kx * 0.09 + 1.3) + math.sin(ky * 0.13 + 0.4) + math.sin((kx + ky) * 0.05 + 2.1)) / 6 + 0.5
+            r = min(0.999, max(0.0, wave * 0.8 + rng.random() * 0.2))
+            top = (y - (cy0 - ry0)) / (2 * ry0)  # 0 at the top, 1 at the bottom
+            if r < 0.06:
+                cell[key] = ("leaf_green", rng.uniform(-0.2, 0.05))
+            elif r < 0.06 + 0.32 * (1 - top):
+                cell[key] = ("leaf_yellow", rng.uniform(-0.1, 0.15))
+            elif r < 0.75:
+                cell[key] = ("leaf_orange", rng.uniform(-0.1, 0.15))
+            elif r < 0.93:
+                cell[key] = ("leaf_red", rng.uniform(-0.1, 0.15))
+            else:
+                cell[key] = ("leaf_brown", rng.uniform(-0.15, 0.05))
+        return cell[key]
+    for y in range(0, 130):
+        for x in range(0, 160):
+            if not in_crown(x + 0.5, y + 0.5):
+                continue
+            nx, ny = (x + 0.5 - cx0) / (rx0 + 16), (y + 0.5 - cy0) / (ry0 + 14)
+            mat, jitter = colour(x, y)
+            lum = Canvas._shade(max(-1, min(1, nx)), max(-1, min(1, ny)), jitter)
+            if rng.random() < 0.05:  # little gaps of shadow between the leaves
+                lum -= 0.35
+            c.mat[y][x], c.lum[y][x], c.fixed[y][x] = mat, lum, None
     return c.to_image()
 
 

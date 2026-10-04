@@ -165,11 +165,11 @@ def sit(c, eyes="open", tilt=0.0, mouth=0.0, ear=0.0, swish=0.0, head_dx=0.0, he
         leg(c, (41, 46), (45 + g, 36 + g), r_top=2.8, r_paw=2.3)
     # tail curled along the ground in front of the paws
     tail(c, (22, 57), (36 + swish, 64), (50 + swish * 1.5, 58 - abs(swish) * 0.5), thick=3.6)
-    hx, hy = 40 + head_dx, 26 + head_dy - breathe * 0.4
+    hx, hy = 40 + head_dx, 30 + head_dy - breathe * 0.4  # head close to the shoulders: a short neck
     if scratch is not None:
         a = math.sin(scratch * 2 * math.pi) * 2.2
         leg(c, (27, 49), (35 + a, 33 + a * 0.6), r_top=3.0, r_paw=2.2)
-    neck(c, (36, 38), (hx, hy), thick=1.1)  # sitting: the neck rises from the chest, not the back
+    neck(c, (36, 39), (hx, hy), thick=1.1)  # sitting: the neck rises from the chest, not the back
     head(c, hx, hy, tilt=tilt, eyes=eyes, mouth=mouth, ear=ear, look=look, ears_down=ears_down)
 
 

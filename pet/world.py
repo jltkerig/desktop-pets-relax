@@ -6,7 +6,7 @@ import random
 from pet import daylight, seasons
 from pet.fox import TROT, WALK, ZOOM, Fox, Step
 from pet.items import Acorn, Climbable, Corn, CornCob, Den, Leaf, Message, Prop, Pumpkin, Treasure, Tree
-from pet.visitors import Goose, Jay, Squirrel, Woolly, migrating_v
+from pet.visitors import Goose, Jay, Squirrel, Woolly, crow_party, migrating_v, turkey_flock
 
 LEAF_COLOURS = ("red", "orange", "yellow", "brown")
 
@@ -309,6 +309,10 @@ class World:
             choices.remove("geese")
         if "migrants" in choices and self.of("migrant"):
             choices.remove("migrants")
+        if "turkeys" in choices and self.of("turkey"):
+            choices.remove("turkeys")
+        if "crows" in choices and self.of("crow"):
+            choices.remove("crows")
         if kind is not None:
             choices = [kind] if kind in choices else []
         if not choices:
@@ -324,6 +328,10 @@ class World:
             return self.add(Jay(self, self.tree()))
         if pick == "migrants":
             return [self.add(goose) for goose in migrating_v(self)][0]
+        if pick == "turkeys":
+            return [self.add(turkey) for turkey in turkey_flock(self)][0]
+        if pick == "crows":
+            return [self.add(crow) for crow in crow_party(self)][0]
         if pick == "geese":
             foxes = self.of("fox")
             centre = self.rng.choice(foxes).x if foxes else self.width * 0.5
@@ -391,7 +399,7 @@ class World:
         self.plant_corn(replant=True)
 
     def visitor_to_watch(self, fox):
-        for kind in ("squirrel", "jay", "woolly", "goose", "frog"):
+        for kind in ("squirrel", "jay", "woolly", "goose", "frog", "turkey", "crow"):
             for v in self.of(kind):
                 if v not in fox.watched and abs(v.x - fox.x) < 600 * self.scale / 2 and 0 < v.x < self.width:
                     return v

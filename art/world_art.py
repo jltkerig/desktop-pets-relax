@@ -1042,11 +1042,126 @@ def frog(pose="sit", t=0.0):
     return c.to_image()
 
 
+# -- wild turkeys and crows ------------------------------------------------------------------------------
+
+COMMON.update({
+    "turkey": ("#2a1a10", "#4a2e1a", "#6e4626", "#946436", "#140c06"),
+    "turkey_bar": ("#8a6a3a", "#b8925a", "#d4b47c", "#ecd6a4", "#4a3618"),
+    "turkey_head": ("#5a6e9a", "#7e96c4", "#a6bce0", "#cad8f0", "#2e3a56"),
+    "wattle": ("#7a1414", "#b02020", "#d63a32", "#ee6a5a", "#3e0808"),
+    "turkey_leg": ("#7a5e5a", "#a08480", "#c4a8a2", "#dccac4", "#3e2e2c"),
+    "crow": ("#08080c", "#14141c", "#22222e", "#363a4e", "#020204"),
+    "crow_sheen": ("#1a2238", "#283456", "#3a4a78", "#5468a0", "#0a0e1a"),
+})
+
+
+def turkey(pose="stand", t=0.0):
+    """40 x 40 wild turkey facing right. pose: run, stand, look (head up, glancing back), gobble (tail
+    fanned, head thrust out, wattle shaking), peck (head down at the ground)."""
+    c = Canvas(40, 40)
+    s = math.sin(t * 2 * math.pi)
+    run = pose == "run"
+    ground = 38
+    # legs: long strides when running, planted otherwise
+    stride = s * 4 if run else 0.0
+    body_y = 22 - (abs(s) * 1.5 if run else 0.0)
+    for lx, d in ((17, stride), (21, -stride)):
+        c.capsule(lx, body_y + 5, lx + d, ground - 1, 0.7, 0.6, "turkey_leg")
+        c.capsule(lx + d, ground, lx + d + 3, ground, 0.6, 0.5, "turkey_leg")
+    # the tail: a big barred fan when gobbling, otherwise folded down behind
+    if pose == "gobble":
+        fan = 0.7 + 0.3 * t
+        for i in range(7):
+            a = math.radians(-160 + i * 22 * fan)
+            tip = (12 + math.cos(a) * 14, body_y - 2 + math.sin(a) * 14)
+            c.capsule(12, body_y, tip[0], tip[1], 1.6, 2.6, "turkey", 0.1)
+            c.ellipse(tip[0], tip[1], 2.2, 2.2, "turkey_bar", bias=0.1)
+    else:
+        droop = 3 if run else 6
+        c.capsule(12, body_y, 3, body_y + droop, 2.6, 2.0, "turkey", -0.2)
+        c.capsule(5, body_y + droop - 1, 2, body_y + droop + 1, 1.4, 1.2, "turkey_bar")
+    # body: round and bronze, with pale barring on the folded wing
+    tilt = -18 if run else 0
+    c.ellipse(19, body_y, 10.0, 7.5, "turkey", angle=tilt)
+    c.ellipse(18, body_y - 1, 7.0, 4.5, "turkey", bias=-0.2, angle=tilt)
+    for bx in (13, 16, 19):
+        c.capsule(bx, body_y + 2, bx + 2, body_y + 3, 0.5, 0.5, "turkey_bar")
+    # neck and head: where the head is depends on what it's doing
+    if pose == "peck":
+        hx, hy = 31 + s * 0.5, ground - 4 + abs(s) * 2
+    elif pose == "gobble":
+        hx, hy = 32 + s * 0.8, body_y - 4
+    elif pose == "look":
+        hx, hy = 27 - max(0.0, s) * 4, 7 + abs(s)  # head up high, turning back over its shoulder
+    elif run:
+        hx, hy = 33, body_y - 8
+    else:
+        hx, hy = 28 + s * 0.5, 9
+    c.capsule(25, body_y - 3, hx - 1, hy + 2, 2.2, 1.2, "turkey_head", bias=-0.1)  # a bare, bluish neck
+    c.ellipse(hx, hy, 2.4, 2.2, "turkey_head")
+    wobble = s * 1.2 if pose == "gobble" else 0.0
+    c.capsule(hx + 0.5, hy + 1.5, hx + 0.5 + wobble, hy + 4.5, 1.0, 1.3, "wattle")  # the red wattle
+    c.capsule(hx + 1.5, hy - 1.2, hx + 3.2, hy + 1.8, 0.5, 0.5, "wattle")           # the snood over the beak
+    c.capsule(hx + 2, hy + 0.2, hx + 4, hy + 0.8, 0.6, 0.4, "beak")
+    if pose == "gobble" and t < 0.7:
+        c.capsule(hx + 2, hy + 1.4, hx + 4, hy + 2.4, 0.5, 0.4, "beak")  # beak open
+    c.pixel(hx + 0.5, hy - 0.8, "eye")
+    # the "beard" hanging from the chest
+    c.capsule(27, body_y - 1, 28, body_y + 4, 0.6, 0.4, "turkey", -0.3)
+    return c.to_image()
+
+
+def crow(pose="perch", t=0.0, acorn_in_beak=False):
+    """24 x 24 American crow facing right. pose: fly, perch, hop, walk, peck, caw, tilt (head cocked,
+    looking at something)."""
+    c = Canvas(24, 24)
+    s = math.sin(t * 2 * math.pi)
+    if pose == "fly":
+        c.capsule(7, 12, 1, 12 + s, 1.6, 2.2, "crow", -0.3)  # a fanned tail
+        c.ellipse(12, 12, 6.0, 3.0, "crow")
+        wing_y = 12 - s * 7
+        c.polygon([(9, 11), (14, 11), (9 - s, wing_y - 1), (5, wing_y)], "crow_sheen", lum=0.4)
+        hx, hy = 18, 10.5
+    else:
+        hop = max(0.0, s) * 2.5 if pose == "hop" else 0.0
+        step = s * 1.5 if pose == "walk" else 0.0
+        lean = 20 if pose == "peck" else 0
+        by = 14 - hop
+        c.capsule(12 + step, by + 3, 11 + step * 1.5, 22 - hop, 0.5, 0.5, "crow")   # legs
+        c.capsule(14 - step, by + 3, 14 - step * 1.5, 22 - hop, 0.5, 0.5, "crow")
+        c.capsule(9, by + 1, 3, by + 5, 1.8, 1.4, "crow", -0.3)  # tail
+        c.ellipse(12, by, 5.5, 4.0, "crow", angle=lean - 15)
+        c.polygon([(8, by - 2), (14, by - 2), (7, by + 3)], "crow_sheen", lum=0.3)  # folded wing
+        if pose == "peck":
+            hx, hy = 18, 19 + abs(s) * 2 - hop
+        elif pose == "caw":
+            hx, hy = 17 + t * 1.5, 8 - t - hop  # head stretched forward and up
+        elif pose == "tilt":
+            hx, hy = 16.5, 9.5 - hop
+        else:
+            hx, hy = 16, 9 - hop
+    c.ellipse(hx, hy, 3.0, 2.7, "crow")
+    if pose == "caw" and t < 0.7:  # beak wide open
+        c.polygon([(hx + 2, hy - 0.8), (hx + 6, hy - 2.2), (hx + 2.4, hy + 0.4)], "crow", lum=0.5)
+        c.polygon([(hx + 2, hy + 0.8), (hx + 5.4, hy + 2.4), (hx + 2.4, hy + 1.6)], "crow", lum=0.5)
+    else:
+        c.polygon([(hx + 2.2, hy - 0.9), (hx + 5.6, hy + 0.4), (hx + 2.2, hy + 1.2)], "crow", lum=0.6)
+    if acorn_in_beak:
+        c.ellipse(hx + 5.2, hy + 1.2, 1.4, 1.6, "acorn")
+        c.ellipse(hx + 5.2, hy - 0.2, 1.5, 0.8, "cap")
+    eye_y = hy - (1.4 if pose == "tilt" else 0.8)
+    c.pixel(hx + 0.8, eye_y, "white", 2)  # a glint, so the eye shows against the black
+    return c.to_image()
+
+
 PIXEL_LETTERS = {
     "H": ["101", "101", "111", "101", "101"], "O": ["111", "101", "101", "101", "111"],
     "N": ["1001", "1101", "1011", "1001", "1001"], "K": ["101", "110", "100", "110", "101"],
     "!": ["1", "1", "1", "0", "1"], "R": ["110", "101", "110", "101", "101"], "I": ["111", "010", "010", "010", "111"],
     "B": ["110", "101", "110", "101", "110"], "T": ["111", "010", "010", "010", "010"],
+    "G": ["111", "100", "101", "101", "111"], "L": ["100", "100", "100", "100", "111"],
+    "E": ["111", "100", "110", "100", "111"], "C": ["111", "100", "100", "100", "111"],
+    "A": ["010", "101", "111", "101", "101"], "W": ["10001", "10001", "10101", "10101", "01010"],
 }
 
 
@@ -1122,6 +1237,21 @@ SPRITES = {
     "frog_sit": ([frog("sit", f) for f in (0.0, 0.5, 1.0, 0.5)], 160, True, (9, 15)),
     "frog_hop": ([frog("hop", f) for f in (0.0, 0.35, 0.7, 1.0)], 90, True, (9, 15)),
     "ribbit_bubble": ([word_bubble("RIBBIT")], 1000, False, (4, 13)),
+    "turkey_run": ([turkey("run", i / 4) for i in range(4)], 70, True, (20, 38)),
+    "turkey_stand": ([turkey("stand", i / 4) for i in range(2)], 600, True, (20, 38)),
+    "turkey_look": ([turkey("look", f) for f in (0.0, 0.25, 0.25, 0.0, 0.0)], 260, True, (20, 38)),
+    "turkey_gobble": ([turkey("gobble", f) for f in (0.0, 0.25, 0.5, 0.75, 1.0, 1.0)], 110, False, (20, 38)),
+    "turkey_peck": ([turkey("peck", i / 4) for i in range(4)], 120, True, (20, 38)),
+    "gobble_bubble": ([word_bubble("GOBBLE!")], 1000, False, (4, 13)),
+    "crow_fly": ([crow("fly", i / 4) for i in range(4)], 85, True, (12, 20)),
+    "crow_carry": ([crow("fly", i / 4, acorn_in_beak=True) for i in range(4)], 85, True, (12, 20)),
+    "crow_perch": ([crow("perch", i / 4) for i in range(2)], 600, True, (12, 22)),
+    "crow_hop": ([crow("hop", i / 4) for i in range(4)], 100, True, (12, 22)),
+    "crow_walk": ([crow("walk", i / 4) for i in range(4)], 140, True, (12, 22)),
+    "crow_peck": ([crow("peck", i / 4) for i in range(4)], 110, True, (12, 22)),
+    "crow_tilt": ([crow("tilt", i / 4) for i in range(2)], 500, True, (12, 22)),
+    "crow_caw": ([crow("caw", f) for f in (0.0, 0.3, 0.6, 0.9)], 120, False, (12, 22)),
+    "caw_bubble": ([word_bubble("CAW!")], 1000, False, (4, 13)),
     "scarecrow_surprised": ([scarecrow(0, True, u) for u in (2, 5, 6, 5, 3, 1, 0)], 110, False, (24, 85)),
     **{f"pumpkin_wilt_{k}_{shape}": ([pumpkin_wilt(g, shape, w) for w in (0.0, 0.3, 0.55, 0.8, 1.0)], 160, False,
                                      (20, 30))

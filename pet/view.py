@@ -11,7 +11,7 @@ from PySide6.QtGui import QAction, QActionGroup, QColor, QCursor, QIcon, QPainte
 from PySide6.QtWidgets import (QApplication, QCheckBox, QGroupBox, QLabel, QMenu, QPushButton, QSystemTrayIcon,
                                QVBoxLayout, QWidget)
 
-from pet import discord, save, screens, seasons, sprites
+from pet import __version__, discord, save, screens, seasons, sprites
 
 FRAME_MS = 33
 TASKBAR_SCRIPT = Path(__file__).resolve().parent / "taskbar_buttons.ps1"
@@ -508,7 +508,7 @@ class ToyBox:
         self.world, self.settings = desktop.world, desktop.settings
         icon = QIcon(str(sprites.SPRITE_DIR / "tray_icon.png"))
         self.tray = QSystemTrayIcon(icon)
-        self.tray.setToolTip("Pixel Fox")
+        self.tray.setToolTip(f"Pixel Fox {__version__}")
         self.menu = QMenu()
         self.menu.aboutToShow.connect(self.build)
         self.tray.setContextMenu(self.menu)
@@ -551,7 +551,8 @@ class ToyBox:
         visit = m.addMenu("Invite a visitor")
         for kind in seasons.VISITORS.get(self.world.season, ()):
             label = {"jay": "Blue jay", "woolly": "Woolly bear caterpillar", "migrants": "Geese flying south",
-                     "geese": "Geese stopping by to honk", "squirrel": "Squirrel"}.get(kind, kind.title())
+                     "geese": "Geese stopping by to honk", "squirrel": "Squirrel",
+                     "turkeys": "Wild turkeys", "crows": "Crows"}.get(kind, kind.title())
             visit.addAction(label, lambda k=kind: self.world.invite_visitor(k))
 
         m.addSeparator()

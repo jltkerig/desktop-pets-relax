@@ -766,5 +766,94 @@ class MessageAlwaysGoesHome(unittest.TestCase):
         self.assertIn(("restore", "message1"), world.screen_requests)
 
 
+class Turkeys(unittest.TestCase):
+    def test_turkeys_come_in_threes_or_more_stop_to_look_and_gobble_then_run_off(self):
+        world, clock = make_world(orange=False, grey=False)
+        flock = world.invite_visitor("turkeys").flock
+        self.assertGreaterEqual(len(world.of("turkey")), 3)
+        self.assertIsNone(world.invite_visitor("turkeys"))  # one flock at a time
+        stopped = gobbled = False
+        for _ in range(240 * 10):
+            run(world, clock, 0.1, fps=10)
+            stopped = stopped or flock.state == "stop"
+            gobbled = gobbled or any(b.anim.name == "gobble_bubble" for b in world.of("bubble"))
+            if not world.of("turkey"):
+                break
+        self.assertTrue(stopped)
+        self.assertTrue(gobbled)
+        self.assertFalse(world.of("turkey"))
+
+    def test_turkeys_are_an_autumn_visitor(self):
+        self.assertIn("turkeys", seasons.VISITORS["autumn"])
+        self.assertNotIn("turkeys", seasons.VISITORS["winter"])
+
+
+class Crows(unittest.TestCase):
+    def test_crows_come_in_pairs_or_more_and_land_near_each_other(self):
+        for seed in range(6):
+            world, clock = make_world(seed=seed, orange=False, grey=False)
+            world.invite_visitor("crows")
+            crows = world.of("crow")
+            self.assertGreaterEqual(len(crows), 2)
+            run(world, clock, 15, fps=20)
+            sitting = [c for c in crows if c.state == "sit"]
+            if len(sitting) >= 2:
+                xs = [c.x for c in sitting]
+                self.assertLess(max(xs) - min(xs), 400 * world.scale)
+
+    def test_crows_land_in_the_oak_on_items_and_on_the_ground(self):
+        from pet.visitors import CrowParty
+        where = set()
+        for seed in range(20):
+            world, _ = make_world(seed=seed, orange=False, grey=False)
+            for spot in CrowParty(world, 3).spots:
+                where.add(spot.holder.kind if spot.holder else "ground")
+        self.assertIn("tree", where)
+        self.assertIn("ground", where)
+        self.assertTrue(where & {"prop", "climb", "den", "pumpkin"})
+
+    def test_crows_that_stay_a_while_look_at_things_and_play_with_them(self):
+        played = False
+        for seed in range(10):
+            world, clock = make_world(seed=seed, orange=False, grey=False)
+            for x in (800, 950, 1100):
+                world.add(Acorn(world, x, world.ground)).on_ground = True
+            party = world.invite_visitor("crows").party
+            if not party.long:
+                continue
+            states = set()
+            for _ in range(150 * 10):
+                run(world, clock, 0.1, fps=10)
+                states |= {c.state for c in world.of("crow")}
+                if not world.of("crow"):
+                    break
+            played = played or {"inspect", "play"} <= states
+            self.assertFalse(world.of("crow"))
+            self.assertTrue(all(a.alpha == 1 and not a.taken for a in world.of("acorn")))  # nothing left in a beak
+        self.assertTrue(played)
+
+    def test_a_click_sends_the_whole_party_off(self):
+        world, clock = make_world(orange=False, grey=False)
+        world.invite_visitor("crows")
+        run(world, clock, 15, fps=20)
+        world.of("crow")[0].click()
+        self.assertTrue(all(c.state == "leave" for c in world.of("crow")))
+        run(world, clock, 30, fps=20)
+        self.assertFalse(world.of("crow"))
+
+    def test_crows_are_about_all_year(self):
+        for season in seasons.SEASONS:
+            self.assertIn("crows", seasons.VISITORS[season])
+        world, _ = make_world("winter", orange=False, grey=False)
+        self.assertIsNotNone(world.invite_visitor("crows"))
+
+
+class Version(unittest.TestCase):
+    def test_the_version_is_in_the_changelog(self):
+        import pet
+        self.assertRegex(pet.__version__, r"^\d+\.\d+\.\d+$")
+        self.assertIn(f"## {pet.__version__}", (ROOT / "CHANGELOG.md").read_text(encoding="utf-8"))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -17,12 +17,12 @@ ITEMS = {
     "haystack": {"label": "Haystack", "seasons": ("summer", "autumn")},
 }
 
-# Visitors that drop by on their own, per season. Winter, spring and summer come next.
+# Visitors that drop by on their own, per season. Crows are about all year round.
 VISITORS = {
-    "autumn": ("squirrel", "jay", "woolly", "migrants", "geese"),
-    "winter": (),
-    "spring": (),
-    "summer": (),
+    "autumn": ("squirrel", "jay", "woolly", "migrants", "geese", "turkeys", "crows"),
+    "winter": ("crows",),
+    "spring": ("crows",),
+    "summer": ("crows",),
 }
 
 

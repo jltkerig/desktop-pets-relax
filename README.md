@@ -5,7 +5,9 @@
 Two pixel foxes, one orange and one grey, live along the top of your taskbar. They wander, nap,
 play together and chase leaves. You can pet them, pick them up and give them toys. The seasons change
 what's around them. In autumn there's an oak tree dropping colourful leaves and acorns, plus a squirrel,
-a blue jay and a woolly bear caterpillar who come by.
+a blue jay, a woolly bear caterpillar, geese and a flock of wild turkeys who come by. Crows visit all year
+round: they perch in the tree, on things or on the ground, and if they stay a while they play with what's
+lying about.
 
 ## Start
 
@@ -36,7 +38,7 @@ Right-click the icon for the menu:
 
 - **Foxes** and this season's items, as checkboxes.
 - **Shake down an acorn**, **Plant new pumpkins / corn**, **Dig up a taskbar treasure**, **Zoomies!**, and
-  **Invite a visitor** (squirrel, blue jay, caterpillar, geese).
+  **Invite a visitor** (squirrel, blue jay, caterpillar, geese, wild turkeys, crows).
 - **Season:** follows the date (northern hemisphere), or preview any season.
 - **Size:** 1x, 2x or 3x.
 - **Pause**, and **Quit**.
@@ -58,12 +60,13 @@ pixelfox.py        start here
 pet/world.py       everything on the desktop, what appears when, how things meet
 pet/fox.py         a fox's moods (playful, bored, sleepy; no hunger) and how it picks what to do
 pet/items.py       the oak, falling leaves, acorns, the squirrel's dirt mound
-pet/visitors.py    the squirrel, the blue jay and the woolly bear caterpillar
+pet/visitors.py    the squirrel, blue jay, woolly bear, geese, frog, wild turkeys and crows
 pet/seasons.py     which season it is and what belongs to it
 pet/view.py        the see-through window, the mouse, the tray menu
 pet/save.py        user-data/world.json: what's out and where
 art/make_art.py    draws every sprite into art/sprites/ (python art/make_art.py --preview to see them all)
 tests/             python -m unittest discover -s tests
+CHANGELOG.md       what changed in each version (the version is in pet/__init__.py)
 ```
 
 ## Your own art

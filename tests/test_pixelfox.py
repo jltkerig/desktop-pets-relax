@@ -65,7 +65,7 @@ class Sprites(unittest.TestCase):
     def test_both_foxes_have_every_animation_the_fox_uses(self):
         used = {"idle", "look", "walk", "trot", "stretch", "yawn", "scratch", "sleep", "wake", "tilt", "petted",
                 "held", "land", "crouch", "pounce", "dig", "bat", "watch", "happy", "sniff", "playbow", "roll",
-                "hop", "boop", "groom", "run", "dive"}
+                "hop", "boop", "groom", "run", "dive", "doze"}
         for palette in ("orange", "grey"):
             for anim in used:
                 self.assertTrue(sprites.exists(f"fox_{palette}_{anim}"), f"fox_{palette}_{anim}")
@@ -530,6 +530,43 @@ class Seams(unittest.TestCase):
         world.set_seams([den.x])  # monitors rearranged so a gap now runs through the den
         left, _, w, _ = den.rect()
         self.assertFalse(left < world.seams[0] < left + w)
+
+
+class DayAndNight(unittest.TestCase):
+    def test_phases_follow_the_sun(self):
+        from pet import daylight
+        october = lambda h: datetime.datetime(2026, 10, 4, h, 0)
+        self.assertEqual(daylight.phase(october(2)), "night")
+        self.assertEqual(daylight.phase(october(13)), "day")
+        self.assertEqual(daylight.phase(october(23)), "night")
+        self.assertIn(daylight.phase(october(7)), ("dawn", "day", "night"))
+
+    def test_a_location_can_be_set_by_hand(self):
+        from pet import daylight
+        noon = datetime.datetime(2026, 6, 21, 12, 0)
+        here = {"location": {"lat": 39.5, "lon": -76.3}}  # a spot in this computer's own time zone
+        self.assertEqual(daylight.phase(noon, here), "day")
+        self.assertEqual(daylight.phase(noon.replace(hour=2), here), "night")
+
+    def test_no_visitors_turn_up_by_themselves_at_night(self):
+        world, clock = make_world(orange=False, grey=False, hour=23)
+        self.assertIsNone(world.invite_visitor())
+        self.assertIsNotNone(world.invite_visitor("woolly"))  # unless you invite one
+
+    def test_foxes_sleep_more_at_night(self):
+        def asleep_share(hour):
+            world, clock = make_world(seed=4, hour=hour)
+            world.settings["items"]["den"]["out"] = False
+            world.rebuild()
+            slept = total = 0
+            for _ in range(20 * 60 * 10):  # twenty minutes, a tenth of a second at a time
+                run(world, clock, 0.1, fps=10)
+                for fox in world.of("fox"):
+                    total += 1
+                    slept += fox.asleep or (fox.step is not None and fox.step.anim == "doze")
+            return slept / total
+        self.assertGreater(asleep_share(23), asleep_share(10))
+        self.assertGreater(asleep_share(23), 0.5)
 
 
 if __name__ == "__main__":

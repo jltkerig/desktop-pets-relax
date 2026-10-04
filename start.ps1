@@ -5,7 +5,7 @@ $ProjectPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 $PythonPath = Find-Python
 if (-not $PythonPath) { throw "Python was not found. Install Python 3.12+ and try again." }
 
-& $PythonPath -c "import PySide6, PIL" 2>$null
+& $PythonPath -c "import PySide6, PIL, astral, tzlocal" 2>$null
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Installing PySide6 and Pillow..."
     & $PythonPath -m pip install -r (Join-Path $ProjectPath "requirements.txt")

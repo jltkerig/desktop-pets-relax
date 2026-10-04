@@ -153,7 +153,7 @@ class Fox(Thing):
             self._start(self.step)
         self._run(self.step, dt)
 
-    CALM = ("idle", "look", "walk", "sniff", "watch", "tilt", "scratch", "groom", "happy", "dig")
+    CALM = ("idle", "look", "walk", "sniff", "watch", "tilt", "scratch", "groom", "happy", "dig")  # not "doze"
 
     @property
     def up_high(self):
@@ -172,17 +172,23 @@ class Fox(Thing):
                 self.world.chase_leaf(self, leaf)
 
     def _moods(self, dt):
-        hour = self.world.now().hour
-        night = hour >= 22 or hour < 7
+        phase = self.world.daylight()
+        night = phase == "night"
+        dozing = self.step is not None and self.step.anim == "doze"
         if self.asleep:
-            self.energy = min(1.0, self.energy + dt * (0.006 if night else 0.012))
+            self.energy = min(1.0, self.energy + dt * (0.003 if night else 0.005))
             self.boredom = max(0.0, self.boredom - dt * 0.004)
+        elif dozing:
+            self.energy = min(1.0, self.energy + dt * 0.002)  # a catnap helps a little
         else:
-            self.energy = max(0.0, self.energy - dt * (0.0035 if night else 0.0012))
+            # foxes tire through the day and most of all at night; dawn and dusk are their lively hours
+            drain = {"night": 0.004, "day": 0.0022, "dawn": 0.001, "dusk": 0.001}[phase]
+            self.energy = max(0.0, self.energy - dt * drain)
             playing = self.step is not None and self.step.anim in ("pounce", "bat", "playbow", "roll", "hop", "trot", "boop",
                                                                     "run", "dive")
             self.boredom = max(0.0, min(1.0, self.boredom + dt * (-0.02 if playing else 0.0025)))
-        self.playful = max(0.0, min(1.0, 0.25 + self.energy * 0.6 - (0.3 if night else 0.0) + self.boredom * 0.3))
+        lively = 0.15 if phase in ("dawn", "dusk") else -0.3 if night else 0.0
+        self.playful = max(0.0, min(1.0, 0.25 + self.energy * 0.6 + lively + self.boredom * 0.3))
 
     def _start(self, step):
         self.anim.play(self.anim_name(step.anim))
@@ -277,16 +283,17 @@ class Fox(Thing):
             return
         if self.busy_with and (self.busy_with.gone or self.busy_with.asleep):
             self.busy_with = None
-        night = w.now().hour >= 22 or w.now().hour < 7
+        night = w.daylight() == "night"
         if self.just_woke:
             self.just_woke = False
             self.plan.extend([Step("stretch"), Step("yawn") if rng.random() < 0.5 else Step("idle", 2.0)])
             return
-        if self.energy < 0.28 or (night and self.energy < 0.55):
+        if self.energy < 0.4 or (night and self.energy < 0.8):
             spot = w.nap_spot(self)
             if spot is not None and abs(spot - self.x) > 30:
                 self.plan.append(Step("walk", to_x=spot, speed=WALK))
-            self.plan.extend([Step("yawn"), Step("sleep", rng.uniform(60, 150) * (2 if night else 1))])
+            # a proper sleep: a few minutes by day, much longer at night
+            self.plan.extend([Step("yawn"), Step("sleep", rng.uniform(150, 360) * (3 if night else 1))])
             return
 
         # something worth watching?
@@ -334,6 +341,9 @@ class Fox(Thing):
 
         options = [
             (9.0, lambda: [Step("idle", rng.uniform(6, 16))]),           # mostly: sitting, just being a fox
+            # a catnap where it sits: eyes closed, head nodding; more likely when tired
+            (2.5 + (1 - self.energy) * 6, lambda: [Step("yawn"), Step("doze", rng.uniform(15, 45)),
+                                                   Step("stretch")]),
             (3.0, lambda: [Step("look"), Step("idle", rng.uniform(3, 8))]),
             (3.0 + self.boredom * 3, lambda: [Step("walk", to_x=w.wander_target(self), speed=WALK)]),
             (1.5 + self.boredom * 2, lambda: [Step("sniff"), Step("sniff")]),

@@ -2,7 +2,7 @@
 import datetime
 import random
 
-from pet import seasons
+from pet import daylight, seasons
 from pet.fox import TROT, WALK, ZOOM, Fox, Step
 from pet.items import Acorn, Climbable, Corn, CornCob, Den, Leaf, Prop, Pumpkin, Treasure, Tree
 from pet.visitors import Goose, Jay, Squirrel, Woolly, migrating_v
@@ -36,6 +36,14 @@ class World:
 
     def now(self):
         return self.clock()
+
+    def daylight(self):
+        """'night', 'dawn', 'day' or 'dusk' (from sunrise and sunset; worked out at most once a minute)."""
+        minute = self.now().replace(second=0, microsecond=0)
+        if getattr(self, "_daylight_at", None) != minute:
+            self._daylight_at = minute
+            self._daylight = daylight.phase(self.now(), self.settings)
+        return self._daylight
 
     @property
     def season(self):
@@ -249,6 +257,8 @@ class World:
 
     def invite_visitor(self, kind=None):
         allowed = seasons.VISITORS.get(self.season, ())
+        if self.daylight() == "night" and kind is None:
+            allowed = ()  # the squirrel, the birds and the rest are tucked up at night
         choices = [k for k in allowed if not self.of(k)]
         acorns = [a for a in self.of("acorn") if a.on_ground and not a.taken]
         if "squirrel" in choices and not acorns:

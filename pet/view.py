@@ -11,7 +11,7 @@ from PySide6.QtGui import QAction, QActionGroup, QCursor, QIcon, QPainter, QPixm
 from PySide6.QtWidgets import (QApplication, QCheckBox, QGroupBox, QLabel, QMenu, QPushButton, QSystemTrayIcon,
                                QVBoxLayout, QWidget)
 
-from pet import save, seasons, sprites
+from pet import save, screens, seasons, sprites
 
 FRAME_MS = 33
 TASKBAR_SCRIPT = Path(__file__).resolve().parent / "taskbar_buttons.ps1"
@@ -42,58 +42,105 @@ class Frames:
         return frames[min(frame, len(frames) - 1)]
 
 
-class Desktop(QWidget):
-    def __init__(self, world, settings, geometry):
-        super().__init__(None, Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool | Qt.NoDropShadowWindowHint)
-        self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setAttribute(Qt.WA_ShowWithoutActivating)
-        self.setMouseTracking(True)
-        self.setGeometry(geometry)
+class Stage:
+    """Runs the pets across every monitor: one see-through window per monitor, all showing slices of the
+    same world. Notices monitors being plugged in, unplugged or rearranged, and rebuilds."""
+
+    def __init__(self, world, settings):
         self.world, self.settings = world, settings
         self.frames = Frames()
-        self.press = None       # (thing, press point, thing's start x/y)
+        self.desktops = []
+        self.press = None       # (thing, press point in the strip, thing's start x)
         self.dragging = None
         self.last_pet = 0.0
+        self.elapsed = 0.0
         self.clock = QElapsedTimer()
         self.clock.start()
-        self.elapsed = 0.0
-        self.timer = QTimer(self)
+        self._watched = set()
+        self.build()
+        app = QApplication.instance()
+        for signal in (app.screenAdded, app.screenRemoved, app.primaryScreenChanged):
+            signal.connect(lambda *_: QTimer.singleShot(500, self.build))
+        self.timer = QTimer()
         self.timer.timeout.connect(self.tick)
         self.timer.start(FRAME_MS)
         # where the taskbar icons are (for digging up "treasure"); checked now and every few minutes
         self.taskbar_strip = None
-        self.finder = QProcess(self)
+        self.finder = QProcess()
         self.finder.finished.connect(self._taskbar_found)
         self.find_taskbar()
-        self.taskbar_timer = QTimer(self)
+        self.taskbar_timer = QTimer()
         self.taskbar_timer.timeout.connect(self.find_taskbar)
         self.taskbar_timer.start(TASKBAR_REFRESH_MS)
 
-    # -- the taskbar icons ------------------------------------------------------------------------------
+    # -- the monitors ----------------------------------------------------------------------------------
+
+    def build(self):
+        """(Re)make one window per monitor, from whatever monitors there are right now."""
+        found = []
+        for screen in QApplication.screens():
+            a = screen.availableGeometry()
+            found.append((a.x(), a.y(), a.width(), a.height(), screen))
+        slices, width, height = screens.layout([f[:4] for f in found])
+        by_area = {f[:4]: f[4] for f in found}
+        for desktop in self.desktops:
+            desktop.hide()
+            desktop.deleteLater()
+        self.world.resize(width, height)
+        self.world.set_seams([s["offset"] for s in slices[1:]])
+        self.desktops = []
+        for s in slices:
+            screen = by_area[(s["x"], s["y"], s["w"], s["h"])]
+            desktop = Desktop(self, screen, s)
+            desktop.show()
+            self.desktops.append(desktop)
+        for screen in QApplication.screens():  # a taskbar moved or resized, a resolution changed
+            if screen not in self._watched:
+                self._watched.add(screen)
+                screen.availableGeometryChanged.connect(lambda *_: QTimer.singleShot(500, self.build))
+
+    def to_world(self, global_point):
+        """A point on any monitor -> (x, y) along the strip; far away if it's on no monitor."""
+        for d in self.desktops:
+            if d.geometry().contains(global_point):
+                local = d.mapFromGlobal(global_point)
+                return d.to_world(local.x(), local.y())
+        return (-10000.0, -10000.0)
+
+    def update(self):
+        for d in self.desktops:
+            d.update()
+
+    # -- the taskbar icons (on the main monitor) ---------------------------------------------------------
+
+    def main_desktop(self):
+        primary = QApplication.primaryScreen()
+        return next((d for d in self.desktops if d.screen_ is primary), self.desktops[0] if self.desktops else None)
 
     def find_taskbar(self):
         if self.finder.state() == QProcess.NotRunning:
             self.finder.start("powershell", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(TASKBAR_SCRIPT)])
 
     def _taskbar_found(self):
+        main = self.main_desktop()
         try:
             strip = json.loads(bytes(self.finder.readAllStandardOutput()).decode("utf-8", "replace") or "{}")
-            ratio = self.screen().devicePixelRatio()
+            ratio = main.screen_.devicePixelRatio()
             strip = {k: strip[k] / ratio for k in ("x", "y", "w", "h")}
-        except (ValueError, KeyError, TypeError):
+        except (ValueError, KeyError, TypeError, AttributeError):
             return
         if strip["w"] < 20 or strip["h"] < 10:
             return
         self.taskbar_strip = strip
-        self.world.taskbar_spots = self._icon_spots(strip)
+        self.world.taskbar_spots = self._icon_spots(main, strip)
 
-    def _icon_spots(self, strip):
-        """The x (in this window) of the centre of each icon in the strip.
+    def _icon_spots(self, main, strip):
+        """Where each taskbar icon is, along the strip.
 
         Columns where the middle of the bar differs from the plain bar colour are part of an icon; runs of
         such columns about an icon wide are icons.
         """
-        image = self.screen().grabWindow(0, int(strip["x"]), int(strip["y"]), int(strip["w"]), int(strip["h"])).toImage()
+        image = main.screen_.grabWindow(0, int(strip["x"]), int(strip["y"]), int(strip["w"]), int(strip["h"])).toImage()
         if image.isNull():
             return []
         ratio = image.width() / max(1.0, strip["w"])
@@ -117,19 +164,20 @@ class Desktop(QWidget):
                     width = (px - gap) - run_start + 1
                     if h * 0.3 <= width <= h * 1.0:
                         centre = (run_start + width / 2) / ratio
-                        spots.append(strip["x"] + centre - self.geometry().x())
+                        spots.append(main.slice["offset"] + strip["x"] + centre - main.geometry().x())
                     run_start, gap = None, 0
         return spots
 
     def _grab_icons(self):
         """Copy the icons the foxes just dug up (a picture only), shrunk so they look pixelated."""
-        while self.world.grab_requests and self.taskbar_strip:
+        main = self.main_desktop()
+        while self.world.grab_requests and self.taskbar_strip and main is not None:
             key, x = self.world.grab_requests.pop(0)
             strip = self.taskbar_strip
             size = int(strip["h"] * 0.62)
-            gx = int(self.geometry().x() + x - size / 2)
+            gx = int(main.geometry().x() + x - main.slice["offset"] - size / 2)
             gy = int(strip["y"] + (strip["h"] - size) / 2)
-            picture = self.screen().grabWindow(0, gx, gy, size, size)
+            picture = main.screen_.grabWindow(0, gx, gy, size, size)
             from pet.items import Treasure
             small = picture.scaled(Treasure.SIZE, Treasure.SIZE, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
             s = self.world.scale
@@ -142,82 +190,53 @@ class Desktop(QWidget):
     def tick(self):
         dt = self.clock.restart() / 1000
         self.elapsed += dt
-        local = self.mapFromGlobal(QCursor.pos())
-        before = self._area()
-        self.world.update(dt, (float(local.x()), float(local.y())))
+        cursor = self.to_world(QCursor.pos())
+        before = [d.area() for d in self.desktops]
+        self.world.update(dt, cursor)
         if self.world.grab_requests:
             self._grab_icons()
-        if self.dragging is not None and self.dragging.kind == "fox":
-            self.dragging.x, self.dragging.y = float(local.x()), float(local.y()) + 22 * self.world.scale
+        if self.dragging is not None and self.dragging.kind == "fox" and cursor[0] > -9999:
+            self.dragging.x, self.dragging.y = cursor[0], cursor[1] + 22 * self.world.scale
         if self.world.dirty:
             self.world.dirty = False
             save.store(self.settings)
-        after = self._area()
-        self.update(before.united(after))
+        for d, old in zip(self.desktops, before):
+            d.update(old.united(d.area()))
 
-    def _area(self):
-        """The screen area everything covers (only that part is redrawn)."""
-        area = QRect()
-        for thing in self.world.things:
-            left, top, w, h = thing.rect()
-            area = area.united(QRect(int(left) - 2, int(top) - 2, int(w) + 4, int(h) + 4))
-        return area
+    # -- the mouse (any monitor) -----------------------------------------------------------------------
 
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setCompositionMode(QPainter.CompositionMode_Source)
-        painter.fillRect(event.rect(), Qt.transparent)
-        painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
-        for thing in self.world.drawing_order():
-            left, top, _, _ = thing.rect()
-            if thing.kind == "treasure":
-                pixmap = self.world.images.get(thing.key)
-                if pixmap is None:
-                    continue
-            else:
-                pixmap = self.frames.get(thing.anim.name, thing.anim.frame, self.world.scale, thing.facing)
-            painter.setOpacity(max(0.0, min(1.0, thing.alpha)))
-            painter.drawPixmap(int(round(left)), int(round(top)), pixmap)
-        painter.end()
-
-    # -- the mouse -------------------------------------------------------------------------------------
-
-    def mousePressEvent(self, event):
-        if event.button() != Qt.LeftButton:
-            return
-        p = event.position()
-        thing = self.world.thing_at(p.x(), p.y(), draggable_only=True)
+    def pressed(self, x, y):
+        thing = self.world.thing_at(x, y, draggable_only=True)
         if thing is not None:
-            self.press = (thing, QPoint(int(p.x()), int(p.y())), thing.x)
+            self.press = (thing, (x, y), thing.x)
 
-    def mouseMoveEvent(self, event):
-        p = event.position()
+    def moved(self, x, y, buttons):
         if self.press and self.dragging is None:
-            thing, start, _ = self.press
-            if (QPoint(int(p.x()), int(p.y())) - start).manhattanLength() > DRAG_START:
+            thing, (sx, sy), _ = self.press
+            if abs(x - sx) + abs(y - sy) > DRAG_START:
                 self.dragging = thing
                 if thing.kind == "fox":
                     thing.pick_up()
         if self.dragging is not None and self.dragging.kind in ("tree", "pumpkin", "prop", "corn", "den", "climb"):
-            thing, start, start_x = self.press
-            thing.x = max(40.0, min(self.world.width - 40.0, start_x + p.x() - start.x()))
-        elif self.dragging is None and not event.buttons():
+            thing, (sx, _), start_x = self.press
+            thing.x = max(40.0, min(self.world.width - 40.0, start_x + x - sx))
+        elif self.dragging is None and not buttons:
             # stroking a fox with the cursor is petting it
-            thing = self.world.thing_at(p.x(), p.y())
+            thing = self.world.thing_at(x, y)
             if thing is not None and thing.kind == "fox" and self.elapsed - self.last_pet > 0.25:
                 self.last_pet = self.elapsed
                 thing.pet()
 
-    def mouseReleaseEvent(self, event):
-        if event.button() != Qt.LeftButton:
-            return
+    def released(self):
         if self.dragging is not None:
             if self.dragging.kind == "fox":
                 self.dragging.drop()
             elif self.dragging.kind in ("tree", "prop", "corn", "den", "climb"):
+                self.world.keep_off_seams(self.dragging)  # dropped across two monitors: onto one of them
                 self.settings["items"][self.dragging.variant]["x"] = round(self.dragging.x)
                 save.store(self.settings)
             elif self.dragging.kind == "pumpkin" and self.dragging.record is not None:
+                self.world.keep_off_seams(self.dragging)
                 self.dragging.record["x"] = round(self.dragging.x)
                 save.store(self.settings)
         elif self.press is not None and self.press[0].kind == "fox":
@@ -226,6 +245,67 @@ class Desktop(QWidget):
             self.press[0].click()  # each item has its own reaction
         self.press = None
         self.dragging = None
+
+
+class Desktop(QWidget):
+    """One monitor's see-through window, showing its slice of the strip."""
+
+    def __init__(self, stage, screen, slice_):
+        super().__init__(None, Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool | Qt.NoDropShadowWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WA_ShowWithoutActivating)
+        self.setMouseTracking(True)
+        self.stage, self.world, self.screen_, self.slice = stage, stage.world, screen, slice_
+        self.setScreen(screen)
+        self.setGeometry(QRect(slice_["x"], slice_["y"], slice_["w"], slice_["h"]))
+        self.dx = -slice_["offset"]                    # strip x -> this window's x
+        self.dy = (slice_["h"] - 2) - self.world.ground  # the world's ground -> this monitor's taskbar edge
+
+    def to_world(self, px, py):
+        return float(px - self.dx), float(py - self.dy)
+
+    def area(self):
+        """The part of this window everything covers (only that part is redrawn)."""
+        area = QRect()
+        for thing in self.world.things:
+            left, top, w, h = thing.rect()
+            r = QRect(int(left + self.dx) - 2, int(top + self.dy) - 2, int(w) + 4, int(h) + 4)
+            if r.intersects(self.rect()):
+                area = area.united(r)
+        return area
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setCompositionMode(QPainter.CompositionMode_Source)
+        painter.fillRect(event.rect(), Qt.transparent)
+        painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
+        view = self.rect()
+        for thing in self.world.drawing_order():
+            left, top, w, h = thing.rect()
+            x, y = int(round(left + self.dx)), int(round(top + self.dy))
+            if not view.intersects(QRect(x, y, int(w), int(h))):
+                continue  # on another monitor
+            if thing.kind == "treasure":
+                pixmap = self.world.images.get(thing.key)
+                if pixmap is None:
+                    continue
+            else:
+                pixmap = self.stage.frames.get(thing.anim.name, thing.anim.frame, self.world.scale, thing.facing)
+            painter.setOpacity(max(0.0, min(1.0, thing.alpha)))
+            painter.drawPixmap(x, y, pixmap)
+        painter.end()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.stage.pressed(*self.to_world(event.position().x(), event.position().y()))
+
+    def mouseMoveEvent(self, event):
+        x, y = self.to_world(event.position().x(), event.position().y())
+        self.stage.moved(x, y, bool(event.buttons()))
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.stage.released()
 
 
 SEASON_WORDS = {("winter", "spring", "summer", "autumn"): "all year"}
@@ -428,7 +508,3 @@ class ToyBox:
         self.tray.hide()
         self.app.quit()
 
-
-def work_area():
-    screen = QApplication.primaryScreen()
-    return screen.availableGeometry()

@@ -3,7 +3,22 @@ import json
 import os
 from pathlib import Path
 
-USER_DIR = Path(os.environ.get("PIXELFOX_USER_DIR") or Path(__file__).resolve().parents[1] / "user-data")
+def _user_dir():
+    """user-data next to the app, or %LOCALAPPDATA%\\PixelFox if the app's folder is read-only."""
+    if os.environ.get("PIXELFOX_USER_DIR"):
+        return Path(os.environ["PIXELFOX_USER_DIR"])
+    beside = Path(__file__).resolve().parents[1] / "user-data"
+    try:
+        beside.mkdir(parents=True, exist_ok=True)
+        probe = beside / ".write-test"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+        return beside
+    except OSError:
+        return Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "PixelFox"
+
+
+USER_DIR = _user_dir()
 WORLD_FILE = USER_DIR / "world.json"
 
 DEFAULTS = {

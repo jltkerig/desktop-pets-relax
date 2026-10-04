@@ -486,5 +486,51 @@ class SquirrelAndCob(unittest.TestCase):
         self.assertFalse(cob.carried)
 
 
+class Monitors(unittest.TestCase):
+    def test_monitors_join_left_to_right_whatever_order_windows_lists_them(self):
+        from pet import screens
+        slices, width, height = screens.layout([(2560, 0, 1920, 1040), (0, 0, 2560, 1400), (-1280, 200, 1280, 984)])
+        self.assertEqual([s["x"] for s in slices], [-1280, 0, 2560])        # left monitor first
+        self.assertEqual([s["offset"] for s in slices], [0, 1280, 3840])
+        self.assertEqual((width, height), (5760, 1400))
+        self.assertEqual(screens.slice_at(slices, 2000)["x"], 0)
+        self.assertEqual(screens.slice_at(slices, 99999)["x"], 2560)          # past the end: the last one
+
+    def test_one_monitor_and_stacked_monitors_work_too(self):
+        from pet import screens
+        self.assertEqual(screens.layout([(0, 0, 1366, 728)])[1:], (1366, 728))
+        slices, width, _ = screens.layout([(0, -1080, 1920, 1040), (0, 0, 1920, 1040)])  # one above the other
+        self.assertEqual(width, 3840)
+        self.assertEqual(screens.layout([])[1:], (0, 0))
+
+    def test_unplugging_a_monitor_keeps_everything_on_screen_and_on_the_ground(self):
+        world, clock = make_world()
+        fox = world.of("fox")[0]
+        fox.x = 1800.0
+        world.resize(1280, 700)
+        self.assertEqual(world.ground, 698)
+        self.assertLessEqual(fox.x, 1280 - 20)
+        self.assertTrue(all(t.y <= world.ground for t in world.things))
+        run(world, clock, 30)  # and it all carries on
+        self.assertEqual(len(world.of("fox")), 2)
+
+
+class Seams(unittest.TestCase):
+    def test_items_never_straddle_two_monitors(self):
+        settings = save.load(Path(os.environ["PIXELFOX_USER_DIR"]) / "missing.json")
+        settings["season"] = "autumn"
+        settings["items"]["den"]["x"] = 2560  # right on the gap
+        clock = [datetime.datetime(2026, 10, 4, 14, 0)]
+        world = World(5120, 1400, settings, rng=random.Random(1), clock=lambda: clock[0], seams=[2560])
+        for thing in world.things:
+            if thing.kind in World.ITEM_KINDS:
+                left, _, w, _ = thing.rect()
+                self.assertFalse(left < 2560 < left + w, thing.kind)
+        den = world.den()
+        world.set_seams([den.x])  # monitors rearranged so a gap now runs through the den
+        left, _, w, _ = den.rect()
+        self.assertFalse(left < world.seams[0] < left + w)
+
+
 if __name__ == "__main__":
     unittest.main()

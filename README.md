@@ -7,15 +7,34 @@ a blue jay and a woolly bear caterpillar who come by.
 
 ## Start
 
-```powershell
-.\start.ps1
-```
+Double-click **Pixel Fox.cmd** (or run `.\start.ps1` in PowerShell).
 
-It installs PySide6 and Pillow the first time, then runs with no console window. Right-click the fox
-icon in the system tray for the **toy box**:
+It installs PySide6 and Pillow the first time (just for you, if installing for everyone isn't allowed),
+then runs with no console window. Starting it again while it's running does nothing.
 
-- **Foxes:** choose which foxes are out.
-- **Toy box:** this season's items (autumn: the oak tree). There's also "Shake down an acorn" and "Invite a visitor".
+## Works on
+
+- **Windows 10 and Windows 11**, with **Python 3.9 or newer**, from python.org, the Microsoft Store or the
+  `py` launcher. The start script finds it, and tries each one first so the Store's placeholder is never used.
+- **Any number of monitors**, any sizes and scaling. The screens are joined left to right as Windows
+  arranges them. Foxes walk from one to the next, and items always sit wholly on one screen.
+  Plugging in, unplugging or rearranging a monitor while it runs is picked up straight away.
+- **Taskbar anywhere:** at the bottom, the pets stand on it. At the top or a side, or when auto-hidden,
+  they stand on the bottom of the screen.
+- **Taskbar icons for treasure digging:** found the Windows 10 way, the Windows 11 way, or from the whole
+  taskbar as a fallback. If none of those works, the foxes just don't dig for treasure.
+- **Settings** are kept in `user-data` next to the app, or in `%LOCALAPPDATA%\PixelFox` if the app's folder
+  can't be written to (for example in Program Files).
+
+## The toy box
+
+Click the fox icon in the system tray to open the **Toy Box** window. Tick or untick each fox and item to
+put it out or away. Items from another season show in italics and come out when their season does.
+Right-click the icon for the menu:
+
+- **Foxes** and this season's items, as checkboxes.
+- **Shake down an acorn**, **Plant new pumpkins / corn**, **Dig up a taskbar treasure**, **Zoomies!**, and
+  **Invite a visitor** (squirrel, blue jay, caterpillar, geese).
 - **Season:** follows the date (northern hemisphere), or preview any season.
 - **Size:** 1x, 2x or 3x.
 - **Pause**, and **Quit**.

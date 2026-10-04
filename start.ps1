@@ -9,6 +9,9 @@ if (-not $PythonPath) { throw "Python was not found. Install Python 3.12+ and tr
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Installing PySide6 and Pillow..."
     & $PythonPath -m pip install -r (Join-Path $ProjectPath "requirements.txt")
+    if ($LASTEXITCODE -ne 0) {  # no permission to install for everyone: install just for this user
+        & $PythonPath -m pip install --user -r (Join-Path $ProjectPath "requirements.txt")
+    }
 }
 if (-not (Test-Path (Join-Path $ProjectPath "art\sprites\fox_orange_idle.png"))) {
     & $PythonPath (Join-Path $ProjectPath "art\make_art.py")

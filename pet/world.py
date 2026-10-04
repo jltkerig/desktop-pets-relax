@@ -11,7 +11,7 @@ LEAF_COLOURS = ("red", "orange", "yellow", "brown")
 
 
 class World:
-    def __init__(self, width, height, settings, rng=None, clock=None):
+    def __init__(self, width, height, settings, rng=None, clock=None, seams=()):
         self.width, self.height = width, height
         self.ground = height - 2  # the taskbar's top edge (the window ends there)
         self.settings = settings
@@ -23,7 +23,9 @@ class World:
         self.cursor_still = 0.0
         self.timers = {"leaf": 1.0, "acorn": self.rng.uniform(20, 50), "visitor": self.rng.uniform(25, 60)}
         self.paused = False
+        self.seams = list(seams)
         self.dirty = False  # settings changed here (pumpkins planted); the window saves them
+        # self.seams: where one monitor ends and the next begins, along the strip
         self.taskbar_spots = []   # x of each taskbar icon, filled in by the window
         self.images = {}          # treasure key -> picture of the icon (set by the window)
         self.grab_requests = []   # (treasure key, x) the window should copy the icon for
@@ -40,9 +42,41 @@ class World:
         chosen = self.settings.get("season", "auto")
         return seasons.season_for(self.now().date()) if chosen == "auto" else chosen
 
+    def resize(self, width, height):
+        """The monitors changed: stretch or shrink the strip, keep everything on the ground and on screen."""
+        old_ground = self.ground
+        self.width, self.height = width, height
+        self.ground = height - 2
+        for thing in self.things:
+            thing.y += self.ground - old_ground
+            thing.x = max(20.0, min(width - 20.0, thing.x))
+        self.taskbar_spots = []
+
+    ITEM_KINDS = ("tree", "prop", "corn", "den", "climb", "pumpkin")
+
     def add(self, thing):
         self.things.append(thing)
+        if thing.kind in self.ITEM_KINDS:
+            self.keep_off_seams(thing)
         return thing
+
+    def keep_off_seams(self, thing):
+        """An item across the gap between two monitors slides fully onto the one holding most of it."""
+        for seam in self.seams:
+            left, _, w, _ = thing.rect()
+            if left < seam < left + w:
+                if seam - left >= left + w - seam:
+                    thing.x -= (left + w - seam) + 4   # mostly on the left monitor: all of it goes there
+                else:
+                    thing.x += (seam - left) + 4       # mostly on the right
+        return thing
+
+    def set_seams(self, seams):
+        """The monitors changed: remember the gaps and move any item sitting across one."""
+        self.seams = list(seams)
+        for thing in self.things:
+            if thing.kind in self.ITEM_KINDS and not thing.gone:
+                self.keep_off_seams(thing)
 
     def of(self, kind):
         return [t for t in self.things if t.kind == kind and not t.gone]

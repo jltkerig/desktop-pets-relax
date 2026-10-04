@@ -1,5 +1,7 @@
 # Pixel Fox
 
+![Pixel Fox: an autumn scene along the taskbar](docs/showcase.png)
+
 Two pixel foxes, one orange and one grey, live along the top of your taskbar. They wander, nap,
 play together and chase leaves. You can pet them, pick them up and give them toys. The seasons change
 what's around them. In autumn there's an oak tree dropping colourful leaves and acorns, plus a squirrel,

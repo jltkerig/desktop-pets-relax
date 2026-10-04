@@ -4,7 +4,7 @@ import random
 
 from pet import seasons
 from pet.fox import TROT, WALK, Fox, Step
-from pet.items import Acorn, Corn, Den, Leaf, Prop, Pumpkin, Treasure, Tree
+from pet.items import Acorn, Climbable, Corn, Den, Leaf, Prop, Pumpkin, Treasure, Tree
 from pet.visitors import Goose, Jay, Squirrel, Woolly, migrating_v
 
 LEAF_COLOURS = ("red", "orange", "yellow", "brown")
@@ -82,6 +82,16 @@ class World:
                 for fox in thing.sleepers:
                     fox.leave_den()
                 thing.gone = True
+        climbables = {"barrels": 0.88, "haystack": 0.40}  # where each goes the first time
+        for thing in self.of("climb"):
+            if thing.variant not in wanted_items:
+                thing.gone = True
+        for name, share in climbables.items():
+            if name in wanted_items and not any(t.variant == name for t in self.of("climb")):
+                x = self.settings["items"][name].get("x")
+                if not (isinstance(x, (int, float)) and 0 < x < self.width):
+                    x = self.width * share
+                self.add(Climbable(self, x, name))
         props = {"scarecrow", "hoe"}
         for thing in self.of("prop"):
             if thing.variant not in wanted_items:
@@ -98,7 +108,7 @@ class World:
                         x = (max(xs) + 70 * self.scale) if xs else self.width * 0.32
                     x = max(40.0, min(self.width - 40.0, x))
                 self.add(Prop(self, x, name))
-        for name in wanted_items - {"pumpkins", "corn", "den"} - props:
+        for name in wanted_items - {"pumpkins", "corn", "den"} - props - set(climbables):
             if not any(t.variant == name for t in self.of("tree")):
                 x = self.settings["items"][name].get("x")
                 x = x if isinstance(x, (int, float)) and 0 < x < self.width else self.width * 0.72
@@ -377,6 +387,28 @@ class World:
         if treasure is not None:
             treasure.carried_by = None
             fox.carrying = None
+
+    def climbable_near(self, fox, reach):
+        near = [t for t in self.of("climb") if abs(t.x - fox.x) < reach * self.scale / 2]
+        return self.rng.choice(near) if near else None
+
+    def climb(self, fox, thing):
+        """Hop up the pile one level at a time, enjoy the view from the top, then leap off."""
+        s, rng = self.scale, self.rng
+        side = -1 if fox.x < thing.x else 1  # climb up the side it's on
+        path = [(thing.x + side * abs(dx) * s if dx else thing.x, self.ground - h * s) for dx, h in thing.levels]
+        start = path[0][0] + side * 30 * s
+        steps = [Step("trot", to_x=start, speed=TROT), Step("crouch", 0.4, face=thing.x)]
+        for x, y in path:
+            steps.append(Step("hop", to_x=x, to_y=y, leap=12))
+        top_x = path[-1][0]
+        steps += [Step("look"), Step("happy", 1.4), Step("tilt"), Step("idle", rng.uniform(2, 5))]
+        if rng.random() < 0.5:
+            steps.append(Step("playbow", 1.0))
+        land = max(60.0, min(self.width - 60.0, top_x - side * rng.uniform(70, 120) * s))
+        steps += [Step("crouch", 0.5, face=land), Step("pounce", to_x=land, to_y=self.ground, leap=18),
+                  Step("land"), Step("happy", 1.0)]
+        fox.do(*steps)
 
     def wander_target(self, fox):
         reach = self.rng.uniform(80, 360) * self.scale / 2

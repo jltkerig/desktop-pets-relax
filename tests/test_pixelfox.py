@@ -355,5 +355,36 @@ class DenAndHoe(unittest.TestCase):
             self.assertIsNotNone(world.den(), season)
 
 
+class Climbing(unittest.TestCase):
+    def test_a_fox_climbs_the_barrels_sits_on_top_and_leaps_off(self):
+        world, clock = make_world(orange=True, grey=False)
+        fox = world.of("fox")[0]
+        barrels = [t for t in world.of("climb") if t.variant == "barrels"][0]
+        world.climb(fox, barrels)
+        on_top = None
+        for _ in range(40 * 30):
+            run(world, clock, 1 / 30)
+            if fox.step is not None and fox.step.anim == "look":
+                on_top = fox.y
+        self.assertAlmostEqual(on_top, world.ground - 66 * world.scale, delta=1)  # looked around from the top barrel
+        self.assertEqual(fox.y, world.ground)                                     # and jumped back down
+
+    def test_a_fox_left_up_high_hops_down_before_doing_anything_else(self):
+        world, clock = make_world(orange=True, grey=False)
+        fox = world.of("fox")[0]
+        fox.plan.clear()
+        fox.step = None
+        fox.y = world.ground - 30 * world.scale
+        run(world, clock, 2)
+        self.assertEqual(fox.y, world.ground)
+
+    def test_haystacks_are_out_in_summer_and_autumn_and_barrels_all_year(self):
+        for season, hay in (("winter", False), ("spring", False), ("summer", True), ("autumn", True)):
+            world, _ = make_world(season, orange=False, grey=False)
+            kinds = {t.variant for t in world.of("climb")}
+            self.assertIn("barrels", kinds, season)
+            self.assertEqual("haystack" in kinds, hay, season)
+
+
 if __name__ == "__main__":
     unittest.main()

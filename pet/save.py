@@ -11,7 +11,8 @@ DEFAULTS = {
     # x None: placed automatically. The pumpkin patch keeps each pumpkin's place and planting time.
     "items": {"oak": {"out": True, "x": None}, "pumpkins": {"out": True, "x": None, "patch": []},
               "scarecrow": {"out": True, "x": None}, "corn": {"out": True, "x": None, "planted": None},
-              "hoe": {"out": True, "x": None}, "den": {"out": True, "x": None}},
+              "hoe": {"out": True, "x": None}, "den": {"out": True, "x": None},
+              "barrels": {"out": True, "x": None}, "haystack": {"out": True, "x": None}},
     "season": "auto",
     "scale": 2,
 }

@@ -8,7 +8,8 @@ from pathlib import Path
 
 from PySide6.QtCore import QElapsedTimer, QPoint, QProcess, QRect, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QCursor, QIcon, QPainter, QPixmap, QTransform
-from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon, QWidget
+from PySide6.QtWidgets import (QApplication, QCheckBox, QGroupBox, QLabel, QMenu, QPushButton, QSystemTrayIcon,
+                               QVBoxLayout, QWidget)
 
 from pet import save, seasons, sprites
 
@@ -197,7 +198,7 @@ class Desktop(QWidget):
                 self.dragging = thing
                 if thing.kind == "fox":
                     thing.pick_up()
-        if self.dragging is not None and self.dragging.kind in ("tree", "pumpkin", "prop", "corn", "den"):
+        if self.dragging is not None and self.dragging.kind in ("tree", "pumpkin", "prop", "corn", "den", "climb"):
             thing, start, start_x = self.press
             thing.x = max(40.0, min(self.world.width - 40.0, start_x + p.x() - start.x()))
         elif self.dragging is None and not event.buttons():
@@ -213,7 +214,7 @@ class Desktop(QWidget):
         if self.dragging is not None:
             if self.dragging.kind == "fox":
                 self.dragging.drop()
-            elif self.dragging.kind in ("tree", "prop", "corn", "den"):
+            elif self.dragging.kind in ("tree", "prop", "corn", "den", "climb"):
                 self.settings["items"][self.dragging.variant]["x"] = round(self.dragging.x)
                 save.store(self.settings)
             elif self.dragging.kind == "pumpkin" and self.dragging.record is not None:
@@ -226,6 +227,70 @@ class Desktop(QWidget):
                 fox.poke()
         self.press = None
         self.dragging = None
+
+
+SEASON_WORDS = {("winter", "spring", "summer", "autumn"): "all year"}
+
+
+class ToyBoxWindow(QWidget):
+    """A small window listing every fox and item with a checkbox: tick what you want on the desktop.
+    Opens when you click the fox icon in the tray."""
+
+    def __init__(self, toybox):
+        super().__init__(None, Qt.Tool | Qt.WindowStaysOnTopHint)
+        self.toybox = toybox
+        self.setWindowTitle("Toy Box")
+        self.setWindowIcon(toybox.tray.icon())
+        self.layout_ = QVBoxLayout(self)
+        self.boxes = {}
+        foxes = QGroupBox("Foxes")
+        fox_layout = QVBoxLayout(foxes)
+        for palette, label in (("orange", "Orange fox"), ("grey", "Grey fox")):
+            box = QCheckBox(label)
+            box.toggled.connect(lambda on, p=palette: toybox._set_fox(p, on))
+            fox_layout.addWidget(box)
+            self.boxes[("fox", palette)] = box
+        self.layout_.addWidget(foxes)
+        items = QGroupBox("On the desktop")
+        item_layout = QVBoxLayout(items)
+        for name, item in seasons.ITEMS.items():
+            when = SEASON_WORDS.get(tuple(item["seasons"]), " and ".join(item["seasons"]))
+            box = QCheckBox(f"{item['label']}  ({when})")
+            box.toggled.connect(lambda on, n=name: toybox._set_item(n, on))
+            item_layout.addWidget(box)
+            self.boxes[("item", name)] = box
+        self.layout_.addWidget(items)
+        self.note = QLabel()
+        self.note.setWordWrap(True)
+        self.layout_.addWidget(self.note)
+        close = QPushButton("Close")
+        close.clicked.connect(self.hide)
+        self.layout_.addWidget(close)
+
+    def refresh(self):
+        """Show the current settings (without firing the checkboxes' handlers)."""
+        settings, season = self.toybox.settings, self.toybox.world.season
+        for (kind, name), box in self.boxes.items():
+            box.blockSignals(True)
+            if kind == "fox":
+                box.setChecked(bool(settings["foxes"].get(name)))
+            else:
+                box.setChecked(bool(settings["items"].get(name, {}).get("out")))
+                box.setEnabled(True)
+                in_season = season in seasons.ITEMS[name]["seasons"]
+                font = box.font()
+                font.setItalic(not in_season)  # ticked items from another season wait for their season
+                box.setFont(font)
+            box.blockSignals(False)
+        self.note.setText(f"It's {season} now. Items in italics belong to another season: tick them and "
+                          f"they'll come out when their season does.")
+
+    def open(self):
+        self.refresh()
+        self.adjustSize()
+        self.show()
+        self.raise_()
+        self.activateWindow()
 
 
 class ToyBox:
@@ -241,10 +306,17 @@ class ToyBox:
         self.menu.aboutToShow.connect(self.build)
         self.tray.setContextMenu(self.menu)
         self.tray.show()
+        self.window = ToyBoxWindow(self)
+        self.tray.activated.connect(self._clicked)
+
+    def _clicked(self, reason):
+        if reason in (QSystemTrayIcon.Trigger, QSystemTrayIcon.DoubleClick):  # a left click
+            self.window.open()
 
     def build(self):
         m = self.menu
         m.clear()
+        m.addAction("Open the toy box...", self.window.open)
         m.addSection("Foxes")
         for palette, label in (("orange", "Orange fox"), ("grey", "Grey fox")):
             self._check(m, label, self.settings["foxes"].get(palette, False),
@@ -307,13 +379,15 @@ class ToyBox:
         save.store(self.settings)
         self.world.rebuild()
         self.desktop.update()
+        if self.window.isVisible():
+            self.window.refresh()
 
     def _set_fox(self, palette, on):
         self.settings["foxes"][palette] = on
         self._changed()
 
     def _set_item(self, name, on):
-        self.settings["items"][name]["out"] = on
+        self.settings["items"].setdefault(name, {"out": on, "x": None})["out"] = on
         self._changed()
 
     def _zoomies(self):

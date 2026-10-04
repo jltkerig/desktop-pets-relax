@@ -296,3 +296,20 @@ class Zzz(Thing):
         self.alpha = max(0.0, 1.0 - self.age / 2.6)
         if self.age > 2.6:
             self.gone = True
+
+
+class Climbable(Thing):
+    """Something the foxes climb: a pile of oak barrels or a haystack. levels are the spots a fox can stand
+    on, as (sideways from the middle, height) in sprite pixels, from the lowest up."""
+    kind = "climb"
+    draggable = True
+    z = 8
+    LEVELS = {
+        "barrels": [(-24, 22), (-12, 44), (0, 66)],
+        "haystack": [(-16, 15), (0, 31)],
+    }
+
+    def __init__(self, world, x, variant):
+        super().__init__(world, x, world.ground, variant)
+        self.variant = variant
+        self.levels = self.LEVELS[variant]

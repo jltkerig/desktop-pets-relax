@@ -655,36 +655,102 @@ def hoe():
     return c.to_image()
 
 
+COMMON.update({
+    "stone": ("#4c4844", "#6e6862", "#928a82", "#b8b0a6", "#26231f"),
+    "stone_dark": ("#3a3632", "#55504a", "#706a62", "#8c857c", "#1c1a17"),
+    "moss": ("#3a5418", "#557422", "#71922e", "#94b04c", "#1c2c08"),
+})
+
+
+def _rock(c, rng, cx, cy, w, h, mat="stone", moss=False):
+    """An irregular, faceted stone: a jagged outline lit from the top left, a darker underside."""
+    pts = []
+    for i in range(8):
+        a = i / 8 * 2 * math.pi + rng.uniform(-0.25, 0.25)
+        r = rng.uniform(0.82, 1.08)
+        pts.append((cx + math.cos(a) * w * r, cy + math.sin(a) * h * r * (0.8 if math.sin(a) > 0 else 1.0)))
+    c.polygon(pts, mat, lum=0.42)
+    # a lit facet on the top left and a shadow band underneath give it weight
+    c.polygon([(cx - w * 0.75, cy - h * 0.1), (cx - w * 0.2, cy - h * 0.85), (cx + w * 0.35, cy - h * 0.7),
+               (cx - w * 0.05, cy - h * 0.05)], mat, lum=0.82)
+    for y in range(int(cy + h * 0.35), int(cy + h) + 1):
+        for x in range(int(cx - w) - 1, int(cx + w) + 2):
+            if 0 <= x < c.w and 0 <= y < c.h and c.mat[y][x] == mat:
+                c.fixed[y][x] = 0
+    if moss:
+        for x in range(int(cx - w * 0.6), int(cx + w * 0.3)):
+            for y in range(int(cy - h * 1.1), int(cy - h * 0.3)):
+                if 0 <= x < c.w and 0 <= y < c.h and c.mat[y][x] == mat and c.mat[y - 1][x] is None:
+                    c.mat[y][x], c.fixed[y][x] = "moss", 2
+                    if c.mat[y + 1][x] == mat and rng.random() < 0.6:
+                        c.mat[y + 1][x], c.fixed[y + 1][x] = "moss", 1
+
+
 def den(occupants=()):
-    """96 x 48: a grassy earth mound with a dark burrow entrance. occupants: fox palettes asleep inside,
-    shown as tail tips curled just inside the doorway."""
-    c = Canvas(96, 48)
-    ground = 46
-    c.ellipse(48, ground, 44, 26, "earth", clip=lambda x, y: y <= ground)
-    c.ellipse(30, ground - 14, 16, 10, "earth", bias=0.05, clip=lambda x, y: y <= ground)
-    c.ellipse(64, ground - 12, 18, 11, "earth", bias=0.05, clip=lambda x, y: y <= ground)
-    # the doorway: a dark arch with a worn earth lip
-    c.ellipse(52, ground, 12, 13, "den_dark", clip=lambda x, y: y <= ground)
-    c.ellipse(52, ground + 1, 15, 2.2, "earth", bias=0.2)
-    # grass tufts on the mound
-    for gx, gy in ((18, 26), (26, 19), (38, 18), (70, 21), (80, 28), (60, 16), (46, 21)):
-        for dx in (-1.5, 0, 1.5):
-            c.capsule(gx, gy + 2, gx + dx, gy - 3, 0.6, 0.4, "grass")
+    """112 x 56: a fox den. A lumpy earth mound set with stones: a big flat rock over the doorway,
+    boulders on either side, pebbles and crumbly dirt clumps, grass and a root. occupants: fox palettes
+    asleep inside, shown as tail tips curled in the doorway."""
+    c = Canvas(112, 56)
+    rng = random.Random(4)
+    ground = 54
+    door_x = 60
+    # the mound: one lumpy shape, lit as a single form
+    lumps = [(56, ground, 46, 30), (36, ground - 16, 18, 12), (74, ground - 14, 20, 13), (54, ground - 24, 14, 9)]
+    for y in range(c.h):
+        for x in range(c.w):
+            if y <= ground and any(((x + 0.5 - lx) / rx) ** 2 + ((y + 0.5 - ly) / ry) ** 2 <= 1 for lx, ly, rx, ry in lumps):
+                nx, ny = (x + 0.5 - 56) / 50, (y + 0.5 - ground + 6) / 34
+                c.mat[y][x] = "earth"
+                c.lum[y][x] = Canvas._shade(max(-1, min(1, nx)), max(-1, min(1, ny)), rng.uniform(-0.05, 0.05))
+    # crumbly texture: darker crumbs and lighter grit
+    for _ in range(140):
+        x, y = rng.randrange(8, 104), rng.randrange(20, ground)
+        if c.mat[y][x] == "earth":
+            c.fixed[y][x] = rng.choice((0, 0, 2))
+    # dirt clumps: little clods sitting on the slope
+    for cx, cy, r in ((24, 42, 2.6), (32, 33, 2.0), (80, 36, 2.4), (88, 44, 2.8), (46, 28, 1.8), (70, 26, 1.8),
+                      (98, 50, 2.2), (14, 50, 2.0)):
+        c.ellipse(cx, cy, r, r * 0.75, "earth", bias=0.25)
+    # the doorway: a dark burrow, with packed earth worn smooth at the lip
+    c.ellipse(door_x, ground, 11, 14, "den_dark", clip=lambda x, y: y <= ground)
+    c.ellipse(door_x, ground - 3, 7, 9, "den_dark", bias=-0.4, clip=lambda x, y: y <= ground)
+    # stones: a flat lintel over the door, boulders either side, smaller rocks and pebbles round the base
+    _rock(c, rng, door_x, ground - 15, 13, 4.2, "stone", moss=True)
+    _rock(c, rng, door_x - 15, ground - 5, 6.5, 6, "stone")
+    _rock(c, rng, door_x + 15, ground - 4, 7, 5.5, "stone_dark", moss=True)
+    _rock(c, rng, 22, ground - 3, 6, 4, "stone_dark")
+    _rock(c, rng, 92, ground - 3, 7, 4.5, "stone")
+    _rock(c, rng, 38, ground - 22, 4.5, 3.2, "stone", moss=True)
+    _rock(c, rng, 78, ground - 22, 4, 3, "stone_dark")
+    for px_, py_, r in ((8, ground - 1, 1.6), (100, ground - 1, 1.8), (44, ground - 1, 1.4), (76, ground - 1, 1.5),
+                        (106, ground - 2, 1.2), (30, ground - 1, 1.2)):
+        c.ellipse(px_, py_, r, r * 0.8, "stone")
+    # scattered earth kicked out of the burrow
+    for dx in (-16, -11, -7, 8, 12, 17):
+        c.ellipse(door_x + dx, ground + 0.5, 1.4, 0.8, "earth", bias=0.15)
+    # a root poking out of the mound, and grass along the top
+    c.capsule(84, 30, 92, 25, 0.8, 0.5, "handle")
+    c.capsule(92, 25, 95, 27, 0.5, 0.4, "handle")
+    for gx, gy in ((20, 34), (28, 25), (44, 22), (52, 21), (66, 21), (82, 27), (92, 34)):
+        top = gy
+        while top < ground and c.mat[top][gx] is None:
+            top += 1  # stand the tuft on the mound's surface
+        for dx, hgt in ((-1.6, 4), (0, 6), (1.6, 4.5)):
+            c.capsule(gx, top + 1, gx + dx, top - hgt, 0.6, 0.35, "grass")
     # sleeping foxes: their tail tips curled in the doorway
     colours = {"orange": ("fur", "white"), "grey": ("fur", "tip")}
     for i, palette in enumerate(occupants[:2]):
-        base_x = 47 + i * 9
-        sub = Canvas(96, 48, palette)
+        base_x = door_x - 5 + i * 9
+        sub = Canvas(112, 56, palette)
         fur, tipmat = colours.get(palette, ("fur", "white"))
         sub.capsule(base_x, ground - 2, base_x + 5, ground - 6, 2.6, 2.4, fur)
         sub.capsule(base_x + 5, ground - 6, base_x + 7, ground - 9, 2.2, 1.0, tipmat)
-        for y in range(48):
-            for x in range(96):
+        c.ramps = {**c.ramps, **{f"{palette}_{k}": v for k, v in sub.ramps.items()}}
+        for y in range(56):
+            for x in range(112):
                 if sub.mat[y][x] is not None:
-                    c.mat[y][x], c.lum[y][x], c.fixed[y][x] = sub.mat[y][x], sub.lum[y][x], None
-                    c.ramps = {**c.ramps, **{f"{palette}_{k}": v for k, v in sub.ramps.items()}}
-                    c.mat[y][x] = f"{palette}_{sub.mat[y][x]}"
-    return c.to_image(flat=True)
+                    c.mat[y][x], c.lum[y][x], c.fixed[y][x] = f"{palette}_{sub.mat[y][x]}", sub.lum[y][x], None
+    return c.to_image()
 
 
 def zzz(t=0.0):
@@ -701,6 +767,84 @@ def zzz(t=0.0):
     for (x, y) in ((2, 2), (3, 2), (4, 2), (5, 2), (5, 3), (4, 4), (3, 5), (2, 6), (3, 6), (4, 6), (5, 6)):
         px[x, y] = ink
     return img
+
+
+# -- climbing things: oak barrels and haystacks ----------------------------------------------------------
+
+COMMON.update({
+    "oak_wood": ("#5a3418", "#7e4a22", "#a0662e", "#c08446", "#2c1808"),
+    "hoop": ("#2a2a2e", "#44444a", "#66666e", "#8e8e96", "#121214"),
+    "hay": ("#9a7a24", "#c4a03a", "#dcbc56", "#efd888", "#584010"),
+    "twine": ("#6a4c22", "#8a6630", "#a88244", "#c4a066", "#36260e"),
+})
+
+BARREL_W, BARREL_H = 22, 22
+
+
+def _barrel(c, left, bottom):
+    """One upright oak barrel: bulging staves with dark seams, two iron hoops, a lighter top rim."""
+    top = bottom - BARREL_H
+    for y in range(top, bottom + 1):
+        f = (y - top) / BARREL_H                      # 0 at the top rim, 1 at the base
+        bulge = round(math.sin(math.pi * f) * 1.6)    # barrels bulge in the middle
+        x0, x1 = left - bulge, left + BARREL_W - 1 + bulge
+        for x in range(x0, x1 + 1):
+            band = (x - x0) / max(1, x1 - x0)
+            level = 3 if band < 0.12 else 2 if band < 0.38 else 1 if band < 0.75 else 0
+            mat = "oak_wood"
+            if (x - left) % 5 == 0 and 0.05 < f < 0.95:
+                level = max(0, level - 1)             # the seams between staves
+            if abs(f - 0.22) < 0.05 or abs(f - 0.78) < 0.05:
+                mat = "hoop"
+            if 0 <= x < c.w and 0 <= y < c.h:
+                c.mat[y][x], c.fixed[y][x] = mat, level
+    for x in range(left + 1, left + BARREL_W - 1):   # the top rim
+        if 0 <= x < c.w:
+            c.mat[top][x], c.fixed[top][x] = "oak_wood", 3
+
+
+def barrels():
+    """72 x 70: a pile of oak barrels, three on the bottom, two, then one on top."""
+    c = Canvas(72, 70)
+    bottom = 68
+    for row, count in enumerate((3, 2, 1)):
+        y = bottom - row * BARREL_H
+        width = count * BARREL_W + (count - 1) * 2
+        start = 36 - width // 2
+        for i in range(count):
+            _barrel(c, start + i * (BARREL_W + 2), y)
+    return c.to_image()
+
+
+BALE_W, BALE_H = 30, 15
+
+
+def _bale(c, rng, left, bottom):
+    """A square hay bale: straw texture in short strokes, two twine bands, a little stray straw."""
+    top = bottom - BALE_H
+    for y in range(top, bottom + 1):
+        for x in range(left, left + BALE_W):
+            level = 2 if y == top else 0 if y >= bottom - 1 or x == left + BALE_W - 1 else 1
+            if level == 1 and rng.random() < 0.35:
+                level = rng.choice((0, 2, 2, 3))      # straw strands
+            mat = "twine" if (x - left) in (7, 22) else "hay"
+            if 0 <= x < c.w and 0 <= y < c.h:
+                c.mat[y][x], c.fixed[y][x] = mat, level
+    for _ in range(6):                                # stray straw sticking out
+        x = rng.randrange(left, left + BALE_W)
+        y = top - 1
+        if 0 <= x < c.w and 0 <= y < c.h:
+            c.mat[y][x], c.fixed[y][x] = "hay", rng.choice((2, 3))
+
+
+def haystack():
+    """66 x 36: two hay bales with a third on top."""
+    c = Canvas(66, 36)
+    rng = random.Random(11)
+    _bale(c, rng, 2, 34)
+    _bale(c, rng, 34, 34)
+    _bale(c, rng, 18, 34 - BALE_H - 1)
+    return c.to_image()
 
 
 def tray_icon():
@@ -737,11 +881,13 @@ SPRITES = {
                                        (20, 30))
        for k, g in PUMPKIN_SIZES.items() for shape in PUMPKIN_SHAPES},
     **{f"corn_{s}": ([corn(s, sw) for sw in (0, 1, 2, 1, 0, -1, -2, -1)], 300, True, (60, 98)) for s in range(5)},
+    "barrels": ([barrels()], 1000, False, (36, 68)),
+    "haystack": ([haystack()], 1000, False, (33, 34)),
     "hoe": ([hoe()], 1000, False, (14, 58)),
-    "den": ([den()], 1000, False, (48, 46)),
-    "den_orange": ([den(("orange",))], 1000, False, (48, 46)),
-    "den_grey": ([den(("grey",))], 1000, False, (48, 46)),
-    "den_both": ([den(("orange", "grey"))], 1000, False, (48, 46)),
+    "den": ([den()], 1000, False, (56, 54)),
+    "den_orange": ([den(("orange",))], 1000, False, (56, 54)),
+    "den_grey": ([den(("grey",))], 1000, False, (56, 54)),
+    "den_both": ([den(("orange", "grey"))], 1000, False, (56, 54)),
     "zzz": ([zzz()], 1000, False, (5, 9)),
     "scarecrow": ([scarecrow(sw) for sw in (0, 1, 2, 1, 0, -1, -2, -1)], 260, True, (24, 85)),
 }

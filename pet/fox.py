@@ -14,16 +14,18 @@ WALK, TROT, ZOOM = 34, 80, 230  # speed in sprite pixels per second (scaled by t
 
 
 class Step:
-    def __init__(self, anim, seconds=None, to_x=None, speed=0.0, leap=0.0, then=None, face=None):
+    def __init__(self, anim, seconds=None, to_x=None, speed=0.0, leap=0.0, then=None, face=None, to_y=None):
         self.anim = anim          # animation name without the fox_<palette>_ prefix
         self.seconds = seconds    # None: one pass of the animation (or until arriving, when moving)
         self.to_x = to_x          # walk/trot/leap to this x
         self.speed = speed
         self.leap = leap          # arc height (sprite pixels) for a leap
+        self.to_y = to_y          # where a leap lands (default: the ground); used to climb things
         self.then = then          # a function run when the step finishes
         self.face = face          # an x to turn toward when the step starts
         self.elapsed = 0.0
         self.start_x = None
+        self.start_y = None
 
 
 class Fox(Thing):
@@ -149,9 +151,14 @@ class Fox(Thing):
 
     CALM = ("idle", "look", "walk", "sniff", "watch", "tilt", "scratch", "groom", "happy", "dig")
 
+    @property
+    def up_high(self):
+        """Standing on top of something (barrels, a haystack)."""
+        return self.y < self.world.ground - 1 and not self.held and not self.vy
+
     def _notice_leaves(self, dt):
         """A leaf drifting down nearby catches its eye: off it goes after it."""
-        if self.asleep or self.carrying is not None or self.busy_with is not None:
+        if self.asleep or self.carrying is not None or self.busy_with is not None or self.up_high:
             return
         if self.step is not None and self.step.anim not in self.CALM:
             return
@@ -178,6 +185,7 @@ class Fox(Thing):
         self.anim.time = 0.0
         self.anim.done = False
         step.start_x = self.x
+        step.start_y = self.y
         if step.face is not None and abs(step.face - self.x) > 2:
             self.facing = 1 if step.face > self.x else -1
         if step.to_x is not None and abs(step.to_x - self.x) > 1:
@@ -197,11 +205,12 @@ class Fox(Thing):
         if step.leap and step.to_x is not None:
             total = sprites.duration(self.anim.name)
             t = min(1.0, step.elapsed / total)
+            end_y = self.world.ground if step.to_y is None else step.to_y
             self.x = step.start_x + (step.to_x - step.start_x) * t
-            self.y = self.world.ground - math.sin(math.pi * t) * step.leap * self.world.scale
+            self.y = step.start_y + (end_y - step.start_y) * t - math.sin(math.pi * t) * step.leap * self.world.scale
             finished = t >= 1.0
             if finished:
-                self.y = self.world.ground
+                self.y = end_y
         elif step.to_x is not None:
             distance = step.to_x - self.x
             move = step.speed * self.world.scale * dt
@@ -224,6 +233,13 @@ class Fox(Thing):
                 step.then()
             self.step = None
 
+    def _climb(self):
+        thing = self.world.climbable_near(self, 900)
+        if thing is None:
+            return [Step("idle", 2.0)]
+        self.world.climb(self, thing)
+        return []  # climb() already filled in the plan
+
     def _zoomies(self):
         """A burst of energy: a wiggle, a sprint to the far end of the screen, a dash partway back, a happy roll."""
         w = self.world
@@ -240,6 +256,10 @@ class Fox(Thing):
 
     def choose(self):
         w, rng = self.world, self.rng
+        if self.up_high:  # left up there (after being petted, say): hop back down first
+            self.plan.append(Step("hop", to_x=max(40.0, min(w.width - 40.0, self.x + self.facing * 40 * w.scale)),
+                                  to_y=w.ground, leap=10))
+            return
         if self.busy_with and (self.busy_with.gone or self.busy_with.asleep):
             self.busy_with = None
         night = w.now().hour >= 22 or w.now().hour < 7
@@ -311,6 +331,7 @@ class Fox(Thing):
             (self.playful * 1.2, lambda: [Step("trot", to_x=w.wander_target(self), speed=TROT)]),
             (0.5, lambda: [Step("stretch")]),
             (self.playful * self.energy * 1.4, lambda: self._zoomies()),
+            (self.playful * 2.0 if w.climbable_near(self, 900) else 0.0, lambda: self._climb()),
             (1.0, lambda: [Step("groom", rng.uniform(2.0, 4.0)), Step("idle", 1.5)]),
             (self.playful * 0.6, lambda: self._tail_chase()),
         ]

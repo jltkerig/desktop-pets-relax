@@ -1,11 +1,11 @@
 {
-  "frame_width": 112,
-  "frame_height": 56,
+  "frame_width": 66,
+  "frame_height": 36,
   "frames": 1,
   "ms": 1000,
   "loop": false,
   "anchor": [
-    56,
-    54
+    33,
+    34
   ]
 }

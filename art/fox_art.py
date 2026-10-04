@@ -65,6 +65,14 @@ def head(c, cx, cy, tilt=0.0, eyes="open", mouth=0.0, ear=0.0, ears_down=False, 
             c.pixel(ex + dx, ey + 1, "eye")
 
 
+def neck(c, base, head_at):
+    """Joins the head to the body: a furry neck with the white throat running up the front."""
+    hx, hy = head_at
+    bx, by = base
+    c.capsule(bx, by, hx - 1.5, hy + 2.5, 5.0, 4.4, "fur")
+    c.capsule(bx + 2.2, by + 1.0, hx + 1.0, hy + 4.5, 2.8, 2.6, "white")
+
+
 def leg(c, hip, paw, r_top=2.8, r_paw=2.1, far=False):
     bias = -0.28 if far else 0.0
     c.capsule(hip[0], hip[1], paw[0], paw[1], r_top, r_paw, "side", bias)
@@ -115,7 +123,9 @@ def stand(c, step=0.0, bob=0.0, tail_lift=0.0, swish=0.0, eyes="open", head_dx=0
         leg(c, (41, y + 2), (47 + paw_lift * 4, GROUND - 3 - paw_lift * 5), r_paw=2.3)
     else:
         leg(c, (41, y + 3), (43 + stride * s * 0.6, GROUND - lift(step * 2 * math.pi)))
-    head(c, 47 + head_dx, y - 12 + head_dy + crouch * 3, tilt=tilt, eyes=eyes, mouth=mouth, ear=ear, look=look)
+    hx, hy = 47 + head_dx, y - 12 + head_dy + crouch * 3
+    neck(c, (40, y - 3), (hx, hy))
+    head(c, hx, hy, tilt=tilt, eyes=eyes, mouth=mouth, ear=ear, look=look)
 
 
 def sit(c, eyes="open", tilt=0.0, mouth=0.0, ear=0.0, swish=0.0, head_dx=0.0, head_dy=0.0, look=0.0,
@@ -140,6 +150,7 @@ def sit(c, eyes="open", tilt=0.0, mouth=0.0, ear=0.0, swish=0.0, head_dx=0.0, he
     if scratch is not None:
         a = math.sin(scratch * 2 * math.pi) * 2.2
         leg(c, (27, 49), (35 + a, 33 + a * 0.6), r_top=3.0, r_paw=2.2)
+    neck(c, (35, 37), (hx, hy))
     head(c, hx, hy, tilt=tilt, eyes=eyes, mouth=mouth, ear=ear, look=look, ears_down=ears_down)
 
 
@@ -162,6 +173,7 @@ def held(c, swing=0.0, eyes="happy"):
     c.ellipse(35, 32, 4.5, 7.0, "white", angle=swing * 2)
     leg(c, (29, 30), (27 + swing, 41))
     leg(c, (37, 30), (38 + swing, 41))
+    neck(c, (33, 27), (33, 16))
     head(c, 33, 16, tilt=8, eyes=eyes, ear=swing * 0.3)
 
 
@@ -175,6 +187,7 @@ def leap(c, rise=0.0, eyes="wide", reach=1.0):
     c.ellipse(38, y + 1, 3.6, 3.4, "white", angle=-20)
     leg(c, (39, y - 1), (50, y - 2 + 4 * (1 - reach)), far=True)
     leg(c, (41, y), (53, y + 3 * (1 - reach)))
+    neck(c, (40, y - 2), (47, y - 10))
     head(c, 47, y - 10, tilt=-10 * reach, eyes=eyes)
 
 
@@ -189,6 +202,7 @@ def bow(c, wiggle=0.0, eyes="open", stretch=1.0, mouth=0.0):
     c.capsule(46, 59, 52, 59.5, 2.6, 2.2, "dark", -0.28)
     c.capsule(40, 56, 55, 59.5, 2.8, 2.2, "fur")
     c.capsule(49, 59, 55, 59.5, 2.6, 2.2, "dark")
+    neck(c, (39, 46), (47, 44 + (1 - stretch) * -4))
     head(c, 47, 44 + (1 - stretch) * -4, tilt=6, eyes=eyes, mouth=mouth)
 
 
@@ -201,6 +215,7 @@ def dig(c, phase=0.0):
     c.ellipse(30, 46, 14.0, 7.6, "fur", angle=14)
     leg(c, (39, 50), (45 + a * 3, GROUND - max(0, a) * 3), far=True)
     leg(c, (41, 51), (46 - a * 3, GROUND - max(0, -a) * 3))
+    neck(c, (40, 47), (49, 47))
     head(c, 49, 47, tilt=22, eyes="closed")
     for i, (dx, dy) in enumerate(((-30, -6), (-34, -10), (-27, -12), (-37, -4))):
         if (int(phase * 4) + i) % 2 == 0:

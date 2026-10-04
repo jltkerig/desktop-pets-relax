@@ -37,7 +37,7 @@ PALETTES = {
         "mouth": ("#3a0f10", "#5a1a1c", "#7a2a2a", "#8a3a3a", "#2a0808"),
         "tongue": ("#b2475a", "#d9667a", "#ee8a9a", "#f7b0bc", "#6a1f2c"),
         "tip": ("#0e0c0c", "#1c1818", "#2c2626", "#3c3434", "#040303"),  # black tail tip
-        "side": ("#7a3a1c", "#a8592c", "#c97a44", "#dea06a", "#3e1a0a"),  # rusty flanks and legs
+        "side": ("#3e3f45", "#5f6066", "#83848a", "#a9aaaf", "#1e1f23"),  # legs: grey, a shade darker than the back
     },
 }
 

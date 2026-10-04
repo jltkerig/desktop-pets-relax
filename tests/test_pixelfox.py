@@ -679,5 +679,33 @@ class DiscordMischief(unittest.TestCase):
         self.assertIn(("restore", "message1"), self.world.screen_requests)
 
 
+class DiscordInUse(unittest.TestCase):
+    def test_while_you_chat_a_fox_soon_steals_and_returns_it_quickly(self):
+        world, clock = make_world(orange=True, grey=False)
+        fox = world.of("fox")[0]
+        fox.do(Step("sleep", 999))
+        world.discord_spot = {"x": fox.x + 200, "y": 600.0}
+        world.discord_active = True
+        stolen_at = returned_at = None
+        for i in range(240 * 30):
+            run(world, clock, 1 / 30)
+            if stolen_at is None and world.of("message"):
+                stolen_at = i / 30
+            if stolen_at is not None and returned_at is None and not world.of("message"):
+                returned_at = i / 30
+                break
+        self.assertIsNotNone(stolen_at)                # it even woke from its nap for it
+        self.assertLess(returned_at - stolen_at, 20)  # a quick heist
+
+    def test_no_temptation_when_you_are_not_using_it(self):
+        world, clock = make_world(orange=True, grey=False)
+        fox = world.of("fox")[0]
+        fox.do(Step("idle", 999))
+        world.discord_spot = {"x": fox.x + 200, "y": 600.0}
+        world.discord_active = False
+        run(world, clock, 60)
+        self.assertFalse(world.of("message"))
+
+
 if __name__ == "__main__":
     unittest.main()

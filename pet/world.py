@@ -30,6 +30,7 @@ class World:
         self.images = {}          # treasure key -> picture of the icon (set by the window)
         self.grab_requests = []   # (treasure key, x) the window should copy the icon for
         self.discord_spot = None  # where a Discord message could be stolen from (set by the window), along the strip
+        self.discord_active = False  # you're using Discord right now (it's in front and you're typing)
         self.screen_requests = []  # ("steal" | "restore", message key) for the window to act on
         self._treasures = 0
         self.rebuild()
@@ -568,6 +569,11 @@ class World:
             if not msg.gone:
                 msg.carried_by, msg.state = None, "returning"
 
+        if self.discord_active:  # you're chatting: a quick grab, a victory hop, and straight back
+            fox.do(Step("trot", to_x=under, speed=TROT), Step("crouch", 0.5, face=spot["x"]),
+                   Step("hop", face=spot["x"], then=yank), Step("happy", 1.5), Step("hop"), Step("happy", 1.0),
+                   Step("hop", face=spot["x"], then=send_home), Step("tilt", face=spot["x"]))
+            return True
         fox.do(Step("walk", to_x=under, speed=WALK), Step("look", face=spot["x"]), Step("crouch", 0.8, face=spot["x"]),
                Step("hop", face=spot["x"], then=yank), Step("happy", 0.8),
                Step("trot", to_x=away, speed=TROT * 1.3, then=drop), Step("playbow", 1.0), Step("roll", 1.8),

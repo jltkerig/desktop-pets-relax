@@ -99,3 +99,25 @@ def still_there(hwnd, bounds):
     if not ON_WINDOWS or not user32.IsWindow(hwnd) or user32.IsIconic(hwnd) or not user32.IsWindowVisible(hwnd):
         return False
     return _bounds(hwnd) == bounds
+
+
+class LASTINPUTINFO(ctypes.Structure):
+    _fields_ = [("cbSize", wintypes.UINT), ("dwTime", wintypes.DWORD)]
+
+
+def seconds_since_input():
+    """How long since any key was pressed or the mouse moved, anywhere (which key is never looked at)."""
+    if not ON_WINDOWS:
+        return 1e9
+    info = LASTINPUTINFO()
+    info.cbSize = ctypes.sizeof(info)
+    if not user32.GetLastInputInfo(ctypes.byref(info)):
+        return 1e9
+    return (kernel32.GetTickCount() - info.dwTime) / 1000.0
+
+
+def in_use(hwnd, within=5.0):
+    """Discord is the window in front and you've typed or moved the mouse in the last few seconds."""
+    if not ON_WINDOWS:
+        return False
+    return user32.GetForegroundWindow() == hwnd and seconds_since_input() < within

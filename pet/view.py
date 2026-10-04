@@ -81,6 +81,22 @@ class Stage:
         self.guard_timer = QTimer()
         self.guard_timer.timeout.connect(self.guard_covers)
         self.guard_timer.start(500)
+        self.active_timer = QTimer()  # every couple of seconds: are you using Discord right now?
+        self.active_timer.timeout.connect(self.check_discord_use)
+        self.active_timer.start(2000)
+
+    def check_discord_use(self):
+        if not self.world.mischief("discord"):
+            self.world.discord_active = False
+            return
+        found = self.discord[0] if self.discord else None
+        if found is None:
+            window = discord.find_window()
+            found = window[0] if window else None
+        active = found is not None and discord.in_use(found)
+        if active and not self.world.discord_active and not self.covers:
+            self.look_for_discord()  # fresh: where's a message showing right now?
+        self.world.discord_active = active and self.world.discord_spot is not None
 
     # -- Discord mischief ------------------------------------------------------------------------------
 

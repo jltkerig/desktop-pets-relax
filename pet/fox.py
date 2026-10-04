@@ -146,6 +146,7 @@ class Fox(Thing):
             self.anim.update(dt)
             return
         self._notice_leaves(dt)
+        self._notice_discord(dt)
         if self.step is None:
             if not self.plan:
                 self.choose()
@@ -159,6 +160,15 @@ class Fox(Thing):
     def up_high(self):
         """Standing on top of something (barrels, a haystack)."""
         return self.y < self.world.ground - 1 and not self.held and not self.vy
+
+    def _notice_discord(self, dt):
+        """You're chatting on Discord: very tempting. It may leave what it's doing (even a nap) to steal."""
+        w = self.world
+        if not w.discord_active or w.discord_spot is None or self.held or self.vy or self.up_high or \
+                self.carrying is not None or self.busy_with is not None or w.of("message"):
+            return
+        if self.rng.random() < dt * 0.018:  # about once a minute per fox while you're active
+            w.steal_message(self)
 
     def _notice_leaves(self, dt):
         """A leaf drifting down nearby catches its eye: off it goes after it."""

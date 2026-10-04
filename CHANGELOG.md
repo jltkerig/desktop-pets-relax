@@ -3,6 +3,11 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.1.1
+
+- `CLAUDE.md`: Claude sessions merge their work into `main` through a pull request, so no extra branches
+  are left behind (GitHub deletes them on merge).
+
 ## 1.1.0
 
 - **Wild turkeys** (autumn): a flock of 3 to 6 runs in from one edge, stops together to look around,

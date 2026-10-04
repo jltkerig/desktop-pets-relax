@@ -36,13 +36,36 @@ def oak(sway=0.0, seed=7):
                 c.fixed[y][x] = 0
     # the crown: one leafy mass with a bumpy oak outline, lit as a single rounded shape
     cx0, cy0, rx0, ry0 = 80 + sway, 70, 62, 44
+    rx0, ry0 = 54, 38  # the core is a little smaller; lobes of different sizes make the outline
     lumps = [(cx0, cy0, rx0, ry0)]
-    for i in range(14):  # bumps around the edge give the oak its lobed silhouette
-        a = i / 14 * 2 * math.pi + rng.uniform(-0.15, 0.15)
-        lumps.append((cx0 + math.cos(a) * rx0 * 0.86, cy0 + math.sin(a) * ry0 * 0.86 - (4 if math.sin(a) < 0 else 0),
-                      rng.uniform(13, 18), rng.uniform(11, 15)))
+    for i in range(20):  # big and small lobes, unevenly spaced, so the silhouette is irregular
+        a = i / 20 * 2 * math.pi + rng.uniform(-0.2, 0.2)
+        reach = rng.uniform(0.78, 1.08)
+        lumps.append((cx0 + math.cos(a) * rx0 * reach, cy0 + math.sin(a) * ry0 * reach - (5 if math.sin(a) < 0 else 0),
+                      rng.uniform(8, 21), rng.uniform(7, 16)))
+    lobes = list(lumps)
+    def in_lobes(x, y):
+        return any(((x - lx) / lrx) ** 2 + ((y - ly) / lry) ** 2 <= 1 for lx, ly, lrx, lry in lobes)
+    for _ in range(26):  # small leafy tufts sitting on the edge, half poking out
+        a = rng.uniform(0, 2 * math.pi)
+        if math.sin(a) > 0.75:
+            continue  # not hanging below the crown's middle, where the trunk is
+        d = 0.0
+        while in_lobes(cx0 + math.cos(a) * d * 1.4, cy0 + math.sin(a) * d) and d < 90:
+            d += 1  # walk out from the centre to the edge
+        lumps.append((cx0 + math.cos(a) * d * 1.4, cy0 + math.sin(a) * d, rng.uniform(3, 6), rng.uniform(2.5, 4.5)))
+    notches = []  # bites out of the edge give it corners
+    for _ in range(9):
+        a = rng.uniform(0, 2 * math.pi)
+        d = 0.0
+        while in_lobes(cx0 + math.cos(a) * d * 1.4, cy0 + math.sin(a) * d) and d < 90:
+            d += 1
+        notches.append((cx0 + math.cos(a) * (d * 1.4 + 2), cy0 + math.sin(a) * (d + 1.5), rng.uniform(4, 7), rng.uniform(3, 5)))
+    holes = [(cx0 - 22 + rng.uniform(-4, 4), cy0 + 14, 3.2, 2.4), (cx0 + 26 + rng.uniform(-4, 4), cy0 - 8, 2.6, 2.0)]
+    def inside(x, y, shapes):
+        return any(((x - lx) / lrx) ** 2 + ((y - ly) / lry) ** 2 <= 1 for lx, ly, lrx, lry in shapes)
     def in_crown(x, y):
-        return any(((x - lx) / lrx) ** 2 + ((y - ly) / lry) ** 2 <= 1 for lx, ly, lrx, lry in lumps)
+        return inside(x, y, lumps) and not inside(x, y, notches) and not inside(x, y, holes)
     # leaf colours come in small clusters, warmer toward the bottom, more yellow on top
     cell = {}
     def colour(x, y):
@@ -74,6 +97,30 @@ def oak(sway=0.0, seed=7):
             if rng.random() < 0.05:  # little gaps of shadow between the leaves
                 lum -= 0.35
             c.mat[y][x], c.lum[y][x], c.fixed[y][x] = mat, lum, None
+    # keep only the crown piece joined to the middle (no floating crumbs)
+    seen, stack = set(), [(int(cx0), int(cy0))]
+    while stack:
+        x, y = stack.pop()
+        if (x, y) in seen or not (0 <= x < 160 and 0 <= y < 130) or not (c.mat[y][x] or "").startswith("leaf"):
+            continue
+        seen.add((x, y))
+        stack.extend(((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)))
+    for y in range(130):
+        for x in range(160):
+            if (c.mat[y][x] or "").startswith("leaf") and (x, y) not in seen:
+                c.mat[y][x] = None
+    # a jagged, leafy edge: nibble some edge pixels away and push others out a pixel
+    edge = [(x, y) for y in range(1, 129) for x in range(1, 159)
+            if c.mat[y][x] and c.mat[y][x].startswith("leaf")
+            and any(c.mat[y + dy][x + dx] is None for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))]
+    for x, y in edge:
+        roll = rng.random()
+        if roll < 0.22:
+            c.mat[y][x] = None
+        elif roll < 0.45:
+            dx, dy = rng.choice(((1, 0), (-1, 0), (0, -1), (1, -1), (-1, -1)))
+            if c.mat[y + dy][x + dx] is None:
+                c.mat[y + dy][x + dx], c.lum[y + dy][x + dx], c.fixed[y + dy][x + dx] = c.mat[y][x], c.lum[y][x], None
     return c.to_image()
 
 

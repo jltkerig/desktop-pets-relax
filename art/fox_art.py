@@ -65,12 +65,18 @@ def head(c, cx, cy, tilt=0.0, eyes="open", mouth=0.0, ear=0.0, ears_down=False, 
             c.pixel(ex + dx, ey + 1, "eye")
 
 
-def neck(c, base, head_at):
-    """Joins the head to the body: a furry neck with the white throat running up the front."""
+def neck(c, base, head_at, thick=1.0):
+    """Joins the head to the body: a furry neck, with a soft white bib from the chest up to the jaw."""
     hx, hy = head_at
     bx, by = base
-    c.capsule(bx, by, hx - 1.5, hy + 2.0, 4.2, 3.6, "fur")
-    c.capsule(bx + 1.8, by + 1.0, hx + 0.8, hy + 3.8, 2.3, 2.0, "white")
+    c.capsule(bx, by, hx - 1.5, hy + 2.0, 4.2 * thick, 3.6 * thick, "fur")
+    # the bib: one soft oval between the chest and the jaw (not a thin stripe)
+    tx, ty = bx + 2.0 * thick, by + 1.5
+    jx, jy = hx + 1.0, hy + 4.0
+    mx, my = (tx + jx) / 2, (ty + jy) / 2
+    length = math.hypot(jx - tx, jy - ty)
+    angle = math.degrees(math.atan2(jy - ty, jx - tx)) + 90
+    c.ellipse(mx, my, 2.9 * thick, max(2.5, length / 2 + 1.2), "white", angle=angle)
 
 
 def leg(c, hip, paw, r_top=2.3, r_paw=1.7, far=False):
@@ -83,8 +89,9 @@ def leg(c, hip, paw, r_top=2.3, r_paw=1.7, far=False):
 
 def tail(c, base, ctrl, tip, thick=4.3, far=False):
     pts = bezier(base, ctrl, tip, 12)
-    radii = [1.8 + thick * math.sin(math.pi * (0.15 + 0.8 * i / 11)) * (0.9 if i < 10 else 0.75) for i in range(12)]
-    radii[-1] = 1.6
+    radii = [2.6 + thick * math.sin(math.pi * (0.12 + 0.72 * i / 11)) for i in range(12)]
+    radii[-2] *= 0.85
+    radii[-1] = 2.0
     mats = ["fur"] * 8 + ["tip"] * 3
     c.chain(pts, radii, mats, bias=-0.2 if far else 0.0)
 
@@ -111,12 +118,13 @@ def stand(c, step=0.0, bob=0.0, tail_lift=0.0, swish=0.0, eyes="open", head_dx=0
     # far legs
     leg(c, (39, y + 3), (40 + stride * s2 * 0.6, GROUND - lift(step * 2 * math.pi + math.pi)), far=True)
     leg(c, (21, y + 3), (19 + stride * s * 0.6, GROUND - lift(step * 2 * math.pi)), far=True)
-    # tail
-    tail(c, (17, y - 1), (8, y - 6 - tail_lift * 4 + swish), (3 + swish * 0.3, y - 12 - tail_lift * 8 + swish * 1.5))
     # body
     c.ellipse(30, y, 15.0, 6.6 - crouch * 1.0, "fur", angle=-3 + crouch * 6)
     c.ellipse(41, y + 1.5, 4.2, 4.6, "white", angle=-10)
     c.ellipse(30, y + 4.5, 9.0, 2.0, "white", bias=-0.25, clip=lambda px, py: py >= y + 3.5)
+    # tail: grows out of the rump, held out behind and a little up
+    tail(c, (19, y - 1.5), (8, y - 4 - tail_lift * 4 + swish), (2 + swish * 0.3, y - 10 - tail_lift * 8 + swish * 1.5),
+         thick=3.8)
     # near legs
     leg(c, (24, y + 3), (23 + stride * s2 * 0.6, GROUND - lift(step * 2 * math.pi + math.pi)))
     if paw_lift is not None:  # one front paw reaching forward (batting)
@@ -150,7 +158,7 @@ def sit(c, eyes="open", tilt=0.0, mouth=0.0, ear=0.0, swish=0.0, head_dx=0.0, he
     if scratch is not None:
         a = math.sin(scratch * 2 * math.pi) * 2.2
         leg(c, (27, 49), (35 + a, 33 + a * 0.6), r_top=3.0, r_paw=2.2)
-    neck(c, (35, 37), (hx, hy))
+    neck(c, (34, 38), (hx, hy), thick=1.25)  # sitting: a fuller neck flowing into the shoulders
     head(c, hx, hy, tilt=tilt, eyes=eyes, mouth=mouth, ear=ear, look=look, ears_down=ears_down)
 
 
@@ -180,10 +188,10 @@ def held(c, swing=0.0, eyes="happy"):
 def leap(c, rise=0.0, eyes="wide", reach=1.0):
     """In the air: body stretched, front paws reaching. rise lifts it (0..1)."""
     y = 40 - rise * 12
-    tail(c, (15, y), (6, y + 2), (1, y - 4), thick=4.8)
     leg(c, (20, y + 2), (11, y + 8), far=True)
     leg(c, (23, y + 2), (14, y + 10))
     c.ellipse(29, y, 16.0, 6.0, "fur", angle=-14 * reach)
+    tail(c, (17, y + 1), (7, y + 3), (1, y - 2), thick=4.0)
     c.ellipse(38, y + 1, 3.6, 3.4, "white", angle=-20)
     leg(c, (39, y - 1), (50, y - 2 + 4 * (1 - reach)), far=True)
     leg(c, (41, y), (53, y + 3 * (1 - reach)))
@@ -193,10 +201,10 @@ def leap(c, rise=0.0, eyes="wide", reach=1.0):
 
 def bow(c, wiggle=0.0, eyes="open", stretch=1.0, mouth=0.0):
     """Play bow / stretch: front low with paws forward, rear up, tail high."""
-    tail(c, (15, 40), (8 + wiggle, 30), (6 + wiggle * 1.6, 22), thick=5.0)
     leg(c, (20, 44), (18, GROUND), far=True)
     leg(c, (23, 44), (22 + wiggle * 0.3, GROUND))
     c.ellipse(29, 46, 14.5, 6.2, "fur", angle=16 * stretch)
+    tail(c, (17, 42), (9 + wiggle, 32), (7 + wiggle * 1.6, 23), thick=4.2)
     c.ellipse(39, 51, 5.0, 4.0, "white", angle=10)
     c.capsule(38, 55, 52, 59.5, 2.8, 2.2, "fur", -0.28)
     c.capsule(46, 59, 52, 59.5, 2.6, 2.2, "dark", -0.28)
@@ -209,10 +217,10 @@ def bow(c, wiggle=0.0, eyes="open", stretch=1.0, mouth=0.0):
 def dig(c, phase=0.0):
     """Nose down, front paws scrabbling; dirt flies out behind."""
     a = math.sin(phase * 2 * math.pi)
-    tail(c, (15, 40), (8, 33), (5 + a, 26), thick=5.0)
     leg(c, (20, 44), (18, GROUND), far=True)
     leg(c, (23, 44), (22, GROUND))
     c.ellipse(30, 46, 14.5, 6.3, "fur", angle=14)
+    tail(c, (18, 42), (9, 34), (6 + a, 27), thick=4.2)
     leg(c, (39, 50), (45 + a * 3, GROUND - max(0, a) * 3), far=True)
     leg(c, (41, 51), (46 - a * 3, GROUND - max(0, -a) * 3))
     neck(c, (40, 47), (49, 47))

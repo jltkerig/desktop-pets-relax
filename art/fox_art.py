@@ -152,7 +152,7 @@ def sit(c, eyes="open", tilt=0.0, mouth=0.0, ear=0.0, swish=0.0, head_dx=0.0, he
     """scratch: None, or 0..1 phase of the hind paw scratching behind the ear."""
     # haunch and body leaning back
     c.ellipse(28, 51, 8.6, 7.4 + breathe * 0.3, "fur")
-    c.ellipse(32, 44, 7.4, 12.5 + breathe * 0.4, "fur", angle=-16)
+    c.ellipse(33, 46, 7.0, 10.8 + breathe * 0.4, "fur", angle=-10)
     c.ellipse(37, 44, 3.8, 7.4, "white", angle=-12)
     if scratch is None:
         c.capsule(22, 59, 31, 59.5, 2.6, 2.3, "dark")  # hind paw on the ground
@@ -169,7 +169,7 @@ def sit(c, eyes="open", tilt=0.0, mouth=0.0, ear=0.0, swish=0.0, head_dx=0.0, he
     if scratch is not None:
         a = math.sin(scratch * 2 * math.pi) * 2.2
         leg(c, (27, 49), (35 + a, 33 + a * 0.6), r_top=3.0, r_paw=2.2)
-    neck(c, (34, 38), (hx, hy), thick=1.25)  # sitting: a fuller neck flowing into the shoulders
+    neck(c, (36, 38), (hx, hy), thick=1.1)  # sitting: the neck rises from the chest, not the back
     head(c, hx, hy, tilt=tilt, eyes=eyes, mouth=mouth, ear=ear, look=look, ears_down=ears_down)
 
 

@@ -289,6 +289,8 @@ class Desktop(QWidget):
                 pixmap = self.world.images.get(thing.key)
                 if pixmap is None:
                     continue
+                if pixmap.width() != int(w):  # partly chewed: smaller
+                    pixmap = pixmap.scaled(int(w), int(h), Qt.IgnoreAspectRatio, Qt.FastTransformation)
             else:
                 pixmap = self.stage.frames.get(thing.anim.name, thing.anim.frame, self.world.scale, thing.facing)
             painter.setOpacity(max(0.0, min(1.0, thing.alpha)))

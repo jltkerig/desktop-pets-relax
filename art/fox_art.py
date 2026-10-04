@@ -334,6 +334,9 @@ ANIMATIONS = {
     # a catnap sitting up: eyes closed, head slowly nodding forward and catching itself
     "doze": ([dict(pose="sit", eyes="closed", head_dy=d, tilt=t, ears_down=True) for d, t in
               ((0, 0), (1, 4), (2, 8), (3, 12), (3, 12), (1, 4), (0, 0), (0, 0))], 420, True),
+    # chewing on a dug-up prize held down between its front paws: head low, jaws working, very pleased
+    "chew": ([dict(pose="stand", stride=0, crouch=0.6, head_dy=7, head_dx=1, tilt=26, mouth=m, eyes="happy") for m in
+              (0.0, 0.5, 0.2, 0.6, 0.0, 0.4)], 140, True),
     "petted": ([dict(pose="sit", eyes="happy", tilt=t, swish=s, ears_down=True) for t, s in
                 ((4, -2), (8, 0), (4, 2), (0, 0), (4, -2), (8, 0))], 130, True),
     "held": ([dict(pose="held", swing=s) for s in (0, 1, 2, 1, 0, -1, -2, -1)], 120, True),

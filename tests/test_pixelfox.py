@@ -65,7 +65,7 @@ class Sprites(unittest.TestCase):
     def test_both_foxes_have_every_animation_the_fox_uses(self):
         used = {"idle", "look", "walk", "trot", "stretch", "yawn", "scratch", "sleep", "wake", "tilt", "petted",
                 "held", "land", "crouch", "pounce", "dig", "bat", "watch", "happy", "sniff", "playbow", "roll",
-                "hop", "boop", "groom", "run", "dive", "doze"}
+                "hop", "boop", "groom", "run", "dive", "doze", "chew"}
         for palette in ("orange", "grey"):
             for anim in used:
                 self.assertTrue(sprites.exists(f"fox_{palette}_{anim}"), f"fox_{palette}_{anim}")
@@ -246,6 +246,7 @@ class Treasure(unittest.TestCase):
         world, clock = make_world(orange=True, grey=False)
         world.taskbar_spots = [700.0]
         fox = world.of("fox")[0]
+        world._after_treasure = lambda: [Step("playbow", 1.0), Step("happy", 1.0)]  # it plays with it, no chewing
         self.assertTrue(world.dig_for_treasure(fox))
         carried = False
         for _ in range(40 * 30):
@@ -567,6 +568,81 @@ class DayAndNight(unittest.TestCase):
             return slept / total
         self.assertGreater(asleep_share(23), asleep_share(10))
         self.assertGreater(asleep_share(23), 0.5)
+
+
+class FoxesTogether(unittest.TestCase):
+    def test_a_lone_fox_has_no_social_options(self):
+        world, _ = make_world(orange=True, grey=False)
+        self.assertEqual(world.of("fox")[0]._social_options(), [])
+
+    def test_two_foxes_greet_with_a_boop(self):
+        world, clock = make_world()
+        a, b = world.of("fox")
+        a.x, b.x = 800.0, 1100.0
+        world.greet(a, b)
+        booped = set()
+        for _ in range(20 * 30):
+            run(world, clock, 1 / 30)
+            for f in (a, b):
+                if f.step is not None and f.step.anim == "boop":
+                    booped.add(f.palette)
+        self.assertEqual(booped, {"orange", "grey"})
+        self.assertIsNone(a.busy_with)
+
+    def test_grooming_and_tagging_along_bring_them_together(self):
+        for action in ("groom_friend", "tag_along"):
+            world, clock = make_world(seed=6)
+            a, b = world.of("fox")
+            a.x, b.x = 700.0, 1200.0
+            getattr(world, action)(a, b)
+            closest = abs(a.x - b.x)
+            for _ in range(30 * 30):
+                run(world, clock, 1 / 30)
+                closest = min(closest, abs(a.x - b.x))
+            self.assertLess(closest, 60 * world.scale, action)  # they came together
+
+    def test_a_sleepy_fox_snuggles_up_to_a_sleeping_friend(self):
+        world, clock = make_world(hour=23)
+        world.settings["items"]["den"]["out"] = False
+        world.rebuild()
+        a, b = world.of("fox")
+        b.do(Step("sleep", 9999))
+        run(world, clock, 0.1)  # the friend has settled down to sleep
+        a.energy = 0.1
+        a.plan.clear()
+        a.step = None
+        run(world, clock, 60)
+        self.assertTrue(a.asleep)
+        self.assertLess(abs(a.x - b.x), 50 * world.scale)
+
+    def test_foxes_watch_a_friend_with_the_zoomies(self):
+        world, clock = make_world(seed=2)
+        a, b = world.of("fox")
+        a.do(Step("idle", 999))  # sitting quietly, so it doesn't go and greet the other first
+        b.do(*b._zoomies())
+        run(world, clock, 1.5)
+        self.assertIs(world.friend_showing_off(a), b)
+        world.watch_friend(a, b)
+        self.assertEqual(a.plan[0].anim, "watch")
+
+
+class Chewing(unittest.TestCase):
+    def test_a_fox_can_chew_up_its_dug_up_icon(self):
+        world, clock = make_world(orange=True, grey=False)
+        world.taskbar_spots = [700.0]
+        fox = world.of("fox")[0]
+        world._after_treasure = lambda: [Step("sniff"), Step("chew", 5.0), Step("happy", 1.0)]  # it decides to chew
+        world.dig_for_treasure(fox)
+        smallest, crumbs = None, False
+        for _ in range(60 * 30):
+            run(world, clock, 1 / 30)
+            treasure = world.of("treasure")
+            if treasure:
+                smallest = treasure[0].rect()[2]
+            crumbs = crumbs or bool(world.of("crumb"))
+        self.assertTrue(crumbs)
+        self.assertFalse(world.of("treasure"))  # all gone
+        self.assertLess(smallest, 12 * world.scale)
 
 
 if __name__ == "__main__":

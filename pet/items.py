@@ -229,10 +229,11 @@ class Treasure(Thing):
         self.key = key
         self.carried_by = fox
         self.on_ground_for = 0.0
+        self.bitten = 0.0  # 0..1: how much of it has been chewed away
 
     def rect(self):
         s = self.world.scale
-        size = self.SIZE * s
+        size = max(2.0, self.SIZE * s * (1 - 0.75 * self.bitten))
         return self.x - size / 2, self.y - size, size, size
 
     def update(self, dt):
@@ -246,6 +247,18 @@ class Treasure(Thing):
         self.carried_by = None
         self.y = min(self.world.ground, self.y + 400 * self.world.scale * dt)  # drops to the ground
         self.on_ground_for += dt
+        w = self.world
+        chewer = next((f for f in w.of("fox") if f.step is not None and f.step.anim == "chew"
+                       and abs(f.x - self.x) < 40 * w.scale), None)
+        if chewer is not None:  # being chewed: smaller bite by bite, crumbs flying off
+            self.bitten = min(1.0, self.bitten + dt / 4.0)
+            if w.rng.random() < dt * 6:
+                w.add(Crumb(w, self.x, self.y - 4 * w.scale))
+            if self.bitten >= 1.0:
+                for _ in range(6):
+                    w.add(Crumb(w, self.x, self.y - 3 * w.scale))
+                self.gone = True
+                return
         if self.on_ground_for > 35:
             self.alpha -= dt / 4
             if self.alpha <= 0:
@@ -474,3 +487,14 @@ class StrawBit(Thing):
         self.alpha = max(0.0, 1 - self.age / 1.6)
         if self.age > 1.6:
             self.gone = True
+
+
+class Crumb(StrawBit):
+    """A chewed-off bit of a dug-up icon, flying off and fading."""
+    kind = "crumb"
+
+    def __init__(self, world, x, y):
+        super().__init__(world, x, y)
+        self.anim = sprites.Anim("crumb")
+        self.vx *= 0.6
+        self.vy *= 0.6

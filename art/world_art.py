@@ -997,6 +997,13 @@ def hay(layout):
     return c.to_image()
 
 
+def crumb(i):
+    """A tiny chewed-off bit of a dug-up icon."""
+    c = Canvas(5, 5)
+    c.ellipse(2.5, 2.5, 1.4 - i * 0.3, 1.1, "grey")
+    return c.to_image()
+
+
 def straw_bit(spin):
     c = Canvas(6, 6)
     a = math.radians(spin * 45)
@@ -1107,6 +1114,7 @@ SPRITES = {
     **{f"corn_{s}": ([corn(s, sw) for sw in (0, 1, 2, 1, 0, -1, -2, -1)], 300, True, (60, 98)) for s in range(5)},
     "barrels": ([barrels()], 1000, False, (35, 62)),
     **{name: ([hay(name)], 1000, False, layout[1]) for name, layout in HAY_LAYOUTS.items()},
+    "crumb": ([crumb(i) for i in range(2)], 120, True, (2, 2)),
     "straw_bit": ([straw_bit(s) for s in range(4)], 90, True, (3, 3)),
     "barrels_fall": (barrels_falling(), 90, False, (55, 62)),
     "hoe_wobble": ([hoe_tilt(a) for a in (0, 7, -6, 4, -3, 1, 0)], 80, False, (14, 58)),

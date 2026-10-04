@@ -396,6 +396,92 @@ class World:
                 return other
         return None
 
+    # -- foxes together ---------------------------------------------------------------------------------
+
+    SHOWING_OFF = ("run", "pounce", "dive", "roll", "playbow", "dig", "hop", "bat")
+
+    def friends(self, fox):
+        """The other foxes out (any number), nearest first."""
+        return sorted((f for f in self.of("fox") if f is not fox), key=lambda f: abs(f.x - fox.x))
+
+    def free_friend(self, fox, reach=1400):
+        """An awake friend that isn't busy with something else, within reach (sprite pixels)."""
+        for other in self.friends(fox):
+            if not other.asleep and not other.held and not other.vy and not other.up_high and \
+                    other.busy_with is None and other.carrying is None and abs(other.x - fox.x) < reach * self.scale / 2:
+                return other
+        return None
+
+    def friend_showing_off(self, fox):
+        """A friend nearby doing something worth watching (zoomies, a pounce, a roll...)."""
+        for other in self.friends(fox):
+            if other.step is not None and other.step.anim in self.SHOWING_OFF and \
+                    abs(other.x - fox.x) < 1200 * self.scale / 2:
+                return other
+        return None
+
+    def sleeping_friend(self, fox):
+        """A friend asleep out in the open (not in the den), to curl up beside."""
+        for other in self.friends(fox):
+            if other.asleep and not other.in_den:
+                return other
+        return None
+
+    def _together(self, a, b):
+        a.busy_with, b.busy_with = b, a
+
+        def apart():
+            if a.busy_with is b:
+                a.busy_with = None
+            if b.busy_with is a:
+                b.busy_with = None
+        return apart
+
+    def _beside(self, fox, friend):
+        """Where fox should stand to be next to friend, facing it, on the side it's coming from."""
+        side = -1 if fox.x < friend.x else 1
+        return max(40.0, min(self.width - 40.0, friend.x + side * 34 * self.scale))
+
+    def _walk_time(self, fox, x):
+        """Seconds for fox to walk to x (so a friend knows how long to wait)."""
+        return abs(x - fox.x) / (WALK * self.scale) + 0.4
+
+    def greet(self, fox, friend):
+        """Walk over and boop noses; both wag happily."""
+        apart = self._together(fox, friend)
+        spot = self._beside(fox, friend)
+        friend.do(Step("look", face=fox.x), Step("idle", self._walk_time(fox, spot), face=fox.x), Step("boop", face=fox.x),
+                  Step("happy", 1.2, face=fox.x))
+        fox.do(Step("walk", to_x=spot, speed=WALK), Step("boop", face=friend.x), Step("happy", 1.2, face=friend.x),
+               Step("idle", 1.5, face=friend.x, then=apart))
+
+    def groom_friend(self, fox, friend):
+        """Sit beside the friend and lick its fur; it leans in, eyes closed."""
+        apart = self._together(fox, friend)
+        spot = self._beside(fox, friend)
+        friend.do(Step("idle", self._walk_time(fox, spot), face=fox.x), Step("petted", 5.0, face=fox.x), Step("happy", 1.0))
+        fox.do(Step("walk", to_x=spot, speed=WALK), Step("groom", 5.0, face=friend.x),
+               Step("idle", 2.0, face=friend.x, then=apart))
+
+    def tag_along(self, fox, friend):
+        """Follow the friend on a little stroll, then sit down beside it."""
+        apart = self._together(fox, friend)
+        stroll = max(60.0, min(self.width - 60.0, friend.x + self.rng.choice((-1, 1)) * self.rng.uniform(120, 260) * self.scale))
+        friend.do(Step("walk", to_x=stroll, speed=WALK), Step("idle", 4.0), Step("look"))
+        fox.do(Step("look", face=friend.x), Step("walk", follow=friend, speed=WALK * 1.15),
+               Step("idle", 4.0, face=friend.x, then=apart))
+
+    def watch_friend(self, fox, friend):
+        """Sit and watch the friend's antics, head tilting."""
+        fox.do(Step("watch", self.rng.uniform(3, 6), face=friend.x), Step("tilt", face=friend.x), Step("happy", 0.8))
+
+    def snuggle(self, fox, friend):
+        """Curl up to sleep right beside a sleeping friend."""
+        night = self.daylight() == "night"
+        spot = self._beside(fox, friend)
+        fox.do(Step("walk", to_x=spot, speed=WALK), Step("yawn"),
+               Step("sleep", self.rng.uniform(150, 360) * (3 if night else 1), face=friend.x))
+
     def play_together(self, fox, friend):
         """A play bow, then a chase: the friend runs off, the fox follows, they meet with a nose boop."""
         fox.busy_with, friend.busy_with = friend, fox
@@ -435,8 +521,14 @@ class World:
         fox.do(Step("walk", to_x=stand, speed=WALK), Step("sniff", face=spot), Step("sniff", face=spot),
                Step("dig", self.rng.uniform(2.0, 3.2), face=spot, then=lambda: self.find_treasure(fox, spot)),
                Step("hop", face=spot), Step("trot", to_x=run_to, speed=TROT * 1.2, then=lambda: self.drop_treasure(fox)),
-               Step("playbow", 1.0), Step("roll", 1.6), Step("happy", 1.2))
+               *self._after_treasure())
         return True
+
+    def _after_treasure(self):
+        """What it does with its prize: sometimes plays, sometimes settles down to chew it up."""
+        if self.rng.random() < 0.5:
+            return [Step("sniff"), Step("chew", self.rng.uniform(4.5, 6.0)), Step("happy", 1.2), Step("groom", 2.0)]
+        return [Step("playbow", 1.0), Step("roll", 1.6), Step("happy", 1.2)]
 
     def find_treasure(self, fox, spot):
         self._treasures += 1

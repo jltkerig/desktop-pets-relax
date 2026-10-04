@@ -223,6 +223,8 @@ class Fox(Thing):
                 if abs(distance) > gap:
                     move = min(abs(distance) - gap, step.speed * self.world.scale * dt)
                     self.x += move if distance > 0 else -move
+                elif target.kind == "fox" and (target.step is None or target.step.anim != "walk"):
+                    finished = True  # caught up with a friend who has stopped: done following
         elif step.leap and step.to_x is not None:
             total = sprites.duration(self.anim.name)
             t = min(1.0, step.elapsed / total)
@@ -253,6 +255,21 @@ class Fox(Thing):
             if step.then:
                 step.then()
             self.step = None
+
+    def _social_options(self):
+        """Things to do with another fox, if one is about and free (none when it's the only fox)."""
+        w = self.world
+        friend = w.free_friend(self)
+        if friend is None:
+            return []
+
+        def go(action):
+            action(self, friend)
+            return []  # the plan is already set
+        return [(2.0, lambda: go(w.greet)),
+                (1.2, lambda: go(w.groom_friend)),
+                (1.2, lambda: go(w.tag_along)),
+                (self.playful * 1.5, lambda: go(w.play_together))]
 
     def _climb(self):
         thing = self.world.climbable_near(self, 900)
@@ -289,11 +306,21 @@ class Fox(Thing):
             self.plan.extend([Step("stretch"), Step("yawn") if rng.random() < 0.5 else Step("idle", 2.0)])
             return
         if self.energy < 0.4 or (night and self.energy < 0.8):
+            friend = w.sleeping_friend(self)
+            if friend is not None and w.den() is None and rng.random() < 0.8:
+                w.snuggle(self, friend)
+                return
             spot = w.nap_spot(self)
             if spot is not None and abs(spot - self.x) > 30:
                 self.plan.append(Step("walk", to_x=spot, speed=WALK))
             # a proper sleep: a few minutes by day, much longer at night
             self.plan.extend([Step("yawn"), Step("sleep", rng.uniform(150, 360) * (3 if night else 1))])
+            return
+
+        # a friend showing off? sit and watch
+        star = w.friend_showing_off(self)
+        if star is not None and rng.random() < 0.6:
+            w.watch_friend(self, star)
             return
 
         # something worth watching?
@@ -355,6 +382,7 @@ class Fox(Thing):
             (self.playful * 1.0, lambda: [Step("hop"), Step("happy", 0.6)]),
             (self.playful * 1.2, lambda: [Step("trot", to_x=w.wander_target(self), speed=TROT)]),
             (0.5, lambda: [Step("stretch")]),
+            *self._social_options(),
             (self.playful * self.energy * 0.4, lambda: self._zoomies()),
             (self.playful * 0.8 if w.climbable_near(self, 900) else 0.0, lambda: self._climb()),
             (1.0, lambda: [Step("groom", rng.uniform(2.0, 4.0)), Step("idle", 1.5)]),

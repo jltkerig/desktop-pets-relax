@@ -3,8 +3,10 @@ import math
 
 from pixelkit import Canvas, bezier, rot
 
-SIZE = 64
-GROUND = 61  # paws rest on this row
+SIZE = 64      # the fox is drawn in a 64 x 64 space...
+ROOM = 10      # ...with this much extra room on the left for the tail to stream out behind
+WIDTH = SIZE + ROOM
+GROUND = 61    # paws rest on this row
 
 
 def head(c, cx, cy, tilt=0.0, eyes="open", mouth=0.0, ear=0.0, ears_down=False, look=0.0):
@@ -88,17 +90,25 @@ def leg(c, hip, paw, r_top=2.3, r_paw=1.7, far=False):
 
 
 def tail(c, base, ctrl, tip, thick=4.3, far=False):
-    pts = bezier(base, ctrl, tip, 12)
-    radii = [2.6 + thick * math.sin(math.pi * (0.12 + 0.72 * i / 11)) for i in range(12)]
-    radii[-2] *= 0.85
-    radii[-1] = 2.0
-    mats = ["fur"] * 8 + ["tip"] * 3
+    """A brush-shaped tail: swells from the root to its fullest a little past the middle, then tapers
+    steadily into a white tip that ends in a soft point."""
+    n = 16
+    pts = bezier(base, ctrl, tip, n)
+    root, peak = 2.4 + thick * 0.35, 2.4 + thick
+    radii = []
+    for i in range(n):
+        f = i / (n - 1)
+        if f < 0.55:
+            radii.append(root + (peak - root) * math.sin(math.pi / 2 * f / 0.55))
+        else:
+            radii.append(0.5 + (peak - 0.5) * (1 - ((f - 0.55) / 0.45) ** 1.5))
+    mats = ["fur"] * 11 + ["tip"] * (n - 1 - 11)
     c.chain(pts, radii, mats, bias=-0.2 if far else 0.0)
 
 
 def fox(pose="stand", **k):
     """Returns a 64 x 64 PIL image. See the pose functions below for the knobs each takes."""
-    c = Canvas(SIZE, SIZE, k.pop("palette", "orange"))
+    c = Canvas(WIDTH, SIZE, k.pop("palette", "orange"), shift=ROOM)
     POSES[pose](c, **k)
     return c.to_image(flat=True)
 
@@ -121,9 +131,9 @@ def stand(c, step=0.0, bob=0.0, tail_lift=0.0, swish=0.0, eyes="open", head_dx=0
     # body
     c.ellipse(30, y, 15.0, 6.6 - crouch * 1.0, "fur", angle=-3 + crouch * 6)
     c.ellipse(41, y + 1.5, 4.2, 4.6, "white", angle=-10)
-    c.ellipse(30, y + 4.5, 9.0, 2.0, "white", bias=-0.25, clip=lambda px, py: py >= y + 3.5)
+    c.ellipse(36, y + 4.5, 4.0, 1.8, "white", bias=-0.25, clip=lambda px, py: py >= y + 3.5)
     # tail: grows out of the rump, held out behind and a little up
-    tail(c, (19, y - 1.5), (8, y - 4 - tail_lift * 4 + swish), (2 + swish * 0.3, y - 10 - tail_lift * 8 + swish * 1.5),
+    tail(c, (19, y - 1.5), (4, y - 2 - tail_lift * 4 + swish), (-8 + swish * 0.3, y - 7 - tail_lift * 7 + swish * 1.5),
          thick=3.8)
     # near legs
     leg(c, (24, y + 3), (23 + stride * s2 * 0.6, GROUND - lift(step * 2 * math.pi + math.pi)))

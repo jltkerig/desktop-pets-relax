@@ -40,7 +40,7 @@ def build():
         for anim, (frames, ms, loop) in fox_art.ANIMATIONS.items():
             images = [fox_art.fox(**dict(f, palette=palette)) for f in frames]
             made[f"fox_{palette}_{anim}"] = save_strip(f"fox_{palette}_{anim}", images, ms, loop,
-                                                       anchor=(32, fox_art.GROUND))
+                                                       anchor=(32 + fox_art.ROOM, fox_art.GROUND))
     for name, (frames, ms, loop, anchor) in world_art.SPRITES.items():
         made[name] = save_strip(name, frames, ms, loop, anchor)
     return made

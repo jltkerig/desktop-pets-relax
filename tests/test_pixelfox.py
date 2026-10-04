@@ -186,7 +186,7 @@ class Pumpkins(unittest.TestCase):
             seen.add(first.stage)
         self.assertTrue({1, 2, 3, 4} <= seen, seen)
         self.assertTrue(first.ripe)
-        self.assertEqual(first.anim.name, f"pumpkin_4_{first.size}")
+        self.assertTrue(first.anim.name.startswith(f"pumpkin_4_{first.size}_{first.shape}"))
 
     def test_the_patch_keeps_growing_after_a_restart(self):
         world, clock = make_world(orange=False, grey=False)

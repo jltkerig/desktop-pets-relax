@@ -148,9 +148,11 @@ class Pumpkin(Thing):
     STAGE_SECONDS = 10 * 60  # about 40 minutes from sprout to ripe
     STAGES = 5
 
-    def __init__(self, world, x, planted, pace=1.0, record=None, size="m"):
+    def __init__(self, world, x, planted, pace=1.0, record=None, size="m", shape="round", jack=False):
         self.size = size if size in ("s", "m", "l") else "m"
-        super().__init__(world, x, world.ground, f"pumpkin_0_{self.size}")
+        self.shape = shape if shape in ("round", "tall", "squat") else "round"
+        self.jack = bool(jack)  # this one turns out to be a jack-o'-lantern when ripe
+        super().__init__(world, x, world.ground, f"pumpkin_0_{self.size}_{self.shape}")
         self.planted = planted
         self.pace = pace
         self.record = record  # its entry in the saved patch, kept up to date when it is moved
@@ -166,7 +168,7 @@ class Pumpkin(Thing):
         return self.stage >= 3
 
     def update(self, dt):
-        name = f"pumpkin_{self.stage}_{self.size}"
+        name = f"pumpkin_{self.stage}_{self.size}_{self.shape}" + ("_jack" if self.jack and self.stage == 4 else "")
         if self.anim.name != name:
             self.anim.name = name
         super().update(dt)

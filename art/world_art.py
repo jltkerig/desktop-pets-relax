@@ -111,26 +111,25 @@ def oak(sway=0.0, seed=7):
         return any(((x - lx) / lrx) ** 2 + ((y - ly) / lry) ** 2 <= 1 for lx, ly, lrx, lry in shapes)
     def in_crown(x, y):
         return inside(x, y, lumps) and not inside(x, y, notches) and not inside(x, y, holes)
-    # leaf colours come in small clusters, warmer toward the bottom, more yellow on top
+    # calm colour: broad patches that flow from golden on top, through orange, to deep red and brown below
     cell = {}
     def colour(x, y):
-        key = ((x + (y // 3) % 2) // 4, y // 3)
+        key = ((x + 3 * ((y // 4) % 2)) // 6, y // 4)  # leaf clusters about 6 x 4, staggered like brickwork
         if key not in cell:
-            # smooth patches of colour (overlapping waves) with a little randomness on top
-            kx, ky = key[0] * 4, key[1] * 3
-            wave = (math.sin(kx * 0.09 + 1.3) + math.sin(ky * 0.13 + 0.4) + math.sin((kx + ky) * 0.05 + 2.1)) / 6 + 0.5
-            r = min(0.999, max(0.0, wave * 0.8 + rng.random() * 0.2))
-            top = (y - (cy0 - ry0)) / (2 * ry0)  # 0 at the top, 1 at the bottom
-            if r < 0.06:
-                cell[key] = ("leaf_green", rng.uniform(-0.2, 0.05))
-            elif r < 0.06 + 0.32 * (1 - top):
-                cell[key] = ("leaf_yellow", rng.uniform(-0.1, 0.15))
-            elif r < 0.75:
-                cell[key] = ("leaf_orange", rng.uniform(-0.1, 0.15))
-            elif r < 0.93:
-                cell[key] = ("leaf_red", rng.uniform(-0.1, 0.15))
-            else:
-                cell[key] = ("leaf_brown", rng.uniform(-0.15, 0.05))
+            kx, ky = key[0] * 6, key[1] * 4
+            top = max(0.0, min(1.0, (ky - (cy0 - ry0 - 20)) / (2 * ry0 + 40)))  # 0 at the top, 1 at the bottom
+            side = (kx - cx0) / (rx0 + 30)                                     # -1 left .. 1 right
+            wave = (math.sin(kx * 0.045 + 1.3) + math.sin(ky * 0.06 + 0.4)) / 4  # gentle, wide drifts
+            v = top * 0.42 + side * 0.06 + wave * 1.1 + 0.12 + rng.uniform(-0.07, 0.07)
+            v = 0.5 + (v - 0.5) * 0.7  # fewer extremes: mostly warm orange and red, a little gold and brown
+            cuts = ((0.3, "leaf_yellow"), (0.62, "leaf_orange"), (0.8, "leaf_red"), (9.0, "leaf_brown"))
+            mat = next(m for cut, m in cuts if v < cut)
+            # near a boundary, mix the two colours in a checkerboard so the change is soft
+            for cut, m in cuts[:-1]:
+                if abs(v - cut) < 0.045 and (key[0] + key[1]) % 2:
+                    nxt = cuts[[c_ for c_, _ in cuts].index(cut) + 1][1]
+                    mat = nxt if v < cut else m
+            cell[key] = (mat, rng.uniform(-0.04, 0.04))
         return cell[key]
     for y in range(0, 160):
         for x in range(0, OAK_W):
@@ -139,8 +138,8 @@ def oak(sway=0.0, seed=7):
             nx, ny = (x + 0.5 - cx0) / (rx0 + 16), (y + 0.5 - cy0) / (ry0 + 14)
             mat, jitter = colour(x, y)
             lum = Canvas._shade(max(-1, min(1, nx)), max(-1, min(1, ny)), jitter)
-            if rng.random() < 0.05:  # little gaps of shadow between the leaves
-                lum -= 0.35
+            if rng.random() < 0.012:  # an occasional small shadow between leaves
+                lum -= 0.25
             c.mat[y][x], c.lum[y][x], c.fixed[y][x] = mat, lum, None
     # keep only the crown piece joined to the middle (no floating crumbs)
     seen, stack = set(), [(int(cx0), int(cy0))]
@@ -171,14 +170,43 @@ def oak(sway=0.0, seed=7):
 
 # -- small things --------------------------------------------------------------------------------------
 
+# A little oak leaf, drawn pixel by pixel: X is leaf, s is the stem. Shaded like the crown:
+# light along the top-left edge, shadow along the bottom-right, the base colour in between.
+OAK_LEAF = [
+    "...X...",
+    "..XXX..",
+    ".XXXXX.",
+    "XXXXXXX",
+    ".XXXXX.",
+    "..XXX..",
+    "...s...",
+]
+
+
 def leaf(mat, spin):
-    """8 x 8 leaf; spin 0..3 turns it as it falls."""
+    """8 x 8 oak leaf in the tree's colours; spin 0..3 tumbles it as it falls."""
+    rows = [list(r) for r in OAK_LEAF]
+    for _ in range(spin % 4):  # turn a quarter each frame
+        rows = [list(r) for r in zip(*rows[::-1])]
+    if spin in (1, 3):
+        rows = [r[::-1] for r in rows]  # and flip, so it flutters rather than spins
     c = Canvas(8, 8)
-    angle = spin * 45
-    c.ellipse(4, 4, 3.2, 1.8 + (0.8 if spin % 2 else 0), mat, angle=angle)
-    x2 = 4 + 2.6 * math.cos(math.radians(angle))
-    y2 = 4 + 2.6 * math.sin(math.radians(angle))
-    c.capsule(4, 4, x2, y2, 0.4, 0.3, mat, bias=-0.7)  # the stem/vein
+    size = len(rows)
+    def leafy(x, y):
+        return 0 <= x < size and 0 <= y < size and rows[y][x] == "X"
+    for y in range(size):
+        for x in range(size):
+            if rows[y][x] == "s":
+                c.pixel(x, y, "leaf_brown", 0)
+            elif rows[y][x] == "X":
+                level = 0 if not leafy(x + 1, y + 1) or not leafy(x, y + 1) else 2 if not leafy(x - 1, y - 1) else 1
+                c.pixel(x, y, mat, level)
+    for y in range(size):  # the centre vein, along the stem's line
+        for x in range(size):
+            if rows[y][x] == "X" and any(rows[yy][xx] == "s" for yy in range(size) for xx in range(size)
+                                         if (xx == x and spin % 2 == 0) or (yy == y and spin % 2 == 1)):
+                if (spin % 2 == 0 and 2 <= y <= 4) or (spin % 2 == 1 and 2 <= x <= 4):
+                    c.pixel(x, y, mat, 0)
     return c.to_image(outline=False)
 
 
@@ -308,9 +336,13 @@ COMMON.update({
 })
 
 
-def _pumpkin_body(c, cx, base, size, mat):
+PUMPKIN_SHAPES = {"round": (1.0, 1.0), "tall": (0.78, 1.32), "squat": (1.28, 0.74)}
+
+
+def _pumpkin_body(c, cx, base, size, mat, shape="round"):
     """A ribbed pumpkin sitting on the ground: side ribs first (darker), the front rib last."""
-    w, h = 9.0 * size, 6.4 * size
+    wide, high = PUMPKIN_SHAPES[shape]
+    w, h = 9.0 * size * wide, 6.4 * size * high
     cy = base - h
     for dx, rx, bias in ((-0.55, 0.5, -0.25), (0.55, 0.5, -0.25), (-0.28, 0.55, -0.08), (0.28, 0.55, -0.08),
                          (0.0, 0.5, 0.08)):
@@ -321,7 +353,29 @@ def _pumpkin_body(c, cx, base, size, mat):
 PUMPKIN_SIZES = {"s": 0.75, "m": 1.0, "l": 1.3}
 
 
-def pumpkin(stage, sway=0.0, grow=1.0):
+COMMON.update({"glow": ("#c26a0a", "#f0a018", "#ffd040", "#fff2a0", "#6a3204")})
+
+
+def jack_face(c, cx, cy, size, flicker):
+    """Carved triangle eyes, a nose and a toothy grin, glowing from the candle inside."""
+    lit = 2 if flicker else 3
+    def tri(x, y, w, h):
+        for row in range(int(h) + 1):
+            half = w * row / max(1, h) / 2
+            for dx in range(int(-half), int(half) + 1):
+                c.pixel(x + dx, y + row, "glow", lit)
+    s = size
+    tri(cx - 3.6 * s, cy - 3.4 * s, 4.0 * s, 2.8 * s)
+    tri(cx + 3.6 * s, cy - 3.4 * s, 4.0 * s, 2.8 * s)
+    tri(cx, cy - 0.6 * s, 1.6 * s, 1.4 * s)
+    for dx in range(int(-6 * s), int(6 * s) + 1):  # the grin, curving up at the ends, with two teeth
+        y = cy + 2.4 * s - (abs(dx) / (6 * s)) ** 2 * 2 * s
+        for dy in range(int(1.6 * s) + 1):
+            if not (abs(dx - 2 * s) < 0.8 and dy == 0) and not (abs(dx + 2 * s) < 0.8 and dy == 0):
+                c.pixel(cx + dx, y + dy, "glow", lit if dy else 1)
+
+
+def pumpkin(stage, sway=0.0, grow=1.0, shape="round", jack=False):
     """44 x 36. Stages: 0 sprout, 1 vine with a flower, 2 small green, 3 yellow-orange, 4 ripe.
     grow scales the pumpkin itself (small, medium or large pumpkins)."""
     c = Canvas(44, 36)
@@ -356,7 +410,10 @@ def pumpkin(stage, sway=0.0, grow=1.0):
         return c.to_image()
     size, mat = {2: (0.55, "pumpkin_green"), 3: (0.8, "pumpkin_young"), 4: (1.15, "pumpkin")}[stage]
     size *= grow
-    top = _pumpkin_body(c, 20, ground + 0.5, size, mat)
+    top = _pumpkin_body(c, 20, ground + 0.5, size, mat, shape if stage >= 3 else "round")
+    if jack and stage == 4:
+        jack_face(c, 20, top + PUMPKIN_SHAPES[shape][1] * 6.4 * size, size * 0.95 * min(1.0, PUMPKIN_SHAPES[shape][1]) ** 0.5,
+                  flicker=sway != 0)
     # the stem, and a curly tendril on the ripe one
     c.capsule(20, top + 2, 21 + size, top - 1.5 * size, 1.2 * size, 0.9 * size, "stem")
     if stage == 4:
@@ -559,8 +616,11 @@ SPRITES = {
     "goose_fly": ([goose("fly", i / 4) for i in range(4)], 110, True, (16, 22)),
     "goose_far": ([goose_far(i / 4) for i in range(4)], 140, True, (7, 5)),
     "honk_bubble": ([honk_bubble()], 1000, False, (4, 13)),
-    **{f"pumpkin_{s}_{k}": ([pumpkin(s, sw, g) for sw in (0, 1, 0, -1)], 700, True, (20, 30))
-       for s in range(5) for k, g in PUMPKIN_SIZES.items()},
+    **{f"pumpkin_{s}_{k}_{shape}": ([pumpkin(s, sw, g, shape) for sw in (0, 1, 0, -1)], 700, True, (20, 30))
+       for s in range(5) for k, g in PUMPKIN_SIZES.items() for shape in PUMPKIN_SHAPES},
+    **{f"pumpkin_4_{k}_{shape}_jack": ([pumpkin(4, sw, g, shape, jack=True) for sw in (0, 1, 0, -1)], 260, True,
+                                       (20, 30))
+       for k, g in PUMPKIN_SIZES.items() for shape in PUMPKIN_SHAPES},
     "scarecrow": ([scarecrow(sw) for sw in (0, 1, 2, 1, 0, -1, -2, -1)], 260, True, (24, 85)),
 }
 for colour in LEAF_COLOURS:

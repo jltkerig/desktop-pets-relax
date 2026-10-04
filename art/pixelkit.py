@@ -72,8 +72,9 @@ def rot(x, y, cx, cy, degrees):
 
 
 class Canvas:
-    def __init__(self, width, height, palette="orange"):
+    def __init__(self, width, height, palette="orange", shift=0):
         self.w, self.h = width, height
+        self.shift = shift  # added to every x, so a drawing can be moved right inside a wider frame
         self.ramps = {**COMMON, **PALETTES[palette]}
         self.mat = [[None] * width for _ in range(height)]
         self.lum = [[0.0] * width for _ in range(height)]
@@ -101,6 +102,9 @@ class Canvas:
     def ellipse(self, cx, cy, rx, ry, mat, angle=0.0, bias=0.0, clip=None):
         """A lit ellipse. clip(x, y) -> bool can keep only part of it (e.g. the lower half)."""
         self._dim = bias <= -0.2
+        cx += self.shift
+        if clip is not None and self.shift:
+            clip = (lambda f, d: (lambda x, y: f(x - d, y)))(clip, self.shift)
         reach = int(max(rx, ry)) + 2
         a = math.radians(-angle)
         ca, sa = math.cos(a), math.sin(a)
@@ -117,6 +121,9 @@ class Canvas:
     def capsule(self, x1, y1, x2, y2, r1, r2, mat, bias=0.0, clip=None):
         """A lit rounded stick from (x1, y1) to (x2, y2), radius r1 at the start and r2 at the end."""
         self._dim = bias <= -0.2
+        x1, x2 = x1 + self.shift, x2 + self.shift
+        if clip is not None and self.shift:
+            clip = (lambda f, d: (lambda x, y: f(x - d, y)))(clip, self.shift)
         reach = int(max(r1, r2)) + 2
         dx, dy = x2 - x1, y2 - y1
         length2 = dx * dx + dy * dy or 1e-9
@@ -139,6 +146,7 @@ class Canvas:
     def polygon(self, points, mat, lum=0.3, bias=0.0):
         """A flat-lit polygon (ears)."""
         self._dim = bias <= -0.2
+        points = [(x + self.shift, y) for x, y in points]
         xs, ys = [p[0] for p in points], [p[1] for p in points]
         for y in range(int(min(ys)) - 1, int(max(ys)) + 2):
             for x in range(int(min(xs)) - 1, int(max(xs)) + 2):
@@ -149,7 +157,7 @@ class Canvas:
 
     def pixel(self, x, y, mat, level=1):
         self._dim = False
-        self._put(int(x), int(y), mat, level=level)
+        self._put(int(x + self.shift), int(y), mat, level=level)
 
     def to_image(self, outline=True, flat=False):
         """flat: shade the whole sprite as one shape (light along its top edge, shadow along its bottom),

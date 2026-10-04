@@ -105,22 +105,28 @@ class World:
         patch = [p for p in item.get("patch", []) if isinstance(p, dict)
                  and isinstance(p.get("x"), (int, float)) and isinstance(p.get("planted"), (int, float))]
         sizes = ["s", "m", "l"]
-        for record in patch:  # pumpkins saved before sizes existed get one now
+        shapes = ["round", "tall", "squat"]
+        for record in patch:  # pumpkins saved before sizes and shapes existed get them now
             if record.get("size") not in sizes:
                 record["size"] = self.rng.choice(sizes)
+                self.dirty = True
+            if record.get("shape") not in shapes:
+                record["shape"] = self.rng.choice(shapes)
+                record["jack"] = self.rng.random() < 0.2
                 self.dirty = True
         if replant or not patch:
             centre = item.get("x") if isinstance(item.get("x"), (int, float)) else self.width * 0.25
             now = self.now().timestamp()
             patch = [{"x": round(max(40, min(self.width - 40, centre + (i - 1) * 46 * self.scale))),
                       "planted": now - self.rng.uniform(0, 90), "pace": round(self.rng.uniform(0.85, 1.2), 2),
-                      "size": size}
+                      "size": size, "shape": self.rng.choice(shapes), "jack": self.rng.random() < 0.2}
                      for i, size in enumerate(self.rng.sample(sizes, 3))]  # one of each, in any order
             self.dirty = True
         item["patch"] = patch
         for record in patch:
             x = max(20.0, min(self.width - 20.0, float(record["x"])))
-            self.add(Pumpkin(self, x, record["planted"], float(record.get("pace", 1.0)), record, record["size"]))
+            self.add(Pumpkin(self, x, record["planted"], float(record.get("pace", 1.0)), record, record["size"],
+                             record["shape"], record.get("jack", False)))
 
     # -- every frame -------------------------------------------------------------------------------------
 

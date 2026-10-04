@@ -28,7 +28,7 @@ class Tree(Thing):
         for _ in range(8):
             x, y = self.crown_point()
             w.add(Leaf(w, x, y, w.rng.choice(("red", "orange", "yellow", "brown"))))
-        if w.rng.random() < 0.4 and len(w.of("acorn")) < 4:
+        if w.rng.random() < 0.4 and len(w.nuts()) < 4:
             w.drop_acorn(self)
 
     def crown_point(self):
@@ -172,52 +172,95 @@ class Pumpkin(Thing):
     z = 6
     STAGE_SECONDS = 10 * 60  # about 40 minutes from sprout to ripe
     STAGES = 5
+    GIANT_CHANCE = 0.15      # now and then one just keeps on growing...
+    GIANT, BURST = 5, 6      # ...into a giant, and then too big: it splits open
 
-    def __init__(self, world, x, planted, pace=1.0, record=None, size="m", shape="round", jack=False):
+    def __init__(self, world, x, planted, pace=1.0, record=None, size="m", shape="round", jack=False,
+                 giant=False):
         self.size = size if size in ("s", "m", "l") else "m"
         self.shape = shape if shape in ("round", "tall", "squat") else "round"
         self.jack = bool(jack)  # this one turns out to be a jack-o'-lantern when ripe
+        self.giant = bool(giant)
+        self.bursting = False
         super().__init__(world, x, world.ground, f"pumpkin_0_{self.size}_{self.shape}")
         self.planted = planted
         self.pace = pace
         self.record = record  # its entry in the saved patch, kept up to date when it is moved
+        self.wilting = False
         self.anim.time = world.rng.uniform(0, 2)
 
     @property
     def stage(self):
+        """0 sprout .. 4 ripe; a giant goes on to 5 (huge) and 6 (too big: it bursts). A jack-o'-lantern
+        stops growing, giant or not."""
         age = self.world.now().timestamp() - self.planted
-        return max(0, min(self.STAGES - 1, int(age / (self.STAGE_SECONDS * self.pace))))
+        last = (self.GIANT if self.jack else self.BURST) if self.giant else self.STAGES - 1
+        return max(0, min(last, int(age / (self.STAGE_SECONDS * self.pace))))
 
     @property
     def ripe(self):
         return self.stage >= 3
 
+    @property
+    def huge(self):
+        return self.stage == self.GIANT
+
     def click(self):
-        if self.stage >= 3 and not getattr(self, "wilting", False):
+        if self.stage == self.STAGES - 1 and not self.wilting and not self.bursting:
             self.wilting = True
             self.anim.play(f"pumpkin_wilt_{self.size}_{self.shape}")
         else:
-            self.anim.time += 0.7  # a little rustle
+            self.anim.time += 0.7  # a little rustle (a giant is far too heavy to do more)
+
+    def carve(self):
+        """The hoe carves a face in a ripe pumpkin: it's a jack-o'-lantern now. True if it could."""
+        if self.stage < self.STAGES - 1 or self.jack or self.wilting or self.bursting:
+            return False
+        self.jack = True
+        if self.record is not None:
+            self.record["jack"] = True
+            self.world.dirty = True
+        s = self.world.scale
+        for _ in range(10):
+            self.world.add(PumpkinBit(self.world, self.x + self.world.rng.uniform(-10, 10) * s, self.y - 12 * s))
+        return True
+
+    def _burst(self):
+        """Too big! It splits open and seeds and bits fly out; then a fresh sprout comes up."""
+        self.bursting = True
+        self.anim.play(f"pumpkin_burst_{self.shape}")
+        w, s = self.world, self.world.scale
+        for _ in range(16):
+            w.add(PumpkinBit(w, self.x + w.rng.uniform(-24, 24) * s, self.y - w.rng.uniform(8, 30) * s))
 
     def _replant(self):
-        """After wilting: a fresh sprout, maybe a different size or shape this time."""
+        """After wilting or bursting: a fresh sprout, maybe a different size or shape this time."""
         w = self.world
         self.wilting = False
         self.planted = w.now().timestamp()
         self.size = w.rng.choice(("s", "m", "l"))
         self.shape = w.rng.choice(("round", "tall", "squat"))
         self.jack = w.rng.random() < 0.2
+        self.giant = w.rng.random() < self.GIANT_CHANCE
+        self.bursting = False
         if self.record is not None:
-            self.record.update(planted=self.planted, size=self.size, shape=self.shape, jack=self.jack)
+            self.record.update(planted=self.planted, size=self.size, shape=self.shape, jack=self.jack,
+                               giant=self.giant)
             w.dirty = True
 
     def update(self, dt):
-        if getattr(self, "wilting", False):
+        if self.wilting or self.bursting:
             super().update(dt)
             if self.anim.done:
                 self._replant()
             return
-        name = f"pumpkin_{self.stage}_{self.size}_{self.shape}" + ("_jack" if self.jack and self.stage == 4 else "")
+        stage = self.stage
+        if stage == self.BURST:
+            return self._burst()
+        if stage == self.GIANT:
+            name = f"pumpkin_giant_{self.shape}" + ("_jack" if self.jack else "")
+        else:
+            name = f"pumpkin_{stage}_{self.size}_{self.shape}" + ("_jack" if self.jack and stage == 4 else "")
         if self.anim.name != name:
             self.anim.name = name
         super().update(dt)
@@ -283,18 +326,72 @@ class Prop(Thing):
     def __init__(self, world, x, variant):
         super().__init__(world, x, world.ground, variant)
         self.variant = variant
+        self.hat_on = True  # the scarecrow's hat (the crows like to borrow it)
 
     CLICKS = {"scarecrow": "scarecrow_surprised", "hoe": "hoe_wobble"}
 
-    def click(self):
+    @property
+    def look(self):
+        """The sprite it shows when nothing's happening."""
+        return self.variant if self.hat_on or self.variant != "scarecrow" else "scarecrow_nohat"
+
+    def react(self):
         reaction = self.CLICKS.get(self.variant)
         if reaction:
-            self.anim.play(reaction)
+            self.anim.play(reaction if self.look == self.variant else reaction + "_nohat")
+
+    def click(self):
+        self.react()
+
+    def lose_hat(self):
+        self.hat_on = False
+        self.react()  # oi!
+
+    def get_hat_back(self):
+        self.hat_on = True
+        self.anim.play(self.look)
 
     def update(self, dt):
         super().update(dt * (1 + self.world.wind * 4))
-        if self.anim.name != self.variant and self.anim.done:
-            self.anim.play(self.variant)  # back to normal
+        resting = self.anim.name in (self.variant, self.variant + "_nohat")
+        if self.anim.name != self.look and (self.anim.done or resting):
+            self.anim.play(self.look)  # back to normal
+
+
+class Hat(Thing):
+    """The scarecrow's hat, dropped by a startled crow. Click it (or let the crows) to put it back. Left lying
+    there, it finds its own way home after a couple of minutes."""
+    kind = "hat"
+    z = 26
+    LIES_FOR = 120
+
+    def __init__(self, world, x, y, scarecrow):
+        super().__init__(world, x, y, "scarecrow_hat")
+        self.scarecrow = scarecrow
+        self.vy = 0.0
+        self.age = 0.0
+
+    def click(self):
+        self.return_home()
+
+    def return_home(self):
+        if not self.scarecrow.gone:
+            self.scarecrow.get_hat_back()
+        self.gone = True
+
+    def update(self, dt):
+        super().update(dt)
+        self.age += dt
+        if self.scarecrow.gone:
+            self.gone = True  # it goes away with the scarecrow
+        elif self.age > self.LIES_FOR and not self.world.of("crow"):
+            self.alpha -= dt / 2
+            if self.alpha <= 0:
+                self.return_home()
+        if self.y < self.world.ground:
+            self.vy += GRAVITY * 0.35 * self.world.scale * dt  # a hat floats down rather than drops
+            self.y = min(self.world.ground, self.y + self.vy * dt)
+            self.x += math.sin(self.y * 0.05) * 20 * self.world.scale * dt
 
 
 class Corn(Thing):
@@ -307,6 +404,13 @@ class Corn(Thing):
     z = 5
     STAGE_SECONDS = 10 * 60
     STAGES = 5
+    STALKS = [(-50, 0.82), (-32, 1.0), (-14, 0.9), (4, 1.06), (22, 0.88), (40, 0.97)]  # as drawn: x from the middle,
+    STALK_HEIGHT = 86                                                                # and height share
+
+    def ears(self):
+        """Where the ear of corn on each stalk hangs (screen x, y)."""
+        s = self.world.scale
+        return [(self.x + dx * s, self.y - self.STALK_HEIGHT * share * 0.5 * s) for dx, share in self.STALKS]
 
     def __init__(self, world, x, planted):
         super().__init__(world, x, world.ground, "corn_0")
@@ -460,6 +564,7 @@ class CornCob(Acorn):
         super().__init__(world, x, y)
         self.carried = False  # in a squirrel's arms
         self.anim = sprites.Anim("corncob")
+        self.kernels = 0      # pecked off by crows
         self.age = 0.0
 
     def update(self, dt):
@@ -496,6 +601,26 @@ class StrawBit(Thing):
         self.alpha = max(0.0, 1 - self.age / 1.6)
         if self.age > 1.6:
             self.gone = True
+
+
+class Kernel(StrawBit):
+    """A kernel of corn pecked off a cob by a crow."""
+    kind = "crumb"
+
+    def __init__(self, world, x, y):
+        super().__init__(world, x, y)
+        self.anim = sprites.Anim("kernel")
+        self.vx *= 0.4
+        self.vy *= 0.5
+
+
+class PumpkinBit(StrawBit):
+    """A chunk of pumpkin flying off: carved out by the hoe, or from a giant splitting open."""
+    kind = "crumb"
+
+    def __init__(self, world, x, y):
+        super().__init__(world, x, y)
+        self.anim = sprites.Anim("pumpkin_bit")
 
 
 class Crumb(StrawBit):

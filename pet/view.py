@@ -346,6 +346,7 @@ class Stage:
                 self.world.keep_off_seams(self.dragging)  # dropped across two monitors: onto one of them
                 self.settings["items"][self.dragging.variant]["x"] = round(self.dragging.x)
                 save.store(self.settings)
+                self.world.dropped(self.dragging)
             elif self.dragging.kind == "pumpkin" and self.dragging.record is not None:
                 self.world.keep_off_seams(self.dragging)
                 self.dragging.record["x"] = round(self.dragging.x)

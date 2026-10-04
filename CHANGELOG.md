@@ -3,6 +3,24 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.4.0
+
+- **Crows stay longer and talk to each other:** visits last about 35 seconds to 4 minutes. They chat back and
+  forth, turning to face each other ("CAW!", "CAW CAW!", "KRAA!", "CAW?"). Only a fox charging at them scares
+  the party off; one wandering close just makes a crow flutter out of the way.
+- **Crows love the scarecrow:** they land on him much more than anywhere else. Now and then one tugs his hat
+  off, struts about wearing it while the others call out, then puts it back (always before they leave). Startle
+  a crow wearing it and it drops the hat: click the hat to put it back, or the next crows will, or it finds its
+  own way home after a couple of minutes.
+- **Crows love corn:** corn cobs on the ground bring crows far more often, and they land right by them and peck
+  the kernels off (two crows can share a cob).
+- **Corn harvest:** clicking ripe corn drops an ear from every stalk (six), and the crows soon come.
+- **Giant pumpkins:** about one pumpkin in seven keeps growing past ripe into a giant, then gets too big and
+  splits open, seeds and bits flying, before a new sprout comes up. A carved giant stays a giant jack-o'-lantern.
+- **The hoe carves pumpkins:** drag the hoe onto a ripe (or giant) pumpkin and let go to carve a jack-o'-lantern.
+- **The den:** sleeping foxes show their snouts poking out of the doorway, not their tails.
+- Acorns keep falling from the oak however much corn is lying about.
+
 ## 1.3.0
 
 - **Pixel Fox.exe:** double-click it to start Pixel Fox with no console window. It runs `start.ps1` from its

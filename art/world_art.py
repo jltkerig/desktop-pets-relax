@@ -418,6 +418,81 @@ def pumpkin(stage, sway=0.0, grow=1.0, shape="round", jack=False):
     return c.to_image()
 
 
+COMMON.update({
+    "pulp": ("#c88a2a", "#e6b04a", "#f4cc72", "#fbe6aa", "#6e4a10"),
+    "seed": ("#b8ae8a", "#ded6b4", "#f2ecd2", "#ffffff", "#6e664a"),
+})
+GIANT = 2.3  # how much bigger than a ripe medium pumpkin a giant one gets
+
+
+def pumpkin_giant(shape="round", sway=0.0, jack=False):
+    """72 x 56: a pumpkin that kept on growing. Too big: it creaks and sags a little."""
+    c = Canvas(72, 56)
+    ground = 50
+    cx = 34
+    c.capsule(cx - 30, ground, cx + 28, ground - 0.5, 1.1, 1.0, "vine")
+    for dx, size in ((-26, 1.4), (24, 1.3), (-14, 1.6)):
+        lx, ly = cx + dx, ground - 4 * size + sway * 0.4
+        c.ellipse(lx, ly, 3.6 * size, 2.8 * size, "vine", angle=-20 if dx < 0 else 20)
+    sag = (1.04, 0.96)  # its own weight squashes it
+    top = _pumpkin_body(c, cx, ground + 0.5, GIANT, "pumpkin", shape, squash=sag)
+    if jack:
+        high = PUMPKIN_SHAPES[shape][1] * sag[1]
+        jack_face(c, cx, top + high * 6.4 * GIANT, GIANT * 0.95 * min(1.0, high) ** 0.5, flicker=sway != 0)
+    c.capsule(cx, top + 3, cx + 2, top - 3, 2.2, 1.6, "stem")
+    return c.to_image()
+
+
+def pumpkin_burst(shape="round", t=0.0):
+    """72 x 56: a giant pumpkin splitting open. t: 0 a crack starts at the top .. 1 split in two, seeds out."""
+    c = Canvas(72, 56)
+    ground = 50
+    cx = 34
+    wide, high = PUMPKIN_SHAPES[shape]
+    c.capsule(cx - 30, ground, cx + 28, ground - 0.5, 1.1, 1.0, "vine")
+    if t < 0.6:  # a jagged crack running down from the stem
+        top = _pumpkin_body(c, cx, ground + 0.5, GIANT, "pumpkin", shape, squash=(1.04, 0.96))
+        length = (ground - top) * t / 0.6
+        y, x, k = top + 1, cx, 0
+        while y < top + 1 + length:
+            c.pixel(x, y, "stem", 0)
+            c.pixel(x + 1, y, "stem", 0)
+            x += 1 if k % 3 == 0 else -1 if k % 3 == 1 else 0
+            y += 1
+            k += 1
+        c.capsule(cx, top + 3, cx + 2, top - 3, 2.2, 1.6, "stem")
+        return c.to_image()
+    # split: two halves rolled apart, the pulpy, seedy inside showing, seeds spilled on the ground
+    open_by = (t - 0.6) / 0.4
+    rng = random.Random(9)
+    sq = 0.92 - open_by * 0.2
+    for side in (-1, 1):
+        hx = cx + side * (4 + open_by * 7)
+        half = Canvas(72, 56)
+        hy_top = _pumpkin_body(half, hx, ground + 0.5, GIANT * 0.85, "pumpkin", shape, squash=(0.9, sq))
+        cut = hx - side * 1
+        for y in range(56):
+            for x in range(72):
+                if half.mat[y][x] is not None and (x - cut) * side >= 0:
+                    c.mat[y][x], c.lum[y][x] = half.mat[y][x], half.lum[y][x]
+        h = ground - hy_top
+        c.ellipse(cut + side * 2.5, ground - h * 0.48, 3.2, h * 0.42, "pulp", bias=0.2)  # the cut face
+        for _ in range(7):
+            c.pixel(cut + side * rng.uniform(1, 4), ground - h * rng.uniform(0.2, 0.75), "seed", 2)
+    for _ in range(int(6 + open_by * 14)):
+        sx, sy = cx + rng.uniform(-6, 6) * (0.6 + open_by), ground - rng.uniform(0, 2)
+        c.pixel(sx, sy, "seed", rng.choice((1, 2)))
+    return c.to_image()
+
+
+def chip(mat, spin, size=1.0):
+    """6 x 6: a little flying bit of something (a corn kernel, a chunk of pumpkin), turning over."""
+    c = Canvas(6, 6)
+    a = math.radians(spin * 45)
+    c.ellipse(3, 3, 1.5 * size, 1.0 * size, mat, angle=math.degrees(a))
+    return c.to_image(outline=False)
+
+
 # -- geese ---------------------------------------------------------------------------------------------
 
 COMMON.update({
@@ -534,9 +609,9 @@ COMMON.update({
 })
 
 
-def scarecrow(sway=0.0, surprised=False, hat_up=0.0):
+def scarecrow(sway=0.0, surprised=False, hat_up=0.0, hat=True):
     """48 x 88: a friendly scarecrow on a post, swaying a little. Faces you. surprised: wide eyes and an
-    O mouth; hat_up lifts the hat off its head."""
+    O mouth; hat_up lifts the hat off its head. hat=False: the crows have run off with it."""
     c = Canvas(48, 88)
     s = sway * 0.6
     # the post and cross-bar
@@ -584,13 +659,27 @@ def scarecrow(sway=0.0, surprised=False, hat_up=0.0):
         for i, dx in enumerate(range(-3, 4)):  # stitched smile
             c.pixel(hx + dx, hy + 3 + (0 if abs(dx) < 2 else -1), "plaid_dark", 0 if i % 2 else 1)
     c.pixel(hx, hy + 1, "pumpkin", 2)  # a little orange nose
-    # a floppy straw hat
-    hy_hat = hy - hat_up
-    c.capsule(hx - 10, hy_hat - 6, hx + 10, hy_hat - 5, 1.6, 1.4, "hat")
-    c.ellipse(hx, hy_hat - 9, 5.8, 4.2, "hat")
-    c.capsule(hx - 5.5, hy_hat - 7, hx + 5.5, hy_hat - 7, 0.8, 0.8, "plaid_red")  # hat band
+    if hat:
+        _straw_hat(c, hx, hy - hat_up)
+    else:  # a tuft of straw sticking up out of the sack where the hat should be
+        for dx in (-3, -1, 1, 3):
+            c.capsule(hx + dx * 0.6, hy - 6, hx + dx * 1.3, hy - 10 - abs(dx) * 0.3, 0.5, 0.4, "straw")
     for dx in (-8, -5, 6, 9):  # straw hair under the brim
         c.capsule(hx + dx * 0.7, hy - 4, hx + dx, hy - 1, 0.5, 0.4, "straw")
+    return c.to_image()
+
+
+def _straw_hat(c, hx, hy, k=1.0):
+    """The scarecrow's floppy straw hat, sitting on a head centred at (hx, hy). k scales it."""
+    c.capsule(hx - 10 * k, hy - 6 * k, hx + 10 * k, hy - 5 * k, 1.6 * k, 1.4 * k, "hat")
+    c.ellipse(hx, hy - 9 * k, 5.8 * k, 4.2 * k, "hat")
+    c.capsule(hx - 5.5 * k, hy - 7 * k, hx + 5.5 * k, hy - 7 * k, 0.8 * k, 0.8 * k, "plaid_red")  # hat band
+
+
+def scarecrow_hat():
+    """24 x 12: the scarecrow's hat on its own, lying where a crow dropped it."""
+    c = Canvas(24, 12)
+    _straw_hat(c, 12, 16)
     return c.to_image()
 
 
@@ -695,7 +784,7 @@ def _rock(c, rng, cx, cy, w, h, mat="stone", moss=False):
 def den(occupants=()):
     """112 x 56: a fox den. A lumpy earth mound set with stones: a big flat rock over the doorway,
     boulders on either side, pebbles and crumbly dirt clumps, grass and a root. occupants: fox palettes
-    asleep inside, shown as tail tips curled in the doorway."""
+    asleep inside, shown as sleepy snouts poking out of the doorway."""
     c = Canvas(112, 56)
     rng = random.Random(4)
     ground = 54
@@ -743,19 +832,25 @@ def den(occupants=()):
             top += 1  # stand the tuft on the mound's surface
         for dx, hgt in ((-1.6, 4), (0, 6), (1.6, 4.5)):
             c.capsule(gx, top + 1, gx + dx, top - hgt, 0.6, 0.35, "grass")
-    # sleeping foxes: their tail tips curled in the doorway
-    colours = {"orange": ("fur", "white"), "grey": ("fur", "tip")}
-    for i, palette in enumerate(occupants[:2]):
-        base_x = door_x - 5 + i * 9
+    # sleeping foxes: their snouts poking out of the doorway, chins on their paws, eyes shut
+    sleepers = occupants[:2]
+    for i, palette in enumerate(sleepers):
+        side = (-1 if i == 0 else 1) if len(sleepers) > 1 else 1
+        hx, hy = door_x + side * (4 if len(sleepers) > 1 else 0) - side * 2, ground - 4
         sub = Canvas(112, 56, palette)
-        fur, tipmat = colours.get(palette, ("fur", "white"))
-        sub.capsule(base_x, ground - 2, base_x + 5, ground - 6, 2.6, 2.4, fur)
-        sub.capsule(base_x + 5, ground - 6, base_x + 7, ground - 9, 2.2, 1.0, tipmat)
+        sub.ellipse(hx + side * 4, ground - 0.8, 2.4, 1.1, "dark")                         # a front paw
+        sub.ellipse(hx, hy, 4.2, 3.4, "fur")                                               # the top of the head
+        sub.capsule(hx + side * 1, hy + 0.5, hx + side * 6.5, hy + 1.8, 2.3, 1.2, "fur")   # the snout
+        sub.ellipse(hx + side * 3.5, hy + 2.6, 3.2, 1.1, "white", bias=-0.1)              # pale chin
+        for dx, dy in ((7, 1), (7, 2), (8, 1)):                                            # the nose tip
+            sub.pixel(hx + side * dx, hy + dy, "nose", 0)
+        for dx in (0.5, 1.5):  # a closed eye: a little dark line
+            sub.pixel(hx + side * dx, hy - 1, "dark", 0)
         c.ramps = {**c.ramps, **{f"{palette}_{k}": v for k, v in sub.ramps.items()}}
         for y in range(56):
             for x in range(112):
                 if sub.mat[y][x] is not None:
-                    c.mat[y][x], c.lum[y][x], c.fixed[y][x] = f"{palette}_{sub.mat[y][x]}", sub.lum[y][x], None
+                    c.mat[y][x], c.lum[y][x], c.fixed[y][x] = f"{palette}_{sub.mat[y][x]}", sub.lum[y][x], sub.fixed[y][x]
     return c.to_image()
 
 
@@ -1111,9 +1206,9 @@ def turkey(pose="stand", t=0.0):
     return c.to_image()
 
 
-def crow(pose="perch", t=0.0, acorn_in_beak=False):
+def crow(pose="perch", t=0.0, acorn_in_beak=False, hat=False):
     """24 x 24 American crow facing right. pose: fly, perch, hop, walk, peck, caw, tilt (head cocked,
-    looking at something)."""
+    looking at something). hat: wearing the scarecrow's hat, which it has pinched."""
     c = Canvas(24, 24)
     s = math.sin(t * 2 * math.pi)
     if pose == "fly":
@@ -1151,6 +1246,10 @@ def crow(pose="perch", t=0.0, acorn_in_beak=False):
         c.ellipse(hx + 5.2, hy - 0.2, 1.5, 0.8, "cap")
     eye_y = hy - (1.4 if pose == "tilt" else 0.8)
     c.pixel(hx + 0.8, eye_y, "white", 2)  # a glint, so the eye shows against the black
+    if hat:  # far too big for it, tipped back on its head
+        c.capsule(hx - 4.5, hy - 2.2, hx + 3.5, hy - 2.8, 0.9, 0.8, "hat")
+        c.ellipse(hx - 0.6, hy - 4.4, 2.8, 2.1, "hat")
+        c.capsule(hx - 3, hy - 3.4, hx + 2, hy - 3.6, 0.5, 0.5, "plaid_red")
     return c.to_image()
 
 
@@ -1162,6 +1261,7 @@ PIXEL_LETTERS = {
     "G": ["111", "100", "101", "101", "111"], "L": ["100", "100", "100", "100", "111"],
     "E": ["111", "100", "110", "100", "111"], "C": ["111", "100", "100", "100", "111"],
     "A": ["010", "101", "111", "101", "101"], "W": ["10001", "10001", "10101", "10101", "01010"],
+    "?": ["111", "001", "011", "000", "010"], " ": ["0", "0", "0", "0", "0"],
 }
 
 
@@ -1252,6 +1352,29 @@ SPRITES = {
     "crow_tilt": ([crow("tilt", i / 4) for i in range(2)], 500, True, (12, 22)),
     "crow_caw": ([crow("caw", f) for f in (0.0, 0.3, 0.6, 0.9)], 120, False, (12, 22)),
     "caw_bubble": ([word_bubble("CAW!")], 1000, False, (4, 13)),
+    "caw2_bubble": ([word_bubble("CAW CAW!")], 1000, False, (4, 13)),
+    "kraa_bubble": ([word_bubble("KRAA!")], 1000, False, (4, 13)),
+    "cawq_bubble": ([word_bubble("CAW?")], 1000, False, (4, 13)),
+    "crow_hat_fly": ([crow("fly", i / 4, hat=True) for i in range(4)], 85, True, (12, 20)),
+    "crow_hat_perch": ([crow("perch", i / 4, hat=True) for i in range(2)], 600, True, (12, 22)),
+    "crow_hat_hop": ([crow("hop", i / 4, hat=True) for i in range(4)], 100, True, (12, 22)),
+    "crow_hat_walk": ([crow("walk", i / 4, hat=True) for i in range(4)], 140, True, (12, 22)),
+    "crow_hat_peck": ([crow("peck", i / 4, hat=True) for i in range(4)], 110, True, (12, 22)),
+    "crow_hat_tilt": ([crow("tilt", i / 4, hat=True) for i in range(2)], 500, True, (12, 22)),
+    "crow_hat_caw": ([crow("caw", f, hat=True) for f in (0.0, 0.3, 0.6, 0.9)], 120, False, (12, 22)),
+    "scarecrow_nohat": ([scarecrow(sw, hat=False) for sw in (0, 1, 2, 1, 0, -1, -2, -1)], 260, True, (24, 85)),
+    "scarecrow_surprised_nohat": ([scarecrow(0, True, hat=False) for _ in range(7)], 110, False, (24, 85)),
+    "scarecrow_hat": ([scarecrow_hat()], 1000, False, (12, 11)),
+    "kernel": ([chip("cob", s, 0.9) for s in range(4)], 90, True, (3, 3)),
+    "pumpkin_bit": ([chip("pumpkin", s, 1.2) for s in range(4)], 90, True, (3, 3)),
+    **{f"pumpkin_giant_{shape}": ([pumpkin_giant(shape, sw) for sw in (0, 1, 0, -1)], 900, True, (34, 50))
+       for shape in PUMPKIN_SHAPES},
+    **{f"pumpkin_giant_{shape}_jack": ([pumpkin_giant(shape, sw, jack=True) for sw in (0, 1, 0, -1)], 260, True,
+                                       (34, 50))
+       for shape in PUMPKIN_SHAPES},
+    **{f"pumpkin_burst_{shape}": ([pumpkin_burst(shape, t) for t in (0.1, 0.25, 0.4, 0.55, 0.7, 0.85, 1.0, 1.0)],
+                                  130, False, (34, 50))
+       for shape in PUMPKIN_SHAPES},
     "scarecrow_surprised": ([scarecrow(0, True, u) for u in (2, 5, 6, 5, 3, 1, 0)], 110, False, (24, 85)),
     **{f"pumpkin_wilt_{k}_{shape}": ([pumpkin_wilt(g, shape, w) for w in (0.0, 0.3, 0.55, 0.8, 1.0)], 160, False,
                                      (20, 30))

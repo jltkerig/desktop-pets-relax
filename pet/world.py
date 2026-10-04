@@ -97,6 +97,13 @@ class World:
     def of(self, kind):
         return [t for t in self.things if t.kind == kind and not t.gone]
 
+    def nuts(self):
+        """The acorns about (not the corn cobs, which are acorns of a sort too)."""
+        return [a for a in self.of("acorn") if not getattr(a, "is_cob", False)]
+
+    def cobs_on_ground(self):
+        return [a for a in self.of("acorn") if getattr(a, "is_cob", False) and a.on_ground and not a.taken]
+
     def tree(self):
         trees = self.of("tree")
         return trees[0] if trees else None
@@ -212,14 +219,15 @@ class World:
             now = self.now().timestamp()
             patch = [{"x": round(max(40, min(self.width - 40, centre + (i - 1) * 46 * self.scale))),
                       "planted": now - self.rng.uniform(0, 90), "pace": round(self.rng.uniform(0.85, 1.2), 2),
-                      "size": size, "shape": self.rng.choice(shapes), "jack": self.rng.random() < 0.2}
+                      "size": size, "shape": self.rng.choice(shapes), "jack": self.rng.random() < 0.2,
+                      "giant": self.rng.random() < Pumpkin.GIANT_CHANCE}
                      for i, size in enumerate(self.rng.sample(sizes, 3))]  # one of each, in any order
             self.dirty = True
         item["patch"] = patch
         for record in patch:
             x = max(20.0, min(self.width - 20.0, float(record["x"])))
             self.add(Pumpkin(self, x, record["planted"], float(record.get("pace", 1.0)), record, record["size"],
-                             record["shape"], record.get("jack", False)))
+                             record["shape"], record.get("jack", False), record.get("giant", False)))
 
     # -- every frame -------------------------------------------------------------------------------------
 
@@ -279,7 +287,7 @@ class World:
             self.add(Leaf(self, x, self.ground - rng.uniform(40, 260) * self.scale, rng.choice(LEAF_COLOURS)))
         if tree is not None and self.timers["acorn"] <= 0:
             self.timers["acorn"] = rng.uniform(40, 120)
-            if len(self.of("acorn")) < 4:
+            if len(self.nuts()) < 4:
                 self.drop_acorn(tree)
         if self.timers["visitor"] <= 0:
             self.timers["visitor"] = rng.uniform(50, 160)
@@ -318,6 +326,8 @@ class World:
         if not choices:
             return None
         pick = self.rng.choice(choices)
+        if kind is None and "crows" in choices and self.cobs_on_ground() and self.rng.random() < 0.8:
+            pick = "crows"  # corn lying about: the crows are never far away
         if pick == "squirrel":
             # squirrels much prefer acorns; a corn cob only now and then, or if there's nothing else
             nuts = [a for a in acorns if not getattr(a, "is_cob", False)]
@@ -394,9 +404,24 @@ class World:
                Step("hop"), Step("happy", 1.2))
 
     def harvest(self, corn):
-        """Ripe corn clicked: an ear of corn drops out for the foxes, and the field starts again."""
-        self.add(CornCob(self, corn.x + self.rng.uniform(-50, 50) * self.scale, self.ground - 60 * self.scale))
+        """Ripe corn clicked: an ear of corn drops from every stalk, and the field starts again. All that corn on
+        the ground soon brings the crows."""
+        for x, y in corn.ears():
+            cob = self.add(CornCob(self, x, y))
+            cob.vx = self.rng.uniform(-25, 25) * self.scale
         self.plant_corn(replant=True)
+        if self.daylight() != "night" and "crows" in seasons.VISITORS.get(self.season, ()):
+            self.timers["visitor"] = min(self.timers["visitor"], self.rng.uniform(8, 25))
+
+    def dropped(self, thing):
+        """Something you dragged was let go. The hoe, let go on a ripe pumpkin, carves it a face."""
+        if thing.kind == "prop" and thing.variant == "hoe":
+            near = [p for p in self.of("pumpkin") if abs(p.x - thing.x) < 30 * self.scale]
+            pumpkin = min(near, key=lambda p: abs(p.x - thing.x)) if near else None
+            if pumpkin is not None:
+                thing.react()  # a thunk, carved or not
+                if not pumpkin.carve():
+                    pumpkin.anim.time += 0.7
 
     def visitor_to_watch(self, fox):
         for kind in ("squirrel", "jay", "woolly", "goose", "frog", "turkey", "crow"):

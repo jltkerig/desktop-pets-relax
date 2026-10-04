@@ -57,6 +57,10 @@ Right-click the icon for the menu:
 - **Click:** a happy hop. A napping fox wakes up and stretches.
 - **Drag a fox:** you pick it up, and it lands when you let go.
 - **Drag the oak:** you can move it anywhere along the bottom of the screen, and it remembers the spot.
+- **Drag the hoe onto a ripe pumpkin:** it carves a jack-o'-lantern.
+- **Click ripe corn:** an ear drops from every stalk, and the crows will soon be round for it.
+- **Crows** chat, play with what's lying about, and sometimes borrow the scarecrow's hat. Click one to shoo them;
+  if it drops the hat, click the hat to put it back.
 - **Rest the cursor near the bottom of the screen:** a playful fox may crouch, wiggle and pounce on it.
 
 Clicks on empty parts of the screen go straight through to your desktop and windows.

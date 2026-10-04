@@ -411,15 +411,16 @@ class Clicks(unittest.TestCase):
         self.assertEqual(pumpkin.stage, 0)
         self.assertEqual(pumpkin.record["planted"], pumpkin.planted)
 
-    def test_ripe_corn_is_harvested_into_a_cob(self):
+    def test_ripe_corn_drops_a_cob_from_every_stalk(self):
         self.clock[0] += datetime.timedelta(hours=1)
         run(self.world, self.clock, 0.1)
-        self.item("corn").click()
+        corn = self.item("corn")
+        corn.click()
         run(self.world, self.clock, 3)
         self.assertEqual(self.item("corn").stage, 0)
         cobs = [a for a in self.world.of("acorn") if a.anim.name == "corncob"]
-        self.assertEqual(len(cobs), 1)
-        self.assertTrue(cobs[0].on_ground)
+        self.assertEqual(len(cobs), len(corn.STALKS))
+        self.assertTrue(all(c.on_ground for c in cobs))
 
     def test_the_barrels_fall_over_vanish_and_come_back(self):
         barrels = self.item("climb", "barrels")
@@ -822,7 +823,7 @@ class Crows(unittest.TestCase):
             if not party.long:
                 continue
             states = set()
-            for _ in range(150 * 10):
+            for _ in range(320 * 10):
                 run(world, clock, 0.1, fps=10)
                 states |= {c.state for c in world.of("crow")}
                 if not world.of("crow"):
@@ -846,6 +847,195 @@ class Crows(unittest.TestCase):
             self.assertIn("crows", seasons.VISITORS[season])
         world, _ = make_world("winter", orange=False, grey=False)
         self.assertIsNotNone(world.invite_visitor("crows"))
+
+
+def crows_with_scarecrow(seed=1):
+    """A world with the scarecrow out (no foxes to scare anyone) and a party of crows, settled in."""
+    world, clock = make_world(seed=seed, orange=False, grey=False)
+    scarecrow = next(p for p in world.of("prop") if p.variant == "scarecrow")
+    party = world.invite_visitor("crows").party
+    party.long, party.stay = True, 10 ** 6
+    run(world, clock, 15, fps=20)
+    return world, clock, scarecrow, party
+
+
+class CrowsAndTheScarecrow(unittest.TestCase):
+    def test_a_crow_pinches_the_hat_wears_it_and_puts_it_back(self):
+        world, clock, scarecrow, party = crows_with_scarecrow()
+        thief = party.members[0]
+        thief._go_for_hat(scarecrow)
+        wore = hatless = False
+        for _ in range(90 * 10):
+            run(world, clock, 0.1, fps=10)
+            wore = wore or (thief.hat and thief.anim.name.startswith("crow_hat_"))
+            hatless = hatless or (not scarecrow.hat_on and scarecrow.anim.name.endswith("_nohat"))
+            if wore and scarecrow.hat_on:
+                break
+        self.assertTrue(wore)
+        self.assertTrue(hatless)
+        self.assertTrue(scarecrow.hat_on)
+        self.assertFalse(thief.hat)
+
+    def test_crows_put_the_hat_back_before_they_leave(self):
+        world, clock, scarecrow, party = crows_with_scarecrow(seed=2)
+        party.members[0]._go_for_hat(scarecrow)
+        for _ in range(200):
+            run(world, clock, 0.1, fps=10)
+            if party.hat_taken():
+                break
+        self.assertTrue(party.hat_taken())
+        party.stay = 0  # time to go
+        run(world, clock, 60, fps=10)
+        self.assertFalse(world.of("crow"))
+        self.assertTrue(scarecrow.hat_on)
+
+    def test_a_startled_crow_drops_the_hat_and_a_click_puts_it_back(self):
+        world, clock, scarecrow, party = crows_with_scarecrow(seed=3)
+        thief = party.members[0]
+        thief._go_for_hat(scarecrow)
+        for _ in range(200):
+            run(world, clock, 0.1, fps=10)
+            if thief.hat:
+                break
+        thief.click()  # shoo!
+        run(world, clock, 5, fps=10)
+        hats = world.of("hat")
+        self.assertEqual(len(hats), 1)
+        self.assertFalse(scarecrow.hat_on)
+        self.assertEqual(hats[0].y, world.ground)  # floated down
+        hats[0].click()
+        self.assertTrue(scarecrow.hat_on)
+        self.assertFalse(world.of("hat"))
+
+    def test_crows_land_on_the_scarecrow_more_than_anywhere(self):
+        from pet.visitors import CrowParty
+        on = total = 0
+        for seed in range(30):
+            world, _ = make_world(seed=seed, orange=False, grey=False)
+            first = CrowParty(world, 2).spots[0]
+            total += 1
+            on += getattr(first.holder, "variant", None) == "scarecrow"
+        self.assertGreater(on / total, 0.25)
+
+
+class CrowsTalking(unittest.TestCase):
+    def test_crows_answer_each_other(self):
+        world, clock, _, party = crows_with_scarecrow(seed=4)
+        speakers = set()
+        for _ in range(60 * 10):
+            run(world, clock, 0.1, fps=10)
+            speakers |= {b.goose for b in world.of("bubble")}
+            if len(speakers) >= 2:
+                break
+        self.assertGreaterEqual(len(speakers), 2)
+
+    def test_crows_stay_a_good_while(self):
+        from pet.visitors import CrowParty
+        world, _ = make_world(orange=False, grey=False)
+        stays = [CrowParty(world, 2).stay for _ in range(40)]
+        self.assertGreaterEqual(min(stays), 35)
+        self.assertGreater(max(stays), 120)
+
+
+class CrowsAndCorn(unittest.TestCase):
+    def test_corn_on_the_ground_brings_the_crows(self):
+        from pet.items import CornCob
+        crows = 0
+        for seed in range(20):
+            world, _ = make_world(seed=seed, orange=False, grey=False)
+            world.add(CornCob(world, 900, world.ground)).on_ground = True
+            world.invite_visitor()
+            crows += bool(world.of("crow"))
+        self.assertGreaterEqual(crows, 12)  # usually around 16 of 20
+
+    def test_harvesting_corn_soon_brings_the_crows(self):
+        world, clock = make_world(orange=False, grey=False)
+        clock[0] += datetime.timedelta(hours=1)
+        run(world, clock, 0.1)
+        world.harvest(world.of("corn")[0])
+        self.assertLessEqual(world.timers["visitor"], 25)
+
+    def test_crows_peck_the_kernels_off_a_cob(self):
+        from pet.items import CornCob
+        world, clock = make_world(seed=5, orange=False, grey=False)
+        cob = world.add(CornCob(world, 900, world.ground))
+        cob.on_ground = True
+        party = world.invite_visitor("crows").party
+        party.long, party.stay = True, 10 ** 6
+        run(world, clock, 90, fps=10)
+        self.assertGreater(cob.kernels, 0)
+
+    def test_corn_cobs_dont_stop_acorns_falling(self):
+        from pet.items import CornCob
+        world, _ = make_world(orange=False, grey=False)
+        for i in range(6):
+            world.add(CornCob(world, 300 + i * 40, world.ground)).on_ground = True
+        self.assertEqual(world.nuts(), [])
+
+
+class BigPumpkinsAndTheHoe(unittest.TestCase):
+    def setUp(self):
+        self.world, self.clock = make_world(orange=False, grey=False)
+        self.pumpkin = self.world.of("pumpkin")[0]
+        self.hoe = next(p for p in self.world.of("prop") if p.variant == "hoe")
+
+    def ripen(self, minutes=45):
+        self.clock[0] += datetime.timedelta(minutes=minutes * self.pumpkin.pace)
+        run(self.world, self.clock, 0.1)
+
+    def test_a_giant_pumpkin_grows_too_big_and_bursts_then_starts_again(self):
+        self.pumpkin.giant, self.pumpkin.jack = True, False
+        self.ripen(55)
+        self.assertTrue(self.pumpkin.huge)
+        self.assertTrue(self.pumpkin.anim.name.startswith("pumpkin_giant_"))
+        self.ripen(10)
+        self.assertTrue(self.pumpkin.bursting)
+        self.assertTrue(self.world.of("crumb"))  # bits and seeds flying
+        run(self.world, self.clock, 3)
+        self.assertFalse(self.pumpkin.bursting)
+        self.assertEqual(self.pumpkin.stage, 0)  # a fresh sprout
+
+    def test_most_pumpkins_stop_at_ripe(self):
+        self.pumpkin.giant = False
+        self.ripen(120)
+        self.assertEqual(self.pumpkin.stage, 4)
+
+    def test_dropping_the_hoe_on_a_ripe_pumpkin_carves_a_jack_o_lantern(self):
+        self.pumpkin.jack, self.pumpkin.giant = False, False
+        self.ripen()
+        self.hoe.x = self.pumpkin.x + 5
+        self.world.dropped(self.hoe)
+        run(self.world, self.clock, 0.1)
+        self.assertTrue(self.pumpkin.jack)
+        self.assertTrue(self.pumpkin.record["jack"])
+        self.assertTrue(self.pumpkin.anim.name.endswith("_jack"))
+        self.assertEqual(self.hoe.anim.name, "hoe_wobble")
+
+    def test_the_hoe_does_nothing_to_an_unripe_pumpkin(self):
+        self.pumpkin.jack = False
+        self.hoe.x = self.pumpkin.x
+        self.world.dropped(self.hoe)
+        self.assertFalse(self.pumpkin.jack)
+
+    def test_a_carved_giant_stays_a_giant_jack_o_lantern(self):
+        self.pumpkin.giant, self.pumpkin.jack = True, False
+        self.ripen(55)
+        self.assertTrue(self.pumpkin.carve())
+        self.ripen(60)
+        run(self.world, self.clock, 0.1)
+        self.assertFalse(self.pumpkin.bursting)
+        self.assertTrue(self.pumpkin.anim.name.startswith("pumpkin_giant_") and self.pumpkin.anim.name.endswith("_jack"))
+
+
+class DenSnouts(unittest.TestCase):
+    def test_sleeping_foxes_show_their_snouts_in_the_doorway(self):
+        from PIL import Image
+        empty = Image.open(sprites.SPRITE_DIR / "den.png").convert("RGBA")
+        full = Image.open(sprites.SPRITE_DIR / "den_orange.png").convert("RGBA")
+        changed = [(x, y) for x in range(empty.width) for y in range(empty.height)
+                   if empty.getpixel((x, y)) != full.getpixel((x, y))]
+        self.assertTrue(changed)
+        self.assertTrue(all(y >= 40 for _, y in changed))  # low down in the doorway, chin on the ground
 
 
 class Version(unittest.TestCase):

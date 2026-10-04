@@ -26,4 +26,6 @@
 - Run the tests with `python -m unittest discover -s tests` (needs Pillow; PySide6 only to run the app).
 - Sprites are drawn by code in `art/` and saved to `art/sprites/` (a PNG strip and a JSON per sprite).
   `python art/make_art.py` redraws them all; commit the PNG and JSON files it writes.
+- `Pixel Fox.exe` is built from `launcher/launcher.c` by `launcher/build.sh` (MinGW-w64 cross compiler).
+  It only runs `start.ps1`, so it rarely needs rebuilding; if you change it, rebuild and commit the .exe.
 - `pet/world.py` and everything it uses has no Qt, so it can be tested. Keep Qt in `pet/view.py`.

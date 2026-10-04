@@ -3,6 +3,13 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.3.0
+
+- **Pixel Fox.exe:** double-click it to start Pixel Fox with no console window. It runs `start.ps1` from its
+  own folder (so it updates itself first, like Pixel Fox.cmd), and shows a message pointing at Pixel Fox.cmd
+  if starting fails. It has the fox face as its icon, so it can be pinned to the taskbar or Start.
+  Source and build script in `launcher/`.
+
 ## 1.2.0
 
 - **Updates itself:** starting Pixel Fox (Pixel Fox.cmd or start.ps1) first checks GitHub for a newer version

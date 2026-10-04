@@ -11,7 +11,11 @@ lying about.
 
 ## Start
 
-Double-click **Pixel Fox.cmd** (or run `.\start.ps1` in PowerShell).
+Double-click **Pixel Fox.exe** (or **Pixel Fox.cmd**, or run `.\start.ps1` in PowerShell).
+
+Pixel Fox.exe starts it with no window at all. Right-click it to pin it to the taskbar or Start, or to make a
+desktop shortcut; keep the .exe itself in the Pixel Fox folder. If it can't start, it tells you, and
+Pixel Fox.cmd shows what went wrong.
 
 It installs PySide6 and Pillow the first time (just for you, if installing for everyone isn't allowed),
 then runs with no console window. Starting it again while it's running does nothing.
@@ -60,6 +64,7 @@ Clicks on empty parts of the screen go straight through to your desktop and wind
 ## How it works
 
 ```
+Pixel Fox.exe      double-click to start (runs start.ps1; source in launcher/)
 pixelfox.py        start here
 start.ps1          checks for updates (update.ps1), installs what's needed, starts it
 pet/world.py       everything on the desktop, what appears when, how things meet

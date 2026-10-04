@@ -1,0 +1,17 @@
+1 ICON "fox.ico"
+1 VERSIONINFO
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904B0"
+    BEGIN
+      VALUE "FileDescription", "Pixel Fox"
+      VALUE "ProductName", "Pixel Fox"
+      VALUE "OriginalFilename", "Pixel Fox.exe"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1200
+  END
+END

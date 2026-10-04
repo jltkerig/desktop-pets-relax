@@ -222,9 +222,8 @@ class Desktop(QWidget):
                 save.store(self.settings)
         elif self.press is not None and self.press[0].kind == "fox":
             self.press[0].poke()
-        elif self.press is not None and self.press[0].kind == "den":
-            for fox in list(self.press[0].sleepers):  # a knock on the den: sleepy foxes pop out
-                fox.poke()
+        elif self.press is not None:
+            self.press[0].click()  # each item has its own reaction
         self.press = None
         self.dragging = None
 

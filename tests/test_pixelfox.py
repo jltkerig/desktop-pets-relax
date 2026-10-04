@@ -366,7 +366,7 @@ class Climbing(unittest.TestCase):
             run(world, clock, 1 / 30)
             if fox.step is not None and fox.step.anim == "look":
                 on_top = fox.y
-        self.assertAlmostEqual(on_top, world.ground - 66 * world.scale, delta=1)  # looked around from the top barrel
+        self.assertAlmostEqual(on_top, world.ground - 60 * world.scale, delta=1)  # looked around from the top barrel
         self.assertEqual(fox.y, world.ground)                                     # and jumped back down
 
     def test_a_fox_left_up_high_hops_down_before_doing_anything_else(self):
@@ -384,6 +384,73 @@ class Climbing(unittest.TestCase):
             kinds = {t.variant for t in world.of("climb")}
             self.assertIn("barrels", kinds, season)
             self.assertEqual("haystack" in kinds, hay, season)
+
+
+class Clicks(unittest.TestCase):
+    def setUp(self):
+        self.world, self.clock = make_world(orange=False, grey=False)
+
+    def item(self, kind, variant=None):
+        return [t for t in self.world.of(kind) if variant is None or getattr(t, "variant", None) == variant][0]
+
+    def test_the_scarecrow_looks_surprised_then_settles(self):
+        scarecrow = self.item("prop", "scarecrow")
+        scarecrow.click()
+        self.assertEqual(scarecrow.anim.name, "scarecrow_surprised")
+        run(self.world, self.clock, 2)
+        self.assertEqual(scarecrow.anim.name, "scarecrow")
+
+    def test_a_ripe_pumpkin_wilts_and_a_sprout_grows_back(self):
+        self.clock[0] += datetime.timedelta(hours=2)
+        run(self.world, self.clock, 0.1)
+        pumpkin = self.world.of("pumpkin")[0]
+        pumpkin.click()
+        self.assertTrue(pumpkin.anim.name.startswith("pumpkin_wilt_"))
+        run(self.world, self.clock, 2)
+        self.assertEqual(pumpkin.stage, 0)
+        self.assertEqual(pumpkin.record["planted"], pumpkin.planted)
+
+    def test_ripe_corn_is_harvested_into_a_cob(self):
+        self.clock[0] += datetime.timedelta(hours=1)
+        run(self.world, self.clock, 0.1)
+        self.item("corn").click()
+        run(self.world, self.clock, 3)
+        self.assertEqual(self.item("corn").stage, 0)
+        cobs = [a for a in self.world.of("acorn") if a.anim.name == "corncob"]
+        self.assertEqual(len(cobs), 1)
+        self.assertTrue(cobs[0].on_ground)
+
+    def test_the_barrels_fall_over_vanish_and_come_back(self):
+        barrels = self.item("climb", "barrels")
+        barrels.click()
+        run(self.world, self.clock, 4)
+        self.assertEqual(barrels.state, "away")
+        self.assertFalse(barrels.available)
+        run(self.world, self.clock, 30)
+        self.assertEqual(barrels.state, "standing")
+        self.assertEqual(barrels.alpha, 1.0)
+
+    def test_the_haystack_rebuilds_in_another_shape(self):
+        hay = self.item("climb", "haystack")
+        before = hay.layout
+        hay.click()
+        self.assertNotEqual(hay.layout, before)
+        self.assertTrue(self.world.of("straw"))
+        self.assertEqual(self.world.settings["items"]["haystack"]["layout"], hay.layout)
+
+    def test_knocking_on_an_empty_den_brings_out_a_frog_that_ribbits_and_leaves(self):
+        self.world.den().click()
+        self.assertEqual(len(self.world.of("frog")), 1)
+        ribbited = False
+        for _ in range(40 * 30):
+            run(self.world, self.clock, 1 / 30)
+            ribbited = ribbited or bool(self.world.of("bubble"))
+        self.assertTrue(ribbited)
+        self.assertFalse(self.world.of("frog"))
+
+    def test_shaking_the_oak_brings_down_leaves(self):
+        self.item("tree").click()
+        self.assertGreaterEqual(len(self.world.of("leaf")), 8)
 
 
 if __name__ == "__main__":

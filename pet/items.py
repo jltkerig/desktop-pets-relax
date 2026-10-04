@@ -1,6 +1,7 @@
 """The oak tree, the leaves it drops and its acorns."""
 import math
 
+from pet import sprites
 from pet.things import Thing
 
 GRAVITY = 700  # sprite pixels per second squared (scaled)
@@ -14,6 +15,21 @@ class Tree(Thing):
     def __init__(self, world, x, variant="oak"):
         super().__init__(world, x, world.ground, variant)
         self.variant = variant
+        self.shaking = 0.0
+
+    def update(self, dt):
+        self.shaking = max(0.0, self.shaking - dt)
+        super().update(dt * (7 if self.shaking else 1))  # a shake makes the crown rustle fast
+
+    def click(self):
+        """Shake the tree: a flurry of leaves, and sometimes an acorn."""
+        w = self.world
+        self.shaking = 0.8
+        for _ in range(8):
+            x, y = self.crown_point()
+            w.add(Leaf(w, x, y, w.rng.choice(("red", "orange", "yellow", "brown"))))
+        if w.rng.random() < 0.4 and len(w.of("acorn")) < 4:
+            w.drop_acorn(self)
 
     def crown_point(self):
         """A random spot in the crown, for leaves and acorns to start from."""
@@ -167,7 +183,31 @@ class Pumpkin(Thing):
     def ripe(self):
         return self.stage >= 3
 
+    def click(self):
+        if self.stage >= 3 and not getattr(self, "wilting", False):
+            self.wilting = True
+            self.anim.play(f"pumpkin_wilt_{self.size}_{self.shape}")
+        else:
+            self.anim.time += 0.7  # a little rustle
+
+    def _replant(self):
+        """After wilting: a fresh sprout, maybe a different size or shape this time."""
+        w = self.world
+        self.wilting = False
+        self.planted = w.now().timestamp()
+        self.size = w.rng.choice(("s", "m", "l"))
+        self.shape = w.rng.choice(("round", "tall", "squat"))
+        self.jack = w.rng.random() < 0.2
+        if self.record is not None:
+            self.record.update(planted=self.planted, size=self.size, shape=self.shape, jack=self.jack)
+            w.dirty = True
+
     def update(self, dt):
+        if getattr(self, "wilting", False):
+            super().update(dt)
+            if self.anim.done:
+                self._replant()
+            return
         name = f"pumpkin_{self.stage}_{self.size}_{self.shape}" + ("_jack" if self.jack and self.stage == 4 else "")
         if self.anim.name != name:
             self.anim.name = name
@@ -213,7 +253,7 @@ class Treasure(Thing):
 
 
 class Prop(Thing):
-    """Something that just stands there looking nice (the scarecrow). You can drag it."""
+    """Something that just stands there looking nice (the scarecrow, the hoe). You can drag it."""
     kind = "prop"
     draggable = True
     z = 7
@@ -221,6 +261,18 @@ class Prop(Thing):
     def __init__(self, world, x, variant):
         super().__init__(world, x, world.ground, variant)
         self.variant = variant
+
+    CLICKS = {"scarecrow": "scarecrow_surprised", "hoe": "hoe_wobble"}
+
+    def click(self):
+        reaction = self.CLICKS.get(self.variant)
+        if reaction:
+            self.anim.play(reaction)
+
+    def update(self, dt):
+        super().update(dt)
+        if self.anim.name != self.variant and self.anim.done:
+            self.anim.play(self.variant)  # back to normal
 
 
 class Corn(Thing):
@@ -245,6 +297,12 @@ class Corn(Thing):
         age = self.world.now().timestamp() - self.planted
         return max(0, min(self.STAGES - 1, int(age / self.STAGE_SECONDS)))
 
+    def click(self):
+        if self.stage >= 3:
+            self.world.harvest(self)
+        else:
+            self.anim.time += 0.9  # a rustle
+
     def update(self, dt):
         name = f"corn_{self.stage}"
         if self.anim.name != name:
@@ -266,6 +324,14 @@ class Den(Thing):
 
     def entrance_x(self):
         return self.x + 4 * self.world.scale
+
+    def click(self):
+        if self.sleepers:
+            for fox in list(self.sleepers):  # a knock on the den: sleepy foxes pop out
+                fox.poke()
+        elif not self.world.of("frog"):
+            from pet.visitors import Frog
+            self.world.add(Frog(self.world, self.entrance_x()))
 
     def update(self, dt):
         self.sleepers = [f for f in self.sleepers if not f.gone and f.in_den]
@@ -305,11 +371,102 @@ class Climbable(Thing):
     draggable = True
     z = 8
     LEVELS = {
-        "barrels": [(-24, 22), (-12, 44), (0, 66)],
+        "barrels": [(-22, 22), (-11, 41), (0, 60)],  # the tops of the barrels, row by row
         "haystack": [(-16, 15), (0, 31)],
+        "haystack_row": [(-32, 15), (0, 15)],
+        "haystack_steps": [(-32, 15), (0, 31), (32, 47)],
     }
+    HAY = ("haystack", "haystack_row", "haystack_steps")
 
-    def __init__(self, world, x, variant):
-        super().__init__(world, x, world.ground, variant)
+    def __init__(self, world, x, variant, layout=None):
         self.variant = variant
-        self.levels = self.LEVELS[variant]
+        self.layout = layout if layout in self.LEVELS and variant == "haystack" else variant
+        super().__init__(world, x, world.ground, self.layout)
+        self.levels = self.LEVELS[self.layout]
+        self.state = "standing"  # barrels: standing, falling, fading, away, returning
+        self.timer = 0.0
+
+    @property
+    def available(self):
+        return self.state == "standing"
+
+    def _drop_climbers(self):
+        for fox in self.world.of("fox"):
+            if fox.up_high and abs(fox.x - self.x) < 80 * self.world.scale:
+                fox.drop()  # whoops: it lands on its feet, happily
+
+    def click(self):
+        w = self.world
+        if self.variant == "barrels" and self.state == "standing":
+            self._drop_climbers()
+            self.state = "falling"
+            self.anim.play("barrels_fall")
+        elif self.variant == "haystack":
+            self._drop_climbers()
+            for _ in range(14):
+                w.add(StrawBit(w, self.x + w.rng.uniform(-40, 40) * w.scale, self.y - w.rng.uniform(4, 30) * w.scale))
+            choices = [h for h in self.HAY if h != self.layout]
+            self.layout = w.rng.choice(choices)
+            self.anim.play(self.layout)
+            self.levels = self.LEVELS[self.layout]
+            w.settings["items"].setdefault("haystack", {"out": True, "x": None})["layout"] = self.layout
+            w.dirty = True
+
+    def update(self, dt):
+        super().update(dt)
+        self.timer += dt
+        if self.state == "falling" and self.anim.done:
+            self.state, self.timer = "fading", 0.0
+        elif self.state == "fading":
+            self.alpha = max(0.0, 1 - self.timer / 1.5)
+            if self.alpha <= 0:
+                self.state, self.timer = "away", 0.0
+        elif self.state == "away" and self.timer > 25:
+            self.state, self.timer = "returning", 0.0
+            self.anim.play("barrels")
+        elif self.state == "returning":
+            self.alpha = min(1.0, self.timer / 1.5)
+            if self.alpha >= 1:
+                self.state = "standing"
+
+
+class CornCob(Acorn):
+    """An ear of corn from the harvest. The foxes bat it about like an acorn; it fades after a while."""
+
+    def __init__(self, world, x, y):
+        super().__init__(world, x, y)
+        self.anim = sprites.Anim("corncob")
+        self.age = 0.0
+
+    def update(self, dt):
+        super().update(dt)
+        self.age += dt
+        if self.age > 90:
+            self.alpha -= dt / 4
+            if self.alpha <= 0:
+                self.gone = True
+
+
+class StrawBit(Thing):
+    """A wisp of straw puffing out of a haystack being rebuilt."""
+    kind = "straw"
+    z = 34
+
+    def __init__(self, world, x, y):
+        super().__init__(world, x, y, "straw_bit")
+        rng = world.rng
+        self.vx = rng.uniform(-90, 90)
+        self.vy = rng.uniform(-200, -90)
+        self.age = 0.0
+        self.anim.time = rng.uniform(0, 1)
+
+    def update(self, dt):
+        super().update(dt)
+        s = self.world.scale
+        self.age += dt
+        self.vy += 300 * dt
+        self.x += self.vx * s / 2 * dt
+        self.y = min(self.world.ground, self.y + self.vy * s / 2 * dt)
+        self.alpha = max(0.0, 1 - self.age / 1.6)
+        if self.age > 1.6:
+            self.gone = True

@@ -333,9 +333,10 @@ COMMON.update({
 PUMPKIN_SHAPES = {"round": (1.0, 1.0), "tall": (0.78, 1.32), "squat": (1.28, 0.74)}
 
 
-def _pumpkin_body(c, cx, base, size, mat, shape="round"):
+def _pumpkin_body(c, cx, base, size, mat, shape="round", squash=(1.0, 1.0)):
     """A ribbed pumpkin sitting on the ground: side ribs first (darker), the front rib last."""
     wide, high = PUMPKIN_SHAPES[shape]
+    wide, high = wide * squash[0], high * squash[1]
     w, h = 9.0 * size * wide, 6.4 * size * high
     cy = base - h
     for dx, rx, bias in ((-0.55, 0.5, -0.25), (0.55, 0.5, -0.25), (-0.28, 0.55, -0.08), (0.28, 0.55, -0.08),
@@ -533,8 +534,9 @@ COMMON.update({
 })
 
 
-def scarecrow(sway=0.0):
-    """48 x 88: a friendly scarecrow on a post, swaying a little. Faces you."""
+def scarecrow(sway=0.0, surprised=False, hat_up=0.0):
+    """48 x 88: a friendly scarecrow on a post, swaying a little. Faces you. surprised: wide eyes and an
+    O mouth; hat_up lifts the hat off its head."""
     c = Canvas(48, 88)
     s = sway * 0.6
     # the post and cross-bar
@@ -565,18 +567,28 @@ def scarecrow(sway=0.0):
     hx, hy = 24 + s, 26
     c.ellipse(hx, hy, 6.5, 7.0, "sack")
     c.capsule(hx - 3, hy + 6.5, hx + 3, hy + 6.5, 0.8, 0.8, "straw")
-    for ex in (-2.5, 2.5):  # button eyes
-        c.pixel(hx + ex, hy - 1, "plaid_dark", 1)
-        c.pixel(hx + ex + 1, hy - 1, "plaid_dark", 1)
-        c.pixel(hx + ex, hy, "plaid_dark", 1)
-        c.pixel(hx + ex + 1, hy, "plaid_dark", 1)
-    for i, dx in enumerate(range(-3, 4)):  # stitched smile
-        c.pixel(hx + dx, hy + 3 + (0 if abs(dx) < 2 else -1), "plaid_dark", 0 if i % 2 else 1)
+    if surprised:
+        for ex in (-3, 2):  # wide button eyes with a glint
+            for dx in (0, 1, 2):
+                for dy in (-2, -1, 0):
+                    c.pixel(hx + ex + dx, hy + dy, "plaid_dark", 0)
+            c.pixel(hx + ex + 1, hy - 2, "bubble", 3)
+        for dx, dy in ((-1, 2), (0, 2), (1, 2), (-2, 3), (2, 3), (-2, 4), (2, 4), (-1, 5), (0, 5), (1, 5)):
+            c.pixel(hx + dx, hy + dy, "plaid_dark", 0)  # an O mouth
+    else:
+        for ex in (-2.5, 2.5):  # button eyes
+            c.pixel(hx + ex, hy - 1, "plaid_dark", 1)
+            c.pixel(hx + ex + 1, hy - 1, "plaid_dark", 1)
+            c.pixel(hx + ex, hy, "plaid_dark", 1)
+            c.pixel(hx + ex + 1, hy, "plaid_dark", 1)
+        for i, dx in enumerate(range(-3, 4)):  # stitched smile
+            c.pixel(hx + dx, hy + 3 + (0 if abs(dx) < 2 else -1), "plaid_dark", 0 if i % 2 else 1)
     c.pixel(hx, hy + 1, "pumpkin", 2)  # a little orange nose
     # a floppy straw hat
-    c.capsule(hx - 10, hy - 6, hx + 10, hy - 5, 1.6, 1.4, "hat")
-    c.ellipse(hx, hy - 9, 5.8, 4.2, "hat")
-    c.capsule(hx - 5.5, hy - 7, hx + 5.5, hy - 7, 0.8, 0.8, "plaid_red")  # hat band
+    hy_hat = hy - hat_up
+    c.capsule(hx - 10, hy_hat - 6, hx + 10, hy_hat - 5, 1.6, 1.4, "hat")
+    c.ellipse(hx, hy_hat - 9, 5.8, 4.2, "hat")
+    c.capsule(hx - 5.5, hy_hat - 7, hx + 5.5, hy_hat - 7, 0.8, 0.8, "plaid_red")  # hat band
     for dx in (-8, -5, 6, 9):  # straw hair under the brim
         c.capsule(hx + dx * 0.7, hy - 4, hx + dx, hy - 1, 0.5, 0.4, "straw")
     return c.to_image()
@@ -797,38 +809,93 @@ def _barrel(c, left, bottom):
             c.mat[top][x], c.fixed[top][x] = "oak_wood", 3
 
 
-def barrels():
-    """72 x 70: a pile of oak barrels, three on the bottom, two, then one on top."""
-    c = Canvas(72, 70)
-    bottom = 68
-    for row, count in enumerate((3, 2, 1)):
-        y = bottom - row * BARREL_H
-        width = count * BARREL_W + (count - 1) * 2
-        start = 36 - width // 2
-        for i in range(count):
-            _barrel(c, start + i * (BARREL_W + 2), y)
+BARREL_R = 11  # barrels lie on their sides; this is the radius of the round end you see
+
+
+def barrel_end(spin=0.0):
+    """24 x 24: one barrel seen end-on: a head of straight oak boards set just inside a shiny iron rim,
+    with a little bung. spin turns the boards (for rolling)."""
+    c = Canvas(24, 24)
+    cx = cy = 12.0
+    ca, sa = math.cos(spin), math.sin(spin)
+    for y in range(24):
+        for x in range(24):
+            dx, dy = x + 0.5 - cx, y + 0.5 - cy
+            d = math.hypot(dx, dy)
+            if d > BARREL_R:
+                continue
+            light = -(dx + dy) / (BARREL_R * 1.4)               # lit from the top left
+            if d > BARREL_R - 1.8:                               # the iron rim
+                c.mat[y][x], c.fixed[y][x] = "hoop", 3 if light > 0.45 else 2 if light > 0.0 else 1 if light > -0.5 else 0
+                continue
+            if d > BARREL_R - 2.8:                               # the head sits a little inside the rim
+                c.mat[y][x], c.fixed[y][x] = "oak_wood", 0
+                continue
+            across = dx * ca + dy * sa                           # position across the boards
+            seam = int(across + 20) % 5 == 0                     # straight seams between the boards
+            level = 3 if light > 0.45 else 2 if light > -0.15 else 1
+            if seam:
+                level = max(0, level - 2)
+            c.mat[y][x], c.fixed[y][x] = "oak_wood", level
+    for bx, by in ((12, 12), (13, 12), (12, 13), (13, 13)):     # the bung
+        c.mat[by][bx], c.fixed[by][bx] = "hoop", 1
+    c.mat[12][12], c.fixed[12][12] = "hoop", 3
     return c.to_image()
+
+
+def barrel_spots():
+    """Centres of the six barrels in the pile (3, 2, 1), nestled like a honeycomb, in a 70 x 64 frame."""
+    spots, ground, step = [], 62, BARREL_R * math.sqrt(3)
+    for row, count in enumerate((3, 2, 1)):
+        y = ground - BARREL_R - row * step
+        for i in range(count):
+            spots.append((35 + (i - (count - 1) / 2) * 2 * BARREL_R, y))
+    return spots
+
+
+def barrels():
+    """70 x 64: oak barrels on their sides, stacked three, two, one."""
+    from PIL import Image
+    img = Image.new("RGBA", (70, 64), (0, 0, 0, 0))
+    one = barrel_end()
+    for x, y in barrel_spots():
+        img.alpha_composite(one, (int(round(x - 12)), int(round(y - 12))))
+    return img
 
 
 BALE_W, BALE_H = 30, 15
 
 
 def _bale(c, rng, left, bottom):
-    """A square hay bale: straw texture in short strokes, two twine bands, a little stray straw."""
+    """A square hay bale with some depth: a lighter top face, the front face in straw strokes, a shaded
+    right side, rounded corners, two twine bands wrapping over the top, and a few stray straws."""
     top = bottom - BALE_H
+    lid = 3                                     # rows of the top face
     for y in range(top, bottom + 1):
         for x in range(left, left + BALE_W):
-            level = 2 if y == top else 0 if y >= bottom - 1 or x == left + BALE_W - 1 else 1
-            if level == 1 and rng.random() < 0.35:
-                level = rng.choice((0, 2, 2, 3))      # straw strands
-            mat = "twine" if (x - left) in (7, 22) else "hay"
-            if 0 <= x < c.w and 0 <= y < c.h:
-                c.mat[y][x], c.fixed[y][x] = mat, level
-    for _ in range(6):                                # stray straw sticking out
-        x = rng.randrange(left, left + BALE_W)
-        y = top - 1
-        if 0 <= x < c.w and 0 <= y < c.h:
-            c.mat[y][x], c.fixed[y][x] = "hay", rng.choice((2, 3))
+            corner = (x in (left, left + BALE_W - 1)) and (y in (top, bottom))
+            if corner or not (0 <= x < c.w and 0 <= y < c.h):
+                continue
+            if y < top + lid:
+                level = 3 if (x + y) % 3 else 2          # the sunlit top
+            elif x >= left + BALE_W - 3:
+                level = 0 if (x + y) % 2 else 1           # the side in shade
+            else:
+                stroke = (x * 2 + y * 3 + (y // 2) * 5) % 7    # straw laid in short diagonal strokes
+                level = 2 if stroke == 0 else 0 if stroke == 4 else 1
+                if y >= bottom - 1:
+                    level = 0
+            mat = "hay"
+            if (x - left) in (7, 8, 21, 22):
+                mat = "twine"
+                level = 2 if y < top + lid else 1 if (x - left) in (7, 21) else 0
+            c.mat[y][x], c.fixed[y][x] = mat, level
+    for _ in range(9):                            # stray straws poking out of the top and sides
+        x = rng.randrange(left + 1, left + BALE_W - 1)
+        for k in range(rng.randint(1, 3)):
+            y = top - 1 - k
+            if 0 <= x + k < c.w and 0 <= y < c.h:
+                c.mat[y][x + k], c.fixed[y][x + k] = "hay", 3
 
 
 def haystack():
@@ -839,6 +906,169 @@ def haystack():
     _bale(c, rng, 34, 34)
     _bale(c, rng, 18, 34 - BALE_H - 1)
     return c.to_image()
+
+
+COMMON.update({
+    "pumpkin_rot": ("#5a3010", "#7e4a1c", "#9c642a", "#b47e40", "#2e1606"),
+    "vine_dry": ("#4a3e1c", "#6a5a28", "#8a7838", "#a89452", "#26200c"),
+})
+
+
+def pumpkin_wilt(grow, shape, w):
+    """A ripe pumpkin wilting when clicked: w 0..1 slumps it lower and wider and turns it brown."""
+    c = Canvas(44, 36)
+    ground = 30
+    reach = 17
+    vine = "vine" if w < 0.4 else "vine_dry"
+    c.capsule(20 - reach, ground, 20 + reach * 0.8, ground - 0.5, 0.9, 0.8, vine)
+    for dx in (-reach + 2, reach * 0.7, -reach * 0.5):
+        lx, ly = 20 + dx, ground - 3.2 + w * 2.4  # leaves droop to the ground
+        c.ellipse(lx, ly, 3.4, 2.6 - w * 1.2, vine, angle=(-20 if dx < 0 else 20) * (1 - w))
+    size = 1.15 * grow
+    mat = "pumpkin" if w < 0.5 else "pumpkin_rot"
+    top = _pumpkin_body(c, 20, ground + 0.5, size, mat, shape, squash=(1 + 0.25 * w, 1 - 0.45 * w))
+    c.capsule(20, top + 2, 21 + size + w * 3, top - 1.5 * size + w * 2.5, 1.2 * size, 0.9 * size, "stem")  # stem flops
+    return c.to_image()
+
+
+def corncob(roll=0):
+    """14 x 14 ear of corn with its husk, rolling when batted (roll 0..3)."""
+    c = Canvas(14, 14)
+    a = math.radians(roll * 45)
+    def at(dx, dy):
+        return 7 + dx * math.cos(a) - dy * math.sin(a), 7 + dx * math.sin(a) + dy * math.cos(a)
+    c.ellipse(*at(0, 0), 2.2, 5.0, "cob", angle=math.degrees(a))
+    for side in (-1, 1):
+        c.capsule(*at(side * 1.2, 4.2), *at(side * 3.0, 6.0), 1.0, 0.5, "husk")
+    for i in range(-3, 4):  # rows of kernels
+        x, y = at(0, i * 1.2)
+        c.pixel(x, y, "cob", 3 if i % 2 else 2)
+    return c.to_image()
+
+
+def hoe_tilt(angle):
+    """The hoe rocking about its base by angle (degrees)."""
+    c = Canvas(24, 60)
+    a = math.radians(angle)
+    def at(x, y):  # turn around the base (14, 58)
+        return 14 + (x - 14) * math.cos(a) - (y - 58) * math.sin(a), 58 + (x - 14) * math.sin(a) + (y - 58) * math.cos(a)
+    c.capsule(*at(14, 58), *at(9, 6), 1.1, 1.0, "handle")
+    c.capsule(*at(9, 6), *at(9, 4), 1.4, 1.4, "handle")
+    c.polygon([at(8, 4), at(16, 3), at(17, 9), at(13, 8)], "iron", lum=0.55)
+    c.ellipse(14, 58.5, 3.5, 1.2, "dirt")
+    return c.to_image()
+
+
+def _single_barrel():
+    return barrel_end()
+
+
+def barrels_falling():
+    """The pile toppling: the barrels tumble down and roll apart, turning as they go. 110 x 64."""
+    from PIL import Image
+    starts = [(x + 20, y) for x, y in barrel_spots()]
+    ends = [(10, 51, 1.0), (40, 51, -0.6), (70, 51, 1.2), (24, 51, -1.0), (96, 51, 1.5), (56, 51, 0.8)]
+    frames = []
+    for f in range(8):
+        k = f / 7
+        frame = Image.new("RGBA", (110, 64), (0, 0, 0, 0))
+        for (sx, sy), (ex, ey, roll) in zip(starts, ends):
+            x = sx + (ex - sx) * k
+            y = sy + (ey - sy) * min(1.0, k * 1.6) - math.sin(math.pi * min(1.0, k * 1.6)) * 4
+            frame.alpha_composite(barrel_end(spin=roll * k * 6), (int(round(x - 12)), int(round(y - 12))))
+        frames.append(frame)
+    return frames
+
+
+HAY_LAYOUTS = {
+    # canvas size, anchor, bales (left, bottom)
+    "haystack": ((66, 36), (33, 34), [(2, 34), (34, 34), (18, 18)]),
+    "haystack_row": ((98, 18), (49, 16), [(2, 16), (34, 16), (66, 16)]),
+    "haystack_steps": ((98, 50), (49, 48), [(2, 48), (34, 48), (66, 48), (34, 32), (66, 32), (66, 16)]),
+}
+
+
+def hay(layout):
+    (cw, ch), _, bales = HAY_LAYOUTS[layout]
+    c = Canvas(cw, ch)
+    rng = random.Random(11)
+    for left, bottom in bales:
+        _bale(c, rng, left, bottom)
+    return c.to_image()
+
+
+def straw_bit(spin):
+    c = Canvas(6, 6)
+    a = math.radians(spin * 45)
+    c.capsule(3 - 2 * math.cos(a), 3 - 2 * math.sin(a), 3 + 2 * math.cos(a), 3 + 2 * math.sin(a), 0.5, 0.4, "hay")
+    return c.to_image(outline=False)
+
+
+COMMON.update({
+    "frog": ("#2e5a1e", "#44802a", "#62a238", "#8ac25a", "#162e0c"),
+    "frog_belly": ("#a8b06a", "#cad08a", "#e2e6aa", "#f4f6d0", "#5a5e2e"),
+})
+
+
+def frog(pose="sit", t=0.0):
+    """18 x 16 frog facing right. sit puffs its throat; hop stretches out its legs."""
+    c = Canvas(18, 16)
+    if pose == "hop":
+        s = math.sin(t * math.pi)
+        y = 9 - s * 4
+        c.capsule(5, y + 2, 1, y + 4 + s * 2, 1.0, 0.8, "frog", -0.25)    # back legs kicking out
+        c.ellipse(9, y, 5.5, 3.2, "frog", angle=-12 * s)
+        c.capsule(12, y + 2, 15, y + 5, 0.8, 0.7, "frog")                  # front legs reaching
+        hx, hy = 13, y - 2
+    else:
+        puff = math.sin(t * math.pi) * 1.4
+        c.capsule(4, 13, 9, 14, 1.4, 1.0, "frog", -0.25)                   # folded back leg
+        c.ellipse(9, 11, 5.5, 3.6, "frog")
+        c.ellipse(12, 13 - puff * 0.3, 2.0 + puff, 1.4 + puff * 0.8, "frog_belly")  # the throat puffing
+        c.capsule(12, 12, 13, 14.5, 0.8, 0.7, "frog")
+        hx, hy = 13, 8
+    c.ellipse(hx, hy, 3.4, 2.4, "frog")
+    for ex in (-1.6, 1.4):  # bulging eyes on top
+        c.ellipse(hx + ex, hy - 2.2, 1.3, 1.2, "frog", bias=0.2)
+        c.pixel(hx + ex + 0.4, hy - 2.4, "eye")
+    c.capsule(hx + 1, hy + 1, hx + 3, hy + 0.6, 0.3, 0.3, "frog", -0.6)   # a wide smile
+    return c.to_image()
+
+
+PIXEL_LETTERS = {
+    "H": ["101", "101", "111", "101", "101"], "O": ["111", "101", "101", "101", "111"],
+    "N": ["1001", "1101", "1011", "1001", "1001"], "K": ["101", "110", "100", "110", "101"],
+    "!": ["1", "1", "1", "0", "1"], "R": ["110", "101", "110", "101", "101"], "I": ["111", "010", "010", "010", "111"],
+    "B": ["110", "101", "110", "101", "110"], "T": ["111", "010", "010", "010", "010"],
+}
+
+
+def word_bubble(text):
+    """A little speech bubble with text in a hand-made pixel font."""
+    from PIL import Image
+    width = sum(len(PIXEL_LETTERS[ch][0]) + 1 for ch in text) + 5
+    w, h = width, 14
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    px = img.load()
+    edge, fill, ink = (42, 42, 42, 255), (255, 255, 255, 255), (30, 30, 30, 255)
+    for y in range(1, h - 4):
+        for x in range(1, w - 1):
+            px[x, y] = fill
+    for x in range(1, w - 1):
+        px[x, 0], px[x, h - 4] = edge, edge
+    for y in range(1, h - 4):
+        px[0, y], px[w - 1, y] = edge, edge
+    for (x, y) in ((4, h - 3), (5, h - 3), (4, h - 2)):
+        px[x, y] = edge
+    px[5, h - 4] = fill
+    x0 = 3
+    for ch in text:
+        for row, bits in enumerate(PIXEL_LETTERS[ch]):
+            for col, bit in enumerate(bits):
+                if bit == "1":
+                    px[x0 + col, 2 + row] = ink
+        x0 += len(PIXEL_LETTERS[ch][0]) + 1
+    return img
 
 
 def tray_icon():
@@ -875,8 +1105,19 @@ SPRITES = {
                                        (20, 30))
        for k, g in PUMPKIN_SIZES.items() for shape in PUMPKIN_SHAPES},
     **{f"corn_{s}": ([corn(s, sw) for sw in (0, 1, 2, 1, 0, -1, -2, -1)], 300, True, (60, 98)) for s in range(5)},
-    "barrels": ([barrels()], 1000, False, (36, 68)),
-    "haystack": ([haystack()], 1000, False, (33, 34)),
+    "barrels": ([barrels()], 1000, False, (35, 62)),
+    **{name: ([hay(name)], 1000, False, layout[1]) for name, layout in HAY_LAYOUTS.items()},
+    "straw_bit": ([straw_bit(s) for s in range(4)], 90, True, (3, 3)),
+    "barrels_fall": (barrels_falling(), 90, False, (55, 62)),
+    "hoe_wobble": ([hoe_tilt(a) for a in (0, 7, -6, 4, -3, 1, 0)], 80, False, (14, 58)),
+    "corncob": ([corncob(r) for r in range(4)], 90, True, (7, 10)),
+    "frog_sit": ([frog("sit", f) for f in (0.0, 0.5, 1.0, 0.5)], 160, True, (9, 15)),
+    "frog_hop": ([frog("hop", f) for f in (0.0, 0.35, 0.7, 1.0)], 90, True, (9, 15)),
+    "ribbit_bubble": ([word_bubble("RIBBIT")], 1000, False, (4, 13)),
+    "scarecrow_surprised": ([scarecrow(0, True, u) for u in (2, 5, 6, 5, 3, 1, 0)], 110, False, (24, 85)),
+    **{f"pumpkin_wilt_{k}_{shape}": ([pumpkin_wilt(g, shape, w) for w in (0.0, 0.3, 0.55, 0.8, 1.0)], 160, False,
+                                     (20, 30))
+       for k, g in PUMPKIN_SIZES.items() for shape in PUMPKIN_SHAPES},
     "hoe": ([hoe()], 1000, False, (14, 58)),
     "den": ([den()], 1000, False, (56, 54)),
     "den_orange": ([den(("orange",))], 1000, False, (56, 54)),

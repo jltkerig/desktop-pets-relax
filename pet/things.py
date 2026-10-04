@@ -18,6 +18,9 @@ class Thing:
     def update(self, dt):
         self.anim.update(dt)
 
+    def click(self):
+        """Something to do when clicked (not dragged). Most things override this."""
+
     def rect(self):
         """(left, top, width, height) on screen."""
         m = sprites.meta(self.anim.name)

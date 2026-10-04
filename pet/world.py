@@ -4,7 +4,7 @@ import random
 
 from pet import seasons
 from pet.fox import TROT, WALK, Fox, Step
-from pet.items import Acorn, Climbable, Corn, Den, Leaf, Prop, Pumpkin, Treasure, Tree
+from pet.items import Acorn, Climbable, Corn, CornCob, Den, Leaf, Prop, Pumpkin, Treasure, Tree
 from pet.visitors import Goose, Jay, Squirrel, Woolly, migrating_v
 
 LEAF_COLOURS = ("red", "orange", "yellow", "brown")
@@ -91,7 +91,7 @@ class World:
                 x = self.settings["items"][name].get("x")
                 if not (isinstance(x, (int, float)) and 0 < x < self.width):
                     x = self.width * share
-                self.add(Climbable(self, x, name))
+                self.add(Climbable(self, x, name, self.settings["items"][name].get("layout")))
         props = {"scarecrow", "hoe"}
         for thing in self.of("prop"):
             if thing.variant not in wanted_items:
@@ -288,8 +288,13 @@ class World:
             if abs(fox.x - goose.x) < 500 * self.scale / 2:
                 fox.hear_honk(goose.x)
 
+    def harvest(self, corn):
+        """Ripe corn clicked: an ear of corn drops out for the foxes, and the field starts again."""
+        self.add(CornCob(self, corn.x + self.rng.uniform(-50, 50) * self.scale, self.ground - 60 * self.scale))
+        self.plant_corn(replant=True)
+
     def visitor_to_watch(self, fox):
-        for kind in ("squirrel", "jay", "woolly", "goose"):
+        for kind in ("squirrel", "jay", "woolly", "goose", "frog"):
             for v in self.of(kind):
                 if v not in fox.watched and abs(v.x - fox.x) < 600 * self.scale / 2 and 0 < v.x < self.width:
                     return v
@@ -389,7 +394,7 @@ class World:
             fox.carrying = None
 
     def climbable_near(self, fox, reach):
-        near = [t for t in self.of("climb") if abs(t.x - fox.x) < reach * self.scale / 2]
+        near = [t for t in self.of("climb") if t.available and abs(t.x - fox.x) < reach * self.scale / 2]
         return self.rng.choice(near) if near else None
 
     def climb(self, fox, thing):

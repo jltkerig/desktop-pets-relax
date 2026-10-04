@@ -197,7 +197,7 @@ class Desktop(QWidget):
                 self.dragging = thing
                 if thing.kind == "fox":
                     thing.pick_up()
-        if self.dragging is not None and self.dragging.kind in ("tree", "pumpkin"):
+        if self.dragging is not None and self.dragging.kind in ("tree", "pumpkin", "prop"):
             thing, start, start_x = self.press
             thing.x = max(40.0, min(self.world.width - 40.0, start_x + p.x() - start.x()))
         elif self.dragging is None and not event.buttons():
@@ -213,7 +213,7 @@ class Desktop(QWidget):
         if self.dragging is not None:
             if self.dragging.kind == "fox":
                 self.dragging.drop()
-            elif self.dragging.kind == "tree":
+            elif self.dragging.kind in ("tree", "prop"):
                 self.settings["items"][self.dragging.variant]["x"] = round(self.dragging.x)
                 save.store(self.settings)
             elif self.dragging.kind == "pumpkin" and self.dragging.record is not None:

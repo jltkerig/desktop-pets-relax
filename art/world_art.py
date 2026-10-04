@@ -17,32 +17,76 @@ COMMON.update({
 
 # -- the oak -----------------------------------------------------------------------------------------
 
+OAK_W, OAK_H = 220, 232
+OAK_GROUND = 229          # the trunk's base row
+OAK_X = 110               # the trunk's centre column
+OAK_CROWN = (110, 86)     # centre of the crown
+
+
+def _px(c, x, y, mat, level):
+    if 0 <= x < c.w and 0 <= y < c.h:
+        c.mat[y][x], c.fixed[y][x] = mat, level
+
+
+def _branch(c, x1, y1, x2, y2, width):
+    """A straight, chunky pixel branch: light along its top edge, dark along the bottom."""
+    steps = int(max(abs(x2 - x1), abs(y2 - y1))) + 1
+    for i in range(steps + 1):
+        x = round(x1 + (x2 - x1) * i / steps)
+        y = round(y1 + (y2 - y1) * i / steps)
+        w = max(2, round(width - (width - 2) * i / steps))  # thinner toward the end
+        for k in range(w):
+            level = 2 if k == 0 else 0 if k == w - 1 else 1
+            _px(c, x, y + k, "bark", level)
+
+
 def oak(sway=0.0, seed=7):
-    """160 x 200. sway shifts the crown a pixel or two (it breathes in the wind)."""
-    c = Canvas(160, 200)
+    """220 x 232. Flat pixel-art trunk and branches; a big leafy crown. sway moves the crown a little."""
+    c = Canvas(OAK_W, OAK_H)
     rng = random.Random(seed)
-    # roots and trunk
-    c.capsule(80, 196, 80, 120, 11, 7, "bark")
-    for dx in (-14, 13):
-        c.capsule(80, 192, 80 + dx, 198, 5, 2.5, "bark")
-    for x1, y1, x2, y2, r in ((79, 140, 50, 100, 4.0), (81, 132, 112, 96, 4.0), (80, 120, 74, 78, 4.5),
-                              (60, 112, 40, 92, 2.5), (104, 104, 124, 88, 2.5)):
-        c.capsule(x1, y1, x2 + sway, y2, r, r * 0.6, "bark")
-    # bark texture: long vertical furrows, broken in a few places
-    for x, y1, y2 in ((75, 126, 160), (75, 166, 190), (79, 122, 148), (79, 154, 186), (83, 130, 172), (86, 140, 188),
-                      (72, 150, 184)):
+    # the trunk: straight stepped sides, tapering upward, with a flared base
+    for y in range(120, OAK_GROUND + 1):
+        rise = OAK_GROUND - y
+        half = 12 - min(rise, 70) * 0.06            # 12 wide at the base, narrowing to about 8
+        if rise < 10:
+            half += (10 - rise) * 0.7                # the flare into the roots
+        half = int(half)
+        left, right = OAK_X - half, OAK_X + half
+        for x in range(left, right + 1):
+            band = (x - left) / max(1, right - left)
+            level = 3 if band < 0.12 else 2 if band < 0.35 else 1 if band < 0.72 else 0
+            _px(c, x, y, "bark", level)
+    # roots: stepped lumps spreading out on the ground
+    for side in (-1, 1):
+        for i in range(9):
+            x = OAK_X + side * (13 + i)
+            top = OAK_GROUND - max(0, 5 - i // 2)
+            for y in range(top, OAK_GROUND + 1):
+                _px(c, x, y, "bark", 2 if y == top else 0 if side > 0 else 1)
+    # bark: broken vertical furrows and a few lighter flecks
+    for x, y1, y2 in ((OAK_X - 5, 132, 168), (OAK_X - 5, 176, 214), (OAK_X - 1, 126, 160), (OAK_X - 1, 168, 222),
+                      (OAK_X + 3, 140, 196), (OAK_X + 6, 150, 220), (OAK_X - 8, 186, 224)):
         for y in range(y1, y2):
-            if 0 <= x < 160 and c.mat[y][x] == "bark":
+            if c.mat[y][x] == "bark":
                 c.fixed[y][x] = 0
+    for _ in range(26):
+        x, y = rng.randrange(OAK_X - 9, OAK_X + 4), rng.randrange(130, 224)
+        if c.mat[y][x] == "bark" and c.fixed[y][x] != 0:
+            c.fixed[y][x] = 3 if c.fixed[y][x] >= 2 else 2
+    # branches reaching up into the crown
+    for x1, y1, x2, y2, w in ((OAK_X - 3, 152, OAK_X - 44, 104, 5), (OAK_X + 3, 146, OAK_X + 46, 100, 5),
+                              (OAK_X, 136, OAK_X - 6, 86, 5), (OAK_X - 30, 120, OAK_X - 60, 100, 3),
+                              (OAK_X + 30, 116, OAK_X + 62, 96, 3)):
+        _branch(c, x1, y1, x2 + sway, y2, w)
     # the crown: one leafy mass with a bumpy oak outline, lit as a single rounded shape
-    cx0, cy0, rx0, ry0 = 80 + sway, 70, 62, 44
-    rx0, ry0 = 54, 38  # the core is a little smaller; lobes of different sizes make the outline
+    cx0, cy0 = OAK_CROWN[0] + sway, OAK_CROWN[1]
+    rx0, ry0 = 74, 50  # the core; lobes of different sizes make the outline
     lumps = [(cx0, cy0, rx0, ry0)]
     for i in range(20):  # big and small lobes, unevenly spaced, so the silhouette is irregular
         a = i / 20 * 2 * math.pi + rng.uniform(-0.2, 0.2)
         reach = rng.uniform(0.78, 1.08)
         lumps.append((cx0 + math.cos(a) * rx0 * reach, cy0 + math.sin(a) * ry0 * reach - (5 if math.sin(a) < 0 else 0),
-                      rng.uniform(8, 21), rng.uniform(7, 16)))
+                      rng.uniform(11, 27), rng.uniform(9, 20)))
     lobes = list(lumps)
     def in_lobes(x, y):
         return any(((x - lx) / lrx) ** 2 + ((y - ly) / lry) ** 2 <= 1 for lx, ly, lrx, lry in lobes)
@@ -51,17 +95,18 @@ def oak(sway=0.0, seed=7):
         if math.sin(a) > 0.75:
             continue  # not hanging below the crown's middle, where the trunk is
         d = 0.0
-        while in_lobes(cx0 + math.cos(a) * d * 1.4, cy0 + math.sin(a) * d) and d < 90:
+        while in_lobes(cx0 + math.cos(a) * d * 1.4, cy0 + math.sin(a) * d) and d < 120:
             d += 1  # walk out from the centre to the edge
         lumps.append((cx0 + math.cos(a) * d * 1.4, cy0 + math.sin(a) * d, rng.uniform(3, 6), rng.uniform(2.5, 4.5)))
     notches = []  # bites out of the edge give it corners
     for _ in range(9):
         a = rng.uniform(0, 2 * math.pi)
         d = 0.0
-        while in_lobes(cx0 + math.cos(a) * d * 1.4, cy0 + math.sin(a) * d) and d < 90:
+        while in_lobes(cx0 + math.cos(a) * d * 1.4, cy0 + math.sin(a) * d) and d < 120:
             d += 1
         notches.append((cx0 + math.cos(a) * (d * 1.4 + 2), cy0 + math.sin(a) * (d + 1.5), rng.uniform(4, 7), rng.uniform(3, 5)))
-    holes = [(cx0 - 22 + rng.uniform(-4, 4), cy0 + 14, 3.2, 2.4), (cx0 + 26 + rng.uniform(-4, 4), cy0 - 8, 2.6, 2.0)]
+    holes = [(cx0 - 30 + rng.uniform(-4, 4), cy0 + 18, 3.6, 2.6), (cx0 + 36 + rng.uniform(-4, 4), cy0 - 10, 3.0, 2.2),
+             (cx0 + 6, cy0 + 30, 2.6, 2.0)]
     def inside(x, y, shapes):
         return any(((x - lx) / lrx) ** 2 + ((y - ly) / lry) ** 2 <= 1 for lx, ly, lrx, lry in shapes)
     def in_crown(x, y):
@@ -87,8 +132,8 @@ def oak(sway=0.0, seed=7):
             else:
                 cell[key] = ("leaf_brown", rng.uniform(-0.15, 0.05))
         return cell[key]
-    for y in range(0, 130):
-        for x in range(0, 160):
+    for y in range(0, 160):
+        for x in range(0, OAK_W):
             if not in_crown(x + 0.5, y + 0.5):
                 continue
             nx, ny = (x + 0.5 - cx0) / (rx0 + 16), (y + 0.5 - cy0) / (ry0 + 14)
@@ -101,16 +146,16 @@ def oak(sway=0.0, seed=7):
     seen, stack = set(), [(int(cx0), int(cy0))]
     while stack:
         x, y = stack.pop()
-        if (x, y) in seen or not (0 <= x < 160 and 0 <= y < 130) or not (c.mat[y][x] or "").startswith("leaf"):
+        if (x, y) in seen or not (0 <= x < OAK_W and 0 <= y < 160) or not (c.mat[y][x] or "").startswith("leaf"):
             continue
         seen.add((x, y))
         stack.extend(((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)))
-    for y in range(130):
-        for x in range(160):
+    for y in range(160):
+        for x in range(OAK_W):
             if (c.mat[y][x] or "").startswith("leaf") and (x, y) not in seen:
                 c.mat[y][x] = None
     # a jagged, leafy edge: nibble some edge pixels away and push others out a pixel
-    edge = [(x, y) for y in range(1, 129) for x in range(1, 159)
+    edge = [(x, y) for y in range(1, 159) for x in range(1, OAK_W - 1)
             if c.mat[y][x] and c.mat[y][x].startswith("leaf")
             and any(c.mat[y + dy][x + dx] is None for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))]
     for x, y in edge:
@@ -273,9 +318,13 @@ def _pumpkin_body(c, cx, base, size, mat):
     return cy - h
 
 
-def pumpkin(stage, sway=0.0):
-    """40 x 32. Stages: 0 sprout, 1 vine with a flower, 2 small green, 3 yellow-orange, 4 big ripe."""
-    c = Canvas(40, 32)
+PUMPKIN_SIZES = {"s": 0.75, "m": 1.0, "l": 1.3}
+
+
+def pumpkin(stage, sway=0.0, grow=1.0):
+    """44 x 36. Stages: 0 sprout, 1 vine with a flower, 2 small green, 3 yellow-orange, 4 ripe.
+    grow scales the pumpkin itself (small, medium or large pumpkins)."""
+    c = Canvas(44, 36)
     ground = 30
     if stage == 0:  # a sprout: a little stem with two seed leaves
         c.ellipse(20, ground + 0.5, 3.5, 1.2, "dirt")
@@ -306,6 +355,7 @@ def pumpkin(stage, sway=0.0):
         c.pixel(fx, fy, "stem", 1)
         return c.to_image()
     size, mat = {2: (0.55, "pumpkin_green"), 3: (0.8, "pumpkin_young"), 4: (1.15, "pumpkin")}[stage]
+    size *= grow
     top = _pumpkin_body(c, 20, ground + 0.5, size, mat)
     # the stem, and a curly tendril on the ripe one
     c.capsule(20, top + 2, 21 + size, top - 1.5 * size, 1.2 * size, 0.9 * size, "stem")
@@ -418,6 +468,69 @@ def honk_bubble():
     return img
 
 
+# -- the scarecrow -------------------------------------------------------------------------------------
+
+COMMON.update({
+    "post": ("#4a3420", "#6a4a2e", "#8a643e", "#a67e54", "#26180c"),
+    "sack": ("#8a7350", "#b09a70", "#cbb88e", "#e2d4b0", "#4a3c26"),
+    "straw": ("#9a7a1e", "#c8a232", "#e2c050", "#f2dc86", "#55400c"),
+    "plaid_red": ("#6e1a16", "#a02822", "#c2402e", "#da6650", "#3a0a08"),
+    "plaid_dark": ("#2a1414", "#3e2020", "#542e2a", "#6c403a", "#140808"),
+    "denim": ("#2c3a5a", "#3e5280", "#566ea0", "#7c92bc", "#141c30"),
+    "hat": ("#6a4e1e", "#8e6c2c", "#ae8a3e", "#c8a65a", "#36260c"),
+    "patch": ("#4a6a2a", "#628a38", "#7ea64c", "#9cc06a", "#24360e"),
+})
+
+
+def scarecrow(sway=0.0):
+    """48 x 88: a friendly scarecrow on a post, swaying a little. Faces you."""
+    c = Canvas(48, 88)
+    s = sway * 0.6
+    # the post and cross-bar
+    c.capsule(24, 86, 24, 26, 1.6, 1.4, "post")
+    c.capsule(8 + s * 0.3, 36, 40 + s * 0.3, 36, 1.3, 1.3, "post")
+    # trousers, then the shirt over the cross-bar
+    c.capsule(20 + s * 0.2, 56, 19 + s * 0.2, 70, 3.0, 2.6, "denim")
+    c.capsule(28 + s * 0.2, 56, 29 + s * 0.2, 70, 3.0, 2.6, "denim")
+    c.ellipse(28.5 + s * 0.2, 62, 1.6, 1.6, "patch")  # a patched knee
+    for x in (18 + s * 0.2, 30 + s * 0.2):  # straw poking out of the trouser legs
+        for dx in (-1.5, 0, 1.5):
+            c.capsule(x, 71, x + dx, 75, 0.5, 0.4, "straw")
+    c.ellipse(24 + s * 0.4, 47, 8.5, 10.5, "plaid_red")
+    for sleeve in (-1, 1):
+        c.capsule(24 + s * 0.4, 39, 24 + sleeve * 13 + s * 0.3, 37, 3.2, 2.6, "plaid_red")
+        hand = 24 + sleeve * 17 + s * 0.3
+        for dy in (-1.5, 0, 1.5):  # straw hands
+            c.capsule(24 + sleeve * 15 + s * 0.3, 37, hand + sleeve * 1.5, 37 + dy, 0.6, 0.4, "straw")
+    # plaid: darker stripes across the shirt and sleeves
+    for y in range(c.h):
+        for x in range(c.w):
+            if c.mat[y][x] == "plaid_red" and (x % 5 == 0 or y % 5 == 0):
+                c.mat[y][x] = "plaid_dark"
+    # buttons down the front
+    for y in (42, 47, 52):
+        c.pixel(24 + s * 0.4, y, "straw", 3)
+    # head: a burlap sack with a stitched smile, a rope at the neck
+    hx, hy = 24 + s, 26
+    c.ellipse(hx, hy, 6.5, 7.0, "sack")
+    c.capsule(hx - 3, hy + 6.5, hx + 3, hy + 6.5, 0.8, 0.8, "straw")
+    for ex in (-2.5, 2.5):  # button eyes
+        c.pixel(hx + ex, hy - 1, "plaid_dark", 1)
+        c.pixel(hx + ex + 1, hy - 1, "plaid_dark", 1)
+        c.pixel(hx + ex, hy, "plaid_dark", 1)
+        c.pixel(hx + ex + 1, hy, "plaid_dark", 1)
+    for i, dx in enumerate(range(-3, 4)):  # stitched smile
+        c.pixel(hx + dx, hy + 3 + (0 if abs(dx) < 2 else -1), "plaid_dark", 0 if i % 2 else 1)
+    c.pixel(hx, hy + 1, "pumpkin", 2)  # a little orange nose
+    # a floppy straw hat
+    c.capsule(hx - 10, hy - 6, hx + 10, hy - 5, 1.6, 1.4, "hat")
+    c.ellipse(hx, hy - 9, 5.8, 4.2, "hat")
+    c.capsule(hx - 5.5, hy - 7, hx + 5.5, hy - 7, 0.8, 0.8, "plaid_red")  # hat band
+    for dx in (-8, -5, 6, 9):  # straw hair under the brim
+        c.capsule(hx + dx * 0.7, hy - 4, hx + dx, hy - 1, 0.5, 0.4, "straw")
+    return c.to_image()
+
+
 def tray_icon():
     """32 x 32 fox face for the tray."""
     import fox_art
@@ -429,7 +542,7 @@ def tray_icon():
 LEAF_COLOURS = ("leaf_red", "leaf_orange", "leaf_yellow", "leaf_brown")
 
 SPRITES = {
-    "oak": ([oak(s) for s in (0, 1, 1, 0, -1, -1)], 600, True, (80, 197)),
+    "oak": ([oak(s) for s in (0, 1, 1, 0, -1, -1)], 600, True, (OAK_X, OAK_GROUND)),
     "acorn": ([acorn(r) for r in range(4)], 90, True, (6, 9)),
     "dirt_mound": ([dirt_mound(s) for s in (0.2, 0.5, 0.8, 1.0)], 200, False, (8, 7)),
     "squirrel_run": ([squirrel("run", i / 4) for i in range(4)], 70, True, (16, 29)),
@@ -446,7 +559,9 @@ SPRITES = {
     "goose_fly": ([goose("fly", i / 4) for i in range(4)], 110, True, (16, 22)),
     "goose_far": ([goose_far(i / 4) for i in range(4)], 140, True, (7, 5)),
     "honk_bubble": ([honk_bubble()], 1000, False, (4, 13)),
-    **{f"pumpkin_{s}": ([pumpkin(s, sw) for sw in (0, 1, 0, -1)], 700, True, (20, 30)) for s in range(5)},
+    **{f"pumpkin_{s}_{k}": ([pumpkin(s, sw, g) for sw in (0, 1, 0, -1)], 700, True, (20, 30))
+       for s in range(5) for k, g in PUMPKIN_SIZES.items()},
+    "scarecrow": ([scarecrow(sw) for sw in (0, 1, 2, 1, 0, -1, -2, -1)], 260, True, (24, 85)),
 }
 for colour in LEAF_COLOURS:
     SPRITES[f"leaf_{colour.split('_')[1]}"] = ([leaf(colour, s) for s in range(4)], 160, True, (4, 4))

@@ -4,7 +4,7 @@ import random
 
 from pet import seasons
 from pet.fox import TROT, WALK, Fox, Step
-from pet.items import Acorn, Leaf, Pumpkin, Treasure, Tree
+from pet.items import Acorn, Leaf, Prop, Pumpkin, Treasure, Tree
 from pet.visitors import Goose, Jay, Squirrel, Woolly, migrating_v
 
 LEAF_COLOURS = ("red", "orange", "yellow", "brown")
@@ -65,7 +65,20 @@ class World:
         else:
             for thing in self.of("pumpkin"):
                 thing.gone = True
-        for name in wanted_items - {"pumpkins"}:
+        props = {"scarecrow"}
+        for thing in self.of("prop"):
+            if thing.variant not in wanted_items:
+                thing.gone = True
+        for name in wanted_items & props:
+            if not any(t.variant == name for t in self.of("prop")):
+                x = self.settings["items"][name].get("x")
+                if not (isinstance(x, (int, float)) and 0 < x < self.width):
+                    patch = self.settings["items"].get("pumpkins", {}).get("patch") or []
+                    xs = [p["x"] for p in patch if isinstance(p, dict) and isinstance(p.get("x"), (int, float))]
+                    x = (max(xs) + 70 * self.scale) if xs else self.width * 0.32  # next to the pumpkin patch
+                    x = min(self.width - 40.0, x)
+                self.add(Prop(self, x, name))
+        for name in wanted_items - {"pumpkins"} - props:
             if not any(t.variant == name for t in self.of("tree")):
                 x = self.settings["items"][name].get("x")
                 x = x if isinstance(x, (int, float)) and 0 < x < self.width else self.width * 0.72
@@ -91,17 +104,23 @@ class World:
             thing.gone = True
         patch = [p for p in item.get("patch", []) if isinstance(p, dict)
                  and isinstance(p.get("x"), (int, float)) and isinstance(p.get("planted"), (int, float))]
+        sizes = ["s", "m", "l"]
+        for record in patch:  # pumpkins saved before sizes existed get one now
+            if record.get("size") not in sizes:
+                record["size"] = self.rng.choice(sizes)
+                self.dirty = True
         if replant or not patch:
             centre = item.get("x") if isinstance(item.get("x"), (int, float)) else self.width * 0.25
             now = self.now().timestamp()
             patch = [{"x": round(max(40, min(self.width - 40, centre + (i - 1) * 46 * self.scale))),
-                      "planted": now - self.rng.uniform(0, 90), "pace": round(self.rng.uniform(0.85, 1.2), 2)}
-                     for i in range(3)]
+                      "planted": now - self.rng.uniform(0, 90), "pace": round(self.rng.uniform(0.85, 1.2), 2),
+                      "size": size}
+                     for i, size in enumerate(self.rng.sample(sizes, 3))]  # one of each, in any order
             self.dirty = True
         item["patch"] = patch
         for record in patch:
             x = max(20.0, min(self.width - 20.0, float(record["x"])))
-            self.add(Pumpkin(self, x, record["planted"], float(record.get("pace", 1.0)), record))
+            self.add(Pumpkin(self, x, record["planted"], float(record.get("pace", 1.0)), record, record["size"]))
 
     # -- every frame -------------------------------------------------------------------------------------
 
@@ -140,7 +159,7 @@ class World:
         sleeper = next((f for f in self.of("fox") if f.asleep and self._under(tree, f.x)), None)
         if sleeper is not None and self.rng.random() < 0.6:
             head = sleeper.x + 12 * self.scale * sleeper.facing
-            x, y = head, tree.y - 110 * self.scale
+            x, y = head, tree.y - 100 * self.scale
         else:
             x, y = tree.crown_point()
         return self.add(Acorn(self, x, y))
@@ -225,9 +244,23 @@ class World:
         return min(acorns, key=lambda a: abs(a.x - fox.x)) if acorns else None
 
     def leaf_near(self, fox, reach):
-        leaves = [l for l in self.of("leaf") if l.falling and abs(l.x - fox.x) < reach * self.scale / 2
-                  and l.y > self.ground - 140 * self.scale]
+        leaves = [l for l in self.of("leaf") if l.falling and not getattr(l, "chased", False)
+                  and abs(l.x - fox.x) < reach * self.scale / 2 and l.y > self.ground - 170 * self.scale]
         return min(leaves, key=lambda l: abs(l.x - fox.x)) if leaves else None
+
+    def chase_leaf(self, fox, leaf):
+        """Run under a falling leaf, crouch, and pounce on it as it comes down."""
+        leaf.chased = True
+        side = 1 if leaf.x >= fox.x else -1
+        under = max(40.0, min(self.width - 40.0, leaf.x - side * 22 * self.scale))
+        fox.do(Step("trot", to_x=under, speed=TROT * 1.15), Step("crouch", self.rng.uniform(0.3, 0.7), face=leaf.x),
+               Step("pounce", to_x=leaf.x, leap=24, then=lambda: self.catch_leaf(fox, leaf)), Step("happy", 1.0))
+
+    def catch_leaf(self, fox, leaf):
+        """The pounce lands: a leaf close by is caught (it disappears under the paws)."""
+        if not leaf.gone and abs(leaf.x - fox.x) < 40 * self.scale:
+            leaf.gone = True
+        leaf.chased = False
 
     def cursor_to_pounce(self, fox):
         """The cursor resting near the ground, not too far away: something to pounce on."""

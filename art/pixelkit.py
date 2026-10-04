@@ -78,12 +78,15 @@ class Canvas:
         self.mat = [[None] * width for _ in range(height)]
         self.lum = [[0.0] * width for _ in range(height)]
         self.fixed = [[None] * width for _ in range(height)]  # a shade index that ignores lighting
+        self.dim = [[False] * width for _ in range(height)]    # part of a far-side leg or tail (a shade darker)
+        self._dim = False
 
     def _put(self, x, y, mat, lum=None, level=None):
         if 0 <= x < self.w and 0 <= y < self.h:
             self.mat[y][x] = mat
             self.lum[y][x] = 0.0 if lum is None else lum
             self.fixed[y][x] = level
+            self.dim[y][x] = self._dim
 
     @staticmethod
     def _shade(nx, ny, bias):
@@ -97,6 +100,7 @@ class Canvas:
 
     def ellipse(self, cx, cy, rx, ry, mat, angle=0.0, bias=0.0, clip=None):
         """A lit ellipse. clip(x, y) -> bool can keep only part of it (e.g. the lower half)."""
+        self._dim = bias <= -0.2
         reach = int(max(rx, ry)) + 2
         a = math.radians(-angle)
         ca, sa = math.cos(a), math.sin(a)
@@ -112,6 +116,7 @@ class Canvas:
 
     def capsule(self, x1, y1, x2, y2, r1, r2, mat, bias=0.0, clip=None):
         """A lit rounded stick from (x1, y1) to (x2, y2), radius r1 at the start and r2 at the end."""
+        self._dim = bias <= -0.2
         reach = int(max(r1, r2)) + 2
         dx, dy = x2 - x1, y2 - y1
         length2 = dx * dx + dy * dy or 1e-9
@@ -133,6 +138,7 @@ class Canvas:
 
     def polygon(self, points, mat, lum=0.3, bias=0.0):
         """A flat-lit polygon (ears)."""
+        self._dim = bias <= -0.2
         xs, ys = [p[0] for p in points], [p[1] for p in points]
         for y in range(int(min(ys)) - 1, int(max(ys)) + 2):
             for x in range(int(min(xs)) - 1, int(max(xs)) + 2):
@@ -142,18 +148,36 @@ class Canvas:
                     self._put(x, y, mat, lum + bias + g)
 
     def pixel(self, x, y, mat, level=1):
+        self._dim = False
         self._put(int(x), int(y), mat, level=level)
 
-    def to_image(self, outline=True):
+    def to_image(self, outline=True, flat=False):
+        """flat: shade the whole sprite as one shape (light along its top edge, shadow along its bottom),
+        instead of lighting every part on its own. Only the colour markings show inside it."""
         img = Image.new("RGBA", (self.w, self.h), (0, 0, 0, 0))
         px = img.load()
+
+        def solid(x, y):
+            return 0 <= x < self.w and 0 <= y < self.h and self.mat[y][x] is not None
+
         for y in range(self.h):
             for x in range(self.w):
                 mat = self.mat[y][x]
                 if mat is None:
                     continue
                 level = self.fixed[y][x]
-                if level is None:
+                if level is None and flat:
+                    if not solid(x, y + 1) or not solid(x + 1, y + 1) or not solid(x, y + 2):
+                        level = 0                       # the underside and back edge
+                    elif not solid(x, y - 1) and not solid(x - 1, y):
+                        level = 3                       # the top-left corner of a form catches the light
+                    elif not solid(x, y - 1) or not solid(x - 1, y - 1):
+                        level = 2                       # the top edge
+                    else:
+                        level = 1
+                    if self.dim[y][x]:
+                        level = max(0, level - 1)
+                elif level is None:
                     lum = self.lum[y][x]
                     level = 0 if lum < 0.12 else 1 if lum < 0.5 else 2 if lum < 0.8 else 3
                 px[x, y] = hex_rgb(self.ramps[mat][level]) + (255,)

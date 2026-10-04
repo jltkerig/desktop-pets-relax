@@ -20,18 +20,19 @@ class Tree(Thing):
         s, rng = self.world.scale, self.world.rng
         a = rng.uniform(0, 2 * math.pi)
         r = rng.uniform(0.2, 0.9)
-        return self.x + math.cos(a) * r * 58 * s, self.y - (127 - math.sin(a) * r * 40) * s
+        return self.x + math.cos(a) * r * 80 * s, self.y - (143 - math.sin(a) * r * 52) * s
 
     def perch_points(self):
         """Branch spots where a bird can sit (screen coordinates of its feet)."""
         s = self.world.scale
-        return [(self.x - 40 * s, self.y - 100 * s), (self.x + 32 * s, self.y - 102 * s),
-                (self.x - 6 * s, self.y - 120 * s)]
+        # spots along the top of the crown
+        return [(self.x - 45 * s, self.y - 188 * s), (self.x + 32 * s, self.y - 192 * s),
+                (self.x + 68 * s, self.y - 176 * s), (self.x - 74 * s, self.y - 168 * s)]
 
     def base_range(self):
         """Where under the tree a fox can nap (between the roots and the crown's edge)."""
         s = self.world.scale
-        return self.x - 50 * s, self.x + 50 * s
+        return self.x - 60 * s, self.x + 60 * s
 
 
 class Leaf(Thing):
@@ -147,8 +148,9 @@ class Pumpkin(Thing):
     STAGE_SECONDS = 10 * 60  # about 40 minutes from sprout to ripe
     STAGES = 5
 
-    def __init__(self, world, x, planted, pace=1.0, record=None):
-        super().__init__(world, x, world.ground, "pumpkin_0")
+    def __init__(self, world, x, planted, pace=1.0, record=None, size="m"):
+        self.size = size if size in ("s", "m", "l") else "m"
+        super().__init__(world, x, world.ground, f"pumpkin_0_{self.size}")
         self.planted = planted
         self.pace = pace
         self.record = record  # its entry in the saved patch, kept up to date when it is moved
@@ -164,7 +166,7 @@ class Pumpkin(Thing):
         return self.stage >= 3
 
     def update(self, dt):
-        name = f"pumpkin_{self.stage}"
+        name = f"pumpkin_{self.stage}_{self.size}"
         if self.anim.name != name:
             self.anim.name = name
         super().update(dt)
@@ -206,3 +208,14 @@ class Treasure(Thing):
             self.alpha -= dt / 4
             if self.alpha <= 0:
                 self.gone = True
+
+
+class Prop(Thing):
+    """Something that just stands there looking nice (the scarecrow). You can drag it."""
+    kind = "prop"
+    draggable = True
+    z = 7
+
+    def __init__(self, world, x, variant):
+        super().__init__(world, x, world.ground, variant)
+        self.variant = variant

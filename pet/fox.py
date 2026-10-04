@@ -129,12 +129,26 @@ class Fox(Thing):
             self.anim.play(self.anim_name("held"))
             self.anim.update(dt)
             return
+        self._notice_leaves(dt)
         if self.step is None:
             if not self.plan:
                 self.choose()
             self.step = self.plan.popleft()
             self._start(self.step)
         self._run(self.step, dt)
+
+    CALM = ("idle", "look", "walk", "sniff", "watch", "tilt", "scratch", "groom", "happy", "dig")
+
+    def _notice_leaves(self, dt):
+        """A leaf drifting down nearby catches its eye: off it goes after it."""
+        if self.asleep or self.carrying is not None or self.busy_with is not None:
+            return
+        if self.step is not None and self.step.anim not in self.CALM:
+            return
+        if self.rng.random() < dt * (0.3 + self.playful * 0.9):
+            leaf = self.world.leaf_near(self, 700)
+            if leaf is not None:
+                self.world.chase_leaf(self, leaf)
 
     def _moods(self, dt):
         hour = self.world.now().hour
@@ -242,10 +256,9 @@ class Fox(Thing):
                 self.plan.extend([Step("trot", to_x=stand, speed=TROT), Step("sniff", face=acorn.x),
                                   Step("bat", face=acorn.x, then=lambda: w.kick(acorn, self)), Step("happy", 1.0)])
                 return
-            leaf = w.leaf_near(self, 220)
+            leaf = w.leaf_near(self, 700)
             if leaf is not None:
-                self.plan.extend([Step("crouch", rng.uniform(0.8, 1.6), face=leaf.x),
-                                  Step("pounce", to_x=leaf.x, leap=22), Step("happy", 0.8)])
+                w.chase_leaf(self, leaf)
                 return
             cursor = w.cursor_to_pounce(self)
             if cursor is not None and rng.random() < 0.5:

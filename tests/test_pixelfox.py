@@ -186,7 +186,7 @@ class Pumpkins(unittest.TestCase):
             seen.add(first.stage)
         self.assertTrue({1, 2, 3, 4} <= seen, seen)
         self.assertTrue(first.ripe)
-        self.assertEqual(first.anim.name, "pumpkin_4")
+        self.assertEqual(first.anim.name, f"pumpkin_4_{first.size}")
 
     def test_the_patch_keeps_growing_after_a_restart(self):
         world, clock = make_world(orange=False, grey=False)
@@ -256,6 +256,37 @@ class Treasure(unittest.TestCase):
     def test_no_taskbar_icons_means_no_digging(self):
         world, _ = make_world(orange=True, grey=False)
         self.assertFalse(world.dig_for_treasure(world.of("fox")[0]))
+
+
+class Field(unittest.TestCase):
+    def test_new_pumpkins_come_in_three_sizes(self):
+        world, _ = make_world(orange=False, grey=False)
+        self.assertEqual(sorted(p.size for p in world.of("pumpkin")), ["l", "m", "s"])
+
+    def test_the_scarecrow_stands_next_to_the_pumpkin_patch(self):
+        world, _ = make_world(orange=False, grey=False)
+        scarecrow = [t for t in world.of("prop") if t.variant == "scarecrow"]
+        self.assertEqual(len(scarecrow), 1)
+        rightmost = max(p.x for p in world.of("pumpkin"))
+        self.assertTrue(0 < scarecrow[0].x - rightmost <= 80 * world.scale)
+        world.settings["season"] = "spring"
+        world.rebuild()
+        self.assertFalse(world.of("prop"))
+
+    def test_a_fox_chases_and_catches_a_falling_leaf(self):
+        from pet.items import Leaf
+        world, clock = make_world(orange=True, grey=False)
+        fox = world.of("fox")[0]
+        fox.do(Step("idle", 999))
+        leaf = world.add(Leaf(world, fox.x + 150, world.ground - 150, "red"))
+        leaf.sway = 0  # straight down, to keep the test simple
+        world.chase_leaf(fox, leaf)
+        pounced = False
+        for _ in range(8 * 30):
+            run(world, clock, 1 / 30)
+            pounced = pounced or (fox.step is not None and fox.step.anim == "pounce")
+        self.assertTrue(pounced)
+        self.assertTrue(leaf.gone)  # caught under its paws
 
 
 if __name__ == "__main__":

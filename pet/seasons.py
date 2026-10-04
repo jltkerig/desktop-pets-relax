@@ -9,6 +9,7 @@ _BY_MONTH = {12: "winter", 1: "winter", 2: "winter", 3: "spring", 4: "spring", 5
 ITEMS = {
     "oak": {"label": "Oak tree", "seasons": ("autumn",)},
     "pumpkins": {"label": "Pumpkin patch", "seasons": ("autumn",)},
+    "scarecrow": {"label": "Scarecrow", "seasons": ("autumn",)},
 }
 
 # Visitors that drop by on their own, per season. Winter, spring and summer come next.

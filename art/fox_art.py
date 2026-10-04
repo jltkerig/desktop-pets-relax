@@ -100,7 +100,7 @@ def fox(pose="stand", **k):
     """Returns a 64 x 64 PIL image. See the pose functions below for the knobs each takes."""
     c = Canvas(SIZE, SIZE, k.pop("palette", "orange"))
     POSES[pose](c, **k)
-    return c.to_image()
+    return c.to_image(flat=True)
 
 
 # -- poses -----------------------------------------------------------------------------------------

@@ -1,0 +1,237 @@
+"""The see-through window the pets live in, and the tray menu (the toy box).
+
+The window covers the desktop above the taskbar. It is transparent, so clicks on empty pixels go straight
+to the desktop; only the foxes, the tree and the other things catch the mouse.
+"""
+from PySide6.QtCore import QElapsedTimer, QPoint, QRect, Qt, QTimer
+from PySide6.QtGui import QAction, QActionGroup, QCursor, QIcon, QPainter, QPixmap, QTransform
+from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon, QWidget
+
+from pet import save, seasons, sprites
+
+FRAME_MS = 33
+DRAG_START = 6  # pixels the mouse must move before a press becomes a drag
+
+
+class Frames:
+    """Loads sprite strips once and cuts them into scaled frames, facing right and left."""
+
+    def __init__(self):
+        self.cache = {}
+
+    def get(self, name, frame, scale, facing):
+        key = (name, scale)
+        if key not in self.cache:
+            meta = sprites.meta(name)
+            strip = QPixmap(str(sprites.SPRITE_DIR / f"{name}.png"))
+            w, h = meta["frame_width"], meta["frame_height"]
+            right, left = [], []
+            for i in range(meta["frames"]):
+                img = strip.copy(i * w, 0, w, h).scaled(w * scale, h * scale, Qt.IgnoreAspectRatio, Qt.FastTransformation)
+                right.append(img)
+                left.append(img.transformed(QTransform().scale(-1, 1)))
+            self.cache[key] = (right, left)
+        right, left = self.cache[key]
+        frames = right if facing > 0 else left
+        return frames[min(frame, len(frames) - 1)]
+
+
+class Desktop(QWidget):
+    def __init__(self, world, settings, geometry):
+        super().__init__(None, Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool | Qt.NoDropShadowWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WA_ShowWithoutActivating)
+        self.setMouseTracking(True)
+        self.setGeometry(geometry)
+        self.world, self.settings = world, settings
+        self.frames = Frames()
+        self.press = None       # (thing, press point, thing's start x/y)
+        self.dragging = None
+        self.last_pet = 0.0
+        self.clock = QElapsedTimer()
+        self.clock.start()
+        self.elapsed = 0.0
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.tick)
+        self.timer.start(FRAME_MS)
+
+    # -- the loop --------------------------------------------------------------------------------------
+
+    def tick(self):
+        dt = self.clock.restart() / 1000
+        self.elapsed += dt
+        local = self.mapFromGlobal(QCursor.pos())
+        before = self._area()
+        self.world.update(dt, (float(local.x()), float(local.y())))
+        if self.dragging is not None and self.dragging.kind == "fox":
+            self.dragging.x, self.dragging.y = float(local.x()), float(local.y()) + 22 * self.world.scale
+        after = self._area()
+        self.update(before.united(after))
+
+    def _area(self):
+        """The screen area everything covers (only that part is redrawn)."""
+        area = QRect()
+        for thing in self.world.things:
+            left, top, w, h = thing.rect()
+            area = area.united(QRect(int(left) - 2, int(top) - 2, int(w) + 4, int(h) + 4))
+        return area
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setCompositionMode(QPainter.CompositionMode_Source)
+        painter.fillRect(event.rect(), Qt.transparent)
+        painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
+        for thing in self.world.drawing_order():
+            left, top, _, _ = thing.rect()
+            pixmap = self.frames.get(thing.anim.name, thing.anim.frame, self.world.scale, thing.facing)
+            painter.setOpacity(max(0.0, min(1.0, thing.alpha)))
+            painter.drawPixmap(int(round(left)), int(round(top)), pixmap)
+        painter.end()
+
+    # -- the mouse -------------------------------------------------------------------------------------
+
+    def mousePressEvent(self, event):
+        if event.button() != Qt.LeftButton:
+            return
+        p = event.position()
+        thing = self.world.thing_at(p.x(), p.y(), draggable_only=True)
+        if thing is not None:
+            self.press = (thing, QPoint(int(p.x()), int(p.y())), thing.x)
+
+    def mouseMoveEvent(self, event):
+        p = event.position()
+        if self.press and self.dragging is None:
+            thing, start, _ = self.press
+            if (QPoint(int(p.x()), int(p.y())) - start).manhattanLength() > DRAG_START:
+                self.dragging = thing
+                if thing.kind == "fox":
+                    thing.pick_up()
+        if self.dragging is not None and self.dragging.kind == "tree":
+            thing, start, start_x = self.press
+            thing.x = max(40.0, min(self.world.width - 40.0, start_x + p.x() - start.x()))
+        elif self.dragging is None and not event.buttons():
+            # stroking a fox with the cursor is petting it
+            thing = self.world.thing_at(p.x(), p.y())
+            if thing is not None and thing.kind == "fox" and self.elapsed - self.last_pet > 0.25:
+                self.last_pet = self.elapsed
+                thing.pet()
+
+    def mouseReleaseEvent(self, event):
+        if event.button() != Qt.LeftButton:
+            return
+        if self.dragging is not None:
+            if self.dragging.kind == "fox":
+                self.dragging.drop()
+            elif self.dragging.kind == "tree":
+                self.settings["items"][self.dragging.variant]["x"] = round(self.dragging.x)
+                save.store(self.settings)
+        elif self.press is not None and self.press[0].kind == "fox":
+            self.press[0].poke()
+        self.press = None
+        self.dragging = None
+
+
+class ToyBox:
+    """The tray icon's menu: which foxes and items are out, the season, pause and quit."""
+
+    def __init__(self, app, desktop):
+        self.app, self.desktop = app, desktop
+        self.world, self.settings = desktop.world, desktop.settings
+        icon = QIcon(str(sprites.SPRITE_DIR / "tray_icon.png"))
+        self.tray = QSystemTrayIcon(icon)
+        self.tray.setToolTip("Pixel Fox")
+        self.menu = QMenu()
+        self.menu.aboutToShow.connect(self.build)
+        self.tray.setContextMenu(self.menu)
+        self.tray.show()
+
+    def build(self):
+        m = self.menu
+        m.clear()
+        m.addSection("Foxes")
+        for palette, label in (("orange", "Orange fox"), ("grey", "Grey fox")):
+            self._check(m, label, self.settings["foxes"].get(palette, False),
+                        lambda on, p=palette: self._set_fox(p, on))
+        m.addSection(f"Toy box ({self.world.season.title()})")
+        items = seasons.items_for(self.world.season)
+        for name in items:
+            item = self.settings["items"].setdefault(name, {"out": False, "x": None})
+            self._check(m, seasons.ITEMS[name]["label"], item.get("out", False),
+                        lambda on, n=name: self._set_item(n, on))
+        if not items:
+            disabled = m.addAction("Nothing for this season yet")
+            disabled.setEnabled(False)
+        if self.world.tree() is not None:
+            m.addAction("Shake down an acorn", lambda: self.world.drop_acorn(self.world.tree()))
+        visit = m.addMenu("Invite a visitor")
+        for kind in seasons.VISITORS.get(self.world.season, ()):
+            visit.addAction(kind.replace("jay", "blue jay").replace("woolly", "woolly bear caterpillar").capitalize(),
+                            lambda k=kind: self.world.invite_visitor(k))
+
+        m.addSeparator()
+        season_menu = m.addMenu("Season")
+        group = QActionGroup(season_menu)
+        current = self.settings.get("season", "auto")
+        auto_label = f"Automatic (now {seasons.season_for(self.world.now().date()).title()})"
+        for key, label in (("auto", auto_label), ("winter", "Winter"), ("spring", "Spring"), ("summer", "Summer"),
+                           ("autumn", "Autumn")):
+            action = season_menu.addAction(label, lambda k=key: self._set_season(k))
+            action.setCheckable(True)
+            action.setChecked(current == key)
+            group.addAction(action)
+        size_menu = m.addMenu("Size")
+        sizes = QActionGroup(size_menu)
+        for value in (1, 2, 3):
+            action = size_menu.addAction(f"{value}x", lambda v=value: self._set_scale(v))
+            action.setCheckable(True)
+            action.setChecked(self.world.scale == value)
+            sizes.addAction(action)
+        self._check(m, "Pause", self.world.paused, self._set_paused)
+        m.addSeparator()
+        m.addAction("Quit", self.quit)
+
+    def _check(self, menu, label, checked, on_toggle):
+        action = QAction(label, menu)
+        action.setCheckable(True)
+        action.setChecked(checked)
+        action.toggled.connect(on_toggle)
+        menu.addAction(action)
+        return action
+
+    def _changed(self):
+        save.store(self.settings)
+        self.world.rebuild()
+        self.desktop.update()
+
+    def _set_fox(self, palette, on):
+        self.settings["foxes"][palette] = on
+        self._changed()
+
+    def _set_item(self, name, on):
+        self.settings["items"][name]["out"] = on
+        self._changed()
+
+    def _set_season(self, key):
+        self.settings["season"] = key
+        self._changed()
+
+    def _set_scale(self, value):
+        self.settings["scale"] = value
+        self.world.scale = value
+        self._changed()
+
+    def _set_paused(self, on):
+        self.world.paused = on
+
+    def quit(self):
+        tree = self.world.tree()
+        if tree is not None:
+            self.settings["items"][tree.variant]["x"] = round(tree.x)
+        save.store(self.settings)
+        self.tray.hide()
+        self.app.quit()
+
+
+def work_area():
+    screen = QApplication.primaryScreen()
+    return screen.availableGeometry()

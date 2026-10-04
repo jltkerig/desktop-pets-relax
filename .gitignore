@@ -1,0 +1,7 @@
+# Your settings (which foxes and items are out, where the tree stands)
+user-data/
+__pycache__/
+*.pyc
+*.log
+# Art preview made by art/make_art.py --preview
+art/preview.png

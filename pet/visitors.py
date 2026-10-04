@@ -26,14 +26,17 @@ class Visitor(Thing):
 
 
 class Squirrel(Visitor):
-    """Runs in, takes an acorn off the ground, buries it somewhere else, and runs off."""
+    """Runs in, takes an acorn off the ground, buries it somewhere else, and runs off. If it takes a corn
+    cob instead, it's slowed by the weight, and a fox may chase it until it drops the cob and flees."""
     kind = "squirrel"
     SPEED = 120
+    CARRY_COB = 55  # a corn cob is heavy for a squirrel
 
     def __init__(self, world, acorn):
         edge = -30.0 if acorn.x > world.width / 2 or world.rng.random() < 0.5 else world.width + 30.0
         super().__init__(world, edge, world.ground, "squirrel_run")
         self.acorn = acorn
+        self.has_cob = getattr(acorn, "is_cob", False)
         acorn.taken = True
         self.state = "to_acorn"
         self.timer = 0.0
@@ -47,19 +50,32 @@ class Squirrel(Visitor):
             if self.acorn.gone:
                 self.state = "leave"
             elif self.move_to(self.acorn.x, self.SPEED, dt):
-                self.acorn.gone = True  # picked up
                 self.state, self.timer = "nibble", 0.0
                 self.anim.play("squirrel_sit")
+                if self.has_cob:  # the cob is carried along (hidden in its arms), so it can be dropped
+                    self.acorn.alpha = 0.0
+                    self.acorn.carried = True
+                    w.chase_squirrel(self)
+                else:
+                    self.acorn.gone = True  # picked up
         elif self.state == "nibble" and self.timer > 1.4:
             away = rng.uniform(160, 420) * w.scale * rng.choice((-1, 1))
             self.bury_x = max(40.0, min(w.width - 40.0, self.x + away))
             self.state = "carry"
             self.anim.play("squirrel_carry")
-        elif self.state == "carry" and self.move_to(self.bury_x, self.SPEED, dt):
-            self.state, self.timer = "dig", 0.0
-            self.anim.play("squirrel_dig")
+        elif self.state == "carry":
+            chaser = next((f for f in w.of("fox") if f.step is not None and f.step.follow is self), None)
+            if chaser is not None and abs(chaser.x - self.x) < 34 * w.scale:
+                self.drop_prize()  # caught up with! it lets go and runs for it
+                self.state = "leave"
+                self.anim.play("squirrel_run")
+            elif self.move_to(self.bury_x, self.CARRY_COB if self.has_cob else self.SPEED, dt):
+                self.state, self.timer = "dig", 0.0
+                self.anim.play("squirrel_dig")
         elif self.state == "dig" and self.timer > 2.2:
             w.add(Mound(w, self.x + 10 * w.scale * self.facing))
+            if self.has_cob:
+                self.acorn.gone = True  # buried after all
             self.state = "pat"
             self.timer = 0.0
             self.anim.play("squirrel_sit")
@@ -69,6 +85,15 @@ class Squirrel(Visitor):
         elif self.state == "leave":
             if self.move_to(self.leave_x(), self.SPEED * 1.2, dt):
                 self.gone = True
+
+    def drop_prize(self):
+        """Let go of the corn cob where it is."""
+        cob = self.acorn
+        if self.has_cob and not cob.gone:
+            cob.x, cob.y = self.x + self.facing * 8 * self.world.scale, self.world.ground
+            cob.alpha, cob.carried, cob.taken, cob.on_ground = 1.0, False, False, True
+            cob.vx = self.facing * 40 * self.world.scale
+        self.has_cob = False
 
 
 class Jay(Visitor):
@@ -212,8 +237,9 @@ class Goose(Visitor):
         self.delay = delay
         self.state = "arrive"
         self.timer = 0.0
-        self.honks = rng.randint(2, 4)
+        self.honks = rng.randint(6, 10)  # they stay a good while: waddling about, honking now and then
         self.waddle_to = land_x
+        self.linger = 4.0
         self.exit = (-60.0, 0.0)
 
     def fly_to(self, x, y, dt, speed=130):
@@ -241,7 +267,7 @@ class Goose(Visitor):
                 self.anim.play("goose_walk")
                 self.waddle_to = max(40.0, min(w.width - 40.0, self.land_x + rng.uniform(-40, 40) * w.scale))
         elif self.state == "waddle":
-            if self.move_to(self.waddle_to, 14, dt) or self.timer > 4:
+            if self.move_to(self.waddle_to, 10, dt) or self.timer > self.linger:
                 fox = w.nearest_fox(self.x)
                 if fox is not None and abs(fox.x - self.x) > 2:
                     self.facing = 1 if fox.x > self.x else -1
@@ -255,7 +281,8 @@ class Goose(Visitor):
                 if self.honks > 0:
                     self.state, self.timer = "waddle", 0.0
                     self.anim.play("goose_walk")
-                    self.waddle_to = max(40.0, min(w.width - 40.0, self.x + rng.uniform(-30, 30) * w.scale))
+                    self.waddle_to = max(40.0, min(w.width - 40.0, self.x + rng.uniform(-45, 45) * w.scale))
+                    self.linger = rng.uniform(3, 8)
                 else:
                     self.state = "leave"
                     self.anim.play("goose_fly")

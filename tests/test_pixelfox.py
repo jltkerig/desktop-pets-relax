@@ -232,7 +232,7 @@ class Geese(unittest.TestCase):
         fox.do(Step("idle", 999))
         world.invite_visitor("geese")
         honked = reacted = False
-        for _ in range(60 * 30):
+        for _ in range(200 * 30):  # a long visit
             run(world, clock, 1 / 30)
             honked = honked or bool(world.of("bubble"))
             reacted = reacted or (fox.step is not None and fox.step.anim in ("tilt", "hop"))
@@ -451,6 +451,39 @@ class Clicks(unittest.TestCase):
     def test_shaking_the_oak_brings_down_leaves(self):
         self.item("tree").click()
         self.assertGreaterEqual(len(self.world.of("leaf")), 8)
+
+
+class SquirrelAndCob(unittest.TestCase):
+    def test_squirrels_prefer_acorns_to_corn_cobs(self):
+        from pet.items import CornCob
+        picks = []
+        for seed in range(40):
+            world, clock = make_world(orange=False, grey=False, seed=seed)
+            for thing in (Acorn(world, 600, world.ground), CornCob(world, 900, world.ground)):
+                thing.on_ground = True
+                world.add(thing)
+            squirrel = world.invite_visitor("squirrel")
+            picks.append(getattr(squirrel.acorn, "is_cob", False))
+        self.assertGreater(picks.count(False), 28)  # mostly acorns
+        self.assertGreater(picks.count(True), 0)    # but a cob now and then
+
+    def test_a_fox_chases_the_squirrel_that_took_the_cob_and_gets_it_back(self):
+        from pet.items import CornCob
+        world, clock = make_world(orange=True, grey=False)
+        fox = world.of("fox")[0]
+        fox.do(Step("idle", 999))
+        cob = CornCob(world, fox.x + 300, world.ground)
+        cob.on_ground = True
+        world.add(cob)
+        squirrel = world.add(__import__("pet.visitors", fromlist=["Squirrel"]).Squirrel(world, cob))
+        chased = False
+        for _ in range(40 * 30):
+            run(world, clock, 1 / 30)
+            chased = chased or (fox.step is not None and fox.step.follow is squirrel)
+        self.assertTrue(chased)
+        self.assertFalse(cob.gone)       # not buried: the squirrel dropped it
+        self.assertEqual(cob.alpha, 1.0)
+        self.assertFalse(cob.carried)
 
 
 if __name__ == "__main__":

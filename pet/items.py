@@ -432,13 +432,17 @@ class Climbable(Thing):
 
 class CornCob(Acorn):
     """An ear of corn from the harvest. The foxes bat it about like an acorn; it fades after a while."""
+    is_cob = True
 
     def __init__(self, world, x, y):
         super().__init__(world, x, y)
+        self.carried = False  # in a squirrel's arms
         self.anim = sprites.Anim("corncob")
         self.age = 0.0
 
     def update(self, dt):
+        if self.carried:
+            return
         super().update(dt)
         self.age += dt
         if self.age > 90:

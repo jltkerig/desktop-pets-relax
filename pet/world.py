@@ -3,7 +3,7 @@ import datetime
 import random
 
 from pet import seasons
-from pet.fox import TROT, WALK, Fox, Step
+from pet.fox import TROT, WALK, ZOOM, Fox, Step
 from pet.items import Acorn, Climbable, Corn, CornCob, Den, Leaf, Prop, Pumpkin, Treasure, Tree
 from pet.visitors import Goose, Jay, Squirrel, Woolly, migrating_v
 
@@ -231,7 +231,11 @@ class World:
             return None
         pick = self.rng.choice(choices)
         if pick == "squirrel":
-            return self.add(Squirrel(self, self.rng.choice(acorns)))
+            # squirrels much prefer acorns; a corn cob only now and then, or if there's nothing else
+            nuts = [a for a in acorns if not getattr(a, "is_cob", False)]
+            cobs = [a for a in acorns if getattr(a, "is_cob", False)]
+            pool = nuts if nuts and (not cobs or self.rng.random() < 0.85) else cobs
+            return self.add(Squirrel(self, self.rng.choice(pool)))
         if pick == "jay":
             return self.add(Jay(self, self.tree()))
         if pick == "migrants":
@@ -287,6 +291,15 @@ class World:
         for fox in self.of("fox"):
             if abs(fox.x - goose.x) < 500 * self.scale / 2:
                 fox.hear_honk(goose.x)
+
+    def chase_squirrel(self, squirrel):
+        """A squirrel ran off with the corn cob: the nearest awake fox gives chase."""
+        foxes = [f for f in self.of("fox") if not f.asleep and not f.held and not f.up_high and not f.vy]
+        if not foxes:
+            return
+        fox = min(foxes, key=lambda f: abs(f.x - squirrel.x))
+        fox.do(Step("tilt", face=squirrel.x), Step("run", follow=squirrel, speed=ZOOM * 0.8),
+               Step("hop"), Step("happy", 1.2))
 
     def harvest(self, corn):
         """Ripe corn clicked: an ear of corn drops out for the foxes, and the field starts again."""

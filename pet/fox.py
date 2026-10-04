@@ -10,17 +10,21 @@ from collections import deque
 from pet import sprites
 from pet.things import Thing
 
-WALK, TROT, ZOOM = 34, 80, 230  # speed in sprite pixels per second (scaled by the world's scale)
+# Speeds in sprite pixels per second (scaled by the world's scale), matched to the leg animations so
+# the paws don't slide: a steady walk, an easy trot, and a proper sprint for zoomies.
+WALK, TROT, ZOOM = 15, 32, 110
 
 
 class Step:
-    def __init__(self, anim, seconds=None, to_x=None, speed=0.0, leap=0.0, then=None, face=None, to_y=None):
+    def __init__(self, anim, seconds=None, to_x=None, speed=0.0, leap=0.0, then=None, face=None, to_y=None,
+                 follow=None):
         self.anim = anim          # animation name without the fox_<palette>_ prefix
         self.seconds = seconds    # None: one pass of the animation (or until arriving, when moving)
         self.to_x = to_x          # walk/trot/leap to this x
         self.speed = speed
         self.leap = leap          # arc height (sprite pixels) for a leap
         self.to_y = to_y          # where a leap lands (default: the ground); used to climb things
+        self.follow = follow      # chase this thing until caught up with it (or it's gone)
         self.then = then          # a function run when the step finishes
         self.face = face          # an x to turn toward when the step starts
         self.elapsed = 0.0
@@ -162,7 +166,7 @@ class Fox(Thing):
             return
         if self.step is not None and self.step.anim not in self.CALM:
             return
-        if self.rng.random() < dt * (0.3 + self.playful * 0.9):
+        if self.rng.random() < dt * (0.04 + self.playful * 0.12):  # now and then, not every leaf
             leaf = self.world.leaf_near(self, 700)
             if leaf is not None:
                 self.world.chase_leaf(self, leaf)
@@ -202,7 +206,18 @@ class Fox(Thing):
         step.elapsed += dt
         self.anim.update(dt)
         finished = False
-        if step.leap and step.to_x is not None:
+        if step.follow is not None:
+            target = step.follow
+            gap = 26 * self.world.scale
+            if target.gone or getattr(target, "state", "") == "leave" or step.elapsed > 20:
+                finished = True  # it got away, or let go of the prize: stop
+            else:
+                distance = target.x - self.x
+                self.facing = 1 if distance > 0 else -1
+                if abs(distance) > gap:
+                    move = min(abs(distance) - gap, step.speed * self.world.scale * dt)
+                    self.x += move if distance > 0 else -move
+        elif step.leap and step.to_x is not None:
             total = sprites.duration(self.anim.name)
             t = min(1.0, step.elapsed / total)
             end_y = self.world.ground if step.to_y is None else step.to_y
@@ -295,12 +310,12 @@ class Fox(Thing):
             return
 
         # play: acorns, falling leaves, the cursor, the other fox
-        if rng.random() < self.playful:
+        if rng.random() < self.playful * 0.5:  # play is a treat, not constant
             acorn = w.acorn_near(self, 500)
             if acorn is not None and rng.random() < 0.6:
                 side = -1 if acorn.x > self.x else 1
                 stand = acorn.x + side * 26 * w.scale
-                self.plan.extend([Step("trot", to_x=stand, speed=TROT), Step("sniff", face=acorn.x),
+                self.plan.extend([Step("walk", to_x=stand, speed=WALK), Step("sniff", face=acorn.x),
                                   Step("bat", face=acorn.x, then=lambda: w.kick(acorn, self)), Step("happy", 1.0)])
                 return
             leaf = w.leaf_near(self, 700)
@@ -318,8 +333,8 @@ class Fox(Thing):
                 return
 
         options = [
-            (4.0, lambda: [Step("idle", rng.uniform(3, 8))]),
-            (2.0, lambda: [Step("look")]),
+            (9.0, lambda: [Step("idle", rng.uniform(6, 16))]),           # mostly: sitting, just being a fox
+            (3.0, lambda: [Step("look"), Step("idle", rng.uniform(3, 8))]),
             (3.0 + self.boredom * 3, lambda: [Step("walk", to_x=w.wander_target(self), speed=WALK)]),
             (1.5 + self.boredom * 2, lambda: [Step("sniff"), Step("sniff")]),
             (1.0, lambda: [Step("scratch")]),
@@ -330,8 +345,8 @@ class Fox(Thing):
             (self.playful * 1.0, lambda: [Step("hop"), Step("happy", 0.6)]),
             (self.playful * 1.2, lambda: [Step("trot", to_x=w.wander_target(self), speed=TROT)]),
             (0.5, lambda: [Step("stretch")]),
-            (self.playful * self.energy * 1.4, lambda: self._zoomies()),
-            (self.playful * 2.0 if w.climbable_near(self, 900) else 0.0, lambda: self._climb()),
+            (self.playful * self.energy * 0.4, lambda: self._zoomies()),
+            (self.playful * 0.8 if w.climbable_near(self, 900) else 0.0, lambda: self._climb()),
             (1.0, lambda: [Step("groom", rng.uniform(2.0, 4.0)), Step("idle", 1.5)]),
             (self.playful * 0.6, lambda: self._tail_chase()),
         ]

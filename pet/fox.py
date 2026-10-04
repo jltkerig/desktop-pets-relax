@@ -10,7 +10,7 @@ from collections import deque
 from pet import sprites
 from pet.things import Thing
 
-WALK, TROT = 34, 80  # speed in sprite pixels per second (scaled by the world's scale)
+WALK, TROT, ZOOM = 34, 80, 230  # speed in sprite pixels per second (scaled by the world's scale)
 
 
 class Step:
@@ -158,7 +158,8 @@ class Fox(Thing):
             self.boredom = max(0.0, self.boredom - dt * 0.004)
         else:
             self.energy = max(0.0, self.energy - dt * (0.0035 if night else 0.0012))
-            playing = self.step is not None and self.step.anim in ("pounce", "bat", "playbow", "roll", "hop", "trot", "boop")
+            playing = self.step is not None and self.step.anim in ("pounce", "bat", "playbow", "roll", "hop", "trot", "boop",
+                                                                    "run")
             self.boredom = max(0.0, min(1.0, self.boredom + dt * (-0.02 if playing else 0.0025)))
         self.playful = max(0.0, min(1.0, 0.25 + self.energy * 0.6 - (0.3 if night else 0.0) + self.boredom * 0.3))
 
@@ -205,6 +206,15 @@ class Fox(Thing):
             if step.then:
                 step.then()
             self.step = None
+
+    def _zoomies(self):
+        """A burst of energy: a wiggle, a sprint to the far end of the screen, a dash partway back, a happy roll."""
+        w = self.world
+        far = w.width - 60.0 if self.x < w.width / 2 else 60.0
+        back = far + (-1 if far > self.x else 1) * self.rng.uniform(0.25, 0.5) * w.width
+        return [Step("crouch", 0.5), Step("hop"), Step("run", to_x=far, speed=ZOOM),
+                Step("bat", face=back), Step("run", to_x=back, speed=ZOOM * 0.9),
+                Step("roll", self.rng.uniform(1.2, 2.2)), Step("happy", 1.0)]
 
     def _tail_chase(self):
         return _spin_steps(self.x, self.world.scale, self.rng.randint(3, 5)) + [Step("happy", 1.0)]
@@ -283,6 +293,7 @@ class Fox(Thing):
             (self.playful * 1.0, lambda: [Step("hop"), Step("happy", 0.6)]),
             (self.playful * 1.2, lambda: [Step("trot", to_x=w.wander_target(self), speed=TROT)]),
             (0.5, lambda: [Step("stretch")]),
+            (self.playful * self.energy * 1.4, lambda: self._zoomies()),
             (1.0, lambda: [Step("groom", rng.uniform(2.0, 4.0)), Step("idle", 1.5)]),
             (self.playful * 0.6, lambda: self._tail_chase()),
         ]

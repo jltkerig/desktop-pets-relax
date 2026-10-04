@@ -261,6 +261,7 @@ class ToyBox:
             m.addAction("Plant new pumpkins", self._replant)
         if self.world.taskbar_spots:
             m.addAction("Dig up a taskbar treasure", self._dig)
+        m.addAction("Zoomies!", self._zoomies)
         visit = m.addMenu("Invite a visitor")
         for kind in seasons.VISITORS.get(self.world.season, ()):
             label = {"jay": "Blue jay", "woolly": "Woolly bear caterpillar", "migrants": "Geese flying south",
@@ -309,6 +310,12 @@ class ToyBox:
     def _set_item(self, name, on):
         self.settings["items"][name]["out"] = on
         self._changed()
+
+    def _zoomies(self):
+        foxes = [f for f in self.world.of("fox") if not f.held]
+        if foxes:
+            fox = self.world.rng.choice(foxes)
+            fox.do(*fox._zoomies())
 
     def _dig(self):
         foxes = [f for f in self.world.of("fox") if not f.held]

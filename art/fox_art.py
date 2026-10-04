@@ -263,6 +263,10 @@ ANIMATIONS = {
              260, False),
     "walk": (_walk(5.0, 8), 110, True),
     "trot": (_walk(7.5, 6), 80, True),
+    # zoomies: a flat-out sprint, long strides, ears back, tail streaming
+    "run": ([dict(pose="stand", step=i / 6, bob=-abs(math.sin(i / 6 * 2 * math.pi)) * 2.2, stride=10.0,
+                  swish=math.sin(i / 6 * 2 * math.pi) * 2.5, tail_lift=-0.4, ear=-0.8, eyes="happy", head_dx=1.5,
+                  head_dy=2) for i in range(6)], 55, True),
     "stretch": ([dict(pose="bow", stretch=s, eyes=e, mouth=m) for s, e, m in
                  ((0.4, "open", 0), (0.7, "closed", 0), (1.0, "closed", 0.4), (1.0, "closed", 0.7), (1.0, "closed", 0.4),
                   (0.7, "open", 0))], 180, False),

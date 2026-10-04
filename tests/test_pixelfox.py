@@ -65,7 +65,7 @@ class Sprites(unittest.TestCase):
     def test_both_foxes_have_every_animation_the_fox_uses(self):
         used = {"idle", "look", "walk", "trot", "stretch", "yawn", "scratch", "sleep", "wake", "tilt", "petted",
                 "held", "land", "crouch", "pounce", "dig", "bat", "watch", "happy", "sniff", "playbow", "roll",
-                "hop", "boop", "groom"}
+                "hop", "boop", "groom", "run"}
         for palette in ("orange", "grey"):
             for anim in used:
                 self.assertTrue(sprites.exists(f"fox_{palette}_{anim}"), f"fox_{palette}_{anim}")
@@ -287,6 +287,21 @@ class Field(unittest.TestCase):
             pounced = pounced or (fox.step is not None and fox.step.anim == "pounce")
         self.assertTrue(pounced)
         self.assertTrue(leaf.gone)  # caught under its paws
+
+
+class Zoomies(unittest.TestCase):
+    def test_zoomies_run_to_the_far_end_and_partway_back(self):
+        world, clock = make_world(orange=True, grey=False)
+        fox = world.of("fox")[0]
+        fox.x = 300.0
+        fox.do(*fox._zoomies())
+        xs = []
+        for _ in range(20 * 30):
+            run(world, clock, 1 / 30)
+            if fox.step is not None and fox.step.anim == "run":
+                xs.append(fox.x)
+        self.assertGreater(max(xs), world.width - 100)       # reached the far end
+        self.assertLess(xs[-1], world.width - 300)          # and dashed back
 
 
 if __name__ == "__main__":

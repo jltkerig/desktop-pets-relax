@@ -170,43 +170,37 @@ def oak(sway=0.0, seed=7):
 
 # -- small things --------------------------------------------------------------------------------------
 
-# A little oak leaf, drawn pixel by pixel: X is leaf, s is the stem. Shaded like the crown:
-# light along the top-left edge, shadow along the bottom-right, the base colour in between.
-OAK_LEAF = [
-    "...X...",
-    "..XXX..",
-    ".XXXXX.",
-    "XXXXXXX",
-    ".XXXXX.",
-    "..XXX..",
-    "...s...",
-]
+# An oak leaf outline (stem at the bottom, tip at the top), in leaf units: rounded lobes down each side.
+OAK_LEAF_OUTLINE = [(0, -5.0), (1.2, -4.2), (1.0, -3.4), (2.0, -2.6), (1.6, -1.6), (2.5, -0.6), (1.9, 0.4),
+                    (2.4, 1.4), (1.4, 2.2), (0.6, 2.9), (0, 3.2), (-0.6, 2.9), (-1.4, 2.2), (-2.4, 1.4),
+                    (-1.9, 0.4), (-2.5, -0.6), (-1.6, -1.6), (-2.0, -2.6), (-1.0, -3.4), (-1.2, -4.2)]
 
 
 def leaf(mat, spin):
-    """8 x 8 oak leaf in the tree's colours; spin 0..3 tumbles it as it falls."""
-    rows = [list(r) for r in OAK_LEAF]
-    for _ in range(spin % 4):  # turn a quarter each frame
-        rows = [list(r) for r in zip(*rows[::-1])]
-    if spin in (1, 3):
-        rows = [r[::-1] for r in rows]  # and flip, so it flutters rather than spins
-    c = Canvas(8, 8)
-    size = len(rows)
-    def leafy(x, y):
-        return 0 <= x < size and 0 <= y < size and rows[y][x] == "X"
-    for y in range(size):
-        for x in range(size):
-            if rows[y][x] == "s":
-                c.pixel(x, y, "leaf_brown", 0)
-            elif rows[y][x] == "X":
-                level = 0 if not leafy(x + 1, y + 1) or not leafy(x, y + 1) else 2 if not leafy(x - 1, y - 1) else 1
-                c.pixel(x, y, mat, level)
-    for y in range(size):  # the centre vein, along the stem's line
-        for x in range(size):
-            if rows[y][x] == "X" and any(rows[yy][xx] == "s" for yy in range(size) for xx in range(size)
-                                         if (xx == x and spin % 2 == 0) or (yy == y and spin % 2 == 1)):
-                if (spin % 2 == 0 and 2 <= y <= 4) or (spin % 2 == 1 and 2 <= x <= 4):
-                    c.pixel(x, y, mat, 0)
+    """12 x 12 oak leaf in the tree's colours. spin 0..5 tumbles it: it turns, and narrows as it tips
+    edge-on, so it flutters down rather than spinning like a coin."""
+    c = Canvas(12, 12)
+    angle = math.radians(-35 + spin * 28)
+    squash = 0.45 + 0.55 * abs(math.cos(spin * math.pi / 3))  # edge-on every few frames
+    size = 1.05
+
+    def place(x, y):
+        x *= squash
+        return (6 + (x * math.cos(angle) - y * math.sin(angle)) * size,
+                6 + (x * math.sin(angle) + y * math.cos(angle)) * size)
+
+    outline = [place(x, y) for x, y in OAK_LEAF_OUTLINE]
+    c.polygon(outline, mat, lum=0.45)
+    # the half on the far side of the vein is a shade darker, as if the leaf is slightly folded
+    half = [place(x, y) for x, y in OAK_LEAF_OUTLINE if x >= 0] + [place(0, 3.2), place(0, -5.0)]
+    c.polygon(half, mat, lum=0.15)
+    # the vein and the stem
+    for i in range(9):
+        x, y = place(0, -4.2 + i * 0.95)
+        c.pixel(x, y, mat, 0)
+    for i in range(3):
+        x, y = place(0, 3.4 + i * 0.7)
+        c.pixel(x, y, "leaf_brown", 0)
     return c.to_image(outline=False)
 
 
@@ -892,4 +886,4 @@ SPRITES = {
     "scarecrow": ([scarecrow(sw) for sw in (0, 1, 2, 1, 0, -1, -2, -1)], 260, True, (24, 85)),
 }
 for colour in LEAF_COLOURS:
-    SPRITES[f"leaf_{colour.split('_')[1]}"] = ([leaf(colour, s) for s in range(4)], 160, True, (4, 4))
+    SPRITES[f"leaf_{colour.split('_')[1]}"] = ([leaf(colour, s) for s in range(6)], 150, True, (6, 6))

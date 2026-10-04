@@ -588,6 +588,121 @@ def scarecrow(sway=0.0):
     return c.to_image()
 
 
+# -- the corn field ------------------------------------------------------------------------------------
+
+COMMON.update({
+    "corn_leaf": ("#2e5214", "#46761e", "#62962c", "#8ab84c", "#16300a"),
+    "corn_dry": ("#8a6a26", "#b08e3a", "#ccac52", "#e4cc7e", "#4a360e"),
+    "cob": ("#b88a10", "#e0b21e", "#f4d040", "#fbe88a", "#5e4206"),
+    "husk": ("#5c7a26", "#7c9c34", "#9cba4e", "#c0d67a", "#2c400e"),
+})
+
+CORN_STALKS = [(10, 0.82), (28, 1.0), (46, 0.9), (64, 1.06), (82, 0.88), (100, 0.97)]  # x, height share
+
+
+def corn(stage, sway=0.0):
+    """120 x 100: a row of six corn stalks. Stages: 0 shoots, 1 knee-high, 2 tall, 3 tassels and ears,
+    4 dried golden for autumn. sway rustles the tops."""
+    c = Canvas(120, 100)
+    ground = 98
+    c.capsule(2, ground + 0.5, 118, ground + 0.5, 1.4, 1.4, "dirt")
+    full = (12, 34, 70, 86, 86)[stage]
+    green, leafy = ("corn_dry", "corn_dry") if stage == 4 else ("corn_leaf", "corn_leaf")
+    for i, (x, share) in enumerate(CORN_STALKS):
+        h = full * share
+        lean = sway * (0.5 + 0.5 * (i % 2)) * (h / 86)
+        top = (x + lean, ground - h)
+        c.capsule(x, ground, top[0], top[1], 1.6 if stage else 1.0, 1.0, green)
+        # long leaves arching out and drooping, alternating sides up the stalk
+        for k in range(1 if stage == 0 else 4 if stage < 2 else 6):
+            y = ground - h * (0.22 + 0.13 * k)
+            side = 1 if (k + i) % 2 else -1
+            reach = (6 if stage == 0 else 11) * (1.0 - 0.06 * k)
+            mid = (x + lean * (1 - y / ground) + side * reach * 0.6, y - 4)
+            tip = (x + lean * (1 - y / ground) + side * reach, y + 2 + (3 if stage == 4 else 0))
+            c.capsule(x + lean * (1 - y / ground), y, mid[0], mid[1], 1.2, 0.9, leafy)
+            c.capsule(mid[0], mid[1], tip[0], tip[1], 0.9, 0.4, leafy, bias=-0.15)
+        if stage >= 3:
+            # the tassel on top, and an ear of corn halfway up, its husk peeled back a little
+            for dx in (-2.5, 0, 2.5):
+                c.capsule(top[0], top[1], top[0] + dx + sway * 0.5, top[1] - 6, 0.6, 0.4, "straw")
+            ey = ground - h * 0.5
+            side = -1 if i % 2 else 1
+            c.ellipse(x + side * 3 + lean * 0.5, ey, 1.9, 4.2, "cob", angle=side * 18)
+            c.capsule(x + side * 2 + lean * 0.5, ey + 4, x + side * 4.5 + lean * 0.5, ey - 1, 1.0, 0.6, "husk" if stage == 3 else "corn_dry")
+    return c.to_image()
+
+
+# -- the hoe and the den -------------------------------------------------------------------------------
+
+COMMON.update({
+    "handle": ("#6a4622", "#8e6232", "#ae7e46", "#c89c62", "#36220e"),
+    "iron": ("#3a3c42", "#5a5e66", "#80848c", "#b0b4ba", "#1c1d20"),
+    "earth": ("#4a3420", "#694a2e", "#86603c", "#a07a50", "#28190c"),
+    "den_dark": ("#100a06", "#1c120c", "#2a1c12", "#3a281a", "#080503"),
+    "grass": ("#3e5a1c", "#5a7c26", "#789e34", "#9cbe54", "#1e300a"),
+})
+
+
+def hoe():
+    """24 x 60: a garden hoe stuck in the ground, leaning a little."""
+    c = Canvas(24, 60)
+    c.capsule(14, 58, 9, 6, 1.1, 1.0, "handle")
+    c.capsule(9, 6, 9, 4, 1.4, 1.4, "handle")
+    c.polygon([(8, 4), (16, 3), (17, 9), (13, 8)], "iron", lum=0.55)   # the blade
+    c.capsule(9, 5, 13, 4.5, 0.8, 0.8, "iron", bias=-0.3)              # its neck
+    c.ellipse(14, 58.5, 3.5, 1.2, "dirt")
+    return c.to_image()
+
+
+def den(occupants=()):
+    """96 x 48: a grassy earth mound with a dark burrow entrance. occupants: fox palettes asleep inside,
+    shown as tail tips curled just inside the doorway."""
+    c = Canvas(96, 48)
+    ground = 46
+    c.ellipse(48, ground, 44, 26, "earth", clip=lambda x, y: y <= ground)
+    c.ellipse(30, ground - 14, 16, 10, "earth", bias=0.05, clip=lambda x, y: y <= ground)
+    c.ellipse(64, ground - 12, 18, 11, "earth", bias=0.05, clip=lambda x, y: y <= ground)
+    # the doorway: a dark arch with a worn earth lip
+    c.ellipse(52, ground, 12, 13, "den_dark", clip=lambda x, y: y <= ground)
+    c.ellipse(52, ground + 1, 15, 2.2, "earth", bias=0.2)
+    # grass tufts on the mound
+    for gx, gy in ((18, 26), (26, 19), (38, 18), (70, 21), (80, 28), (60, 16), (46, 21)):
+        for dx in (-1.5, 0, 1.5):
+            c.capsule(gx, gy + 2, gx + dx, gy - 3, 0.6, 0.4, "grass")
+    # sleeping foxes: their tail tips curled in the doorway
+    colours = {"orange": ("fur", "white"), "grey": ("fur", "tip")}
+    for i, palette in enumerate(occupants[:2]):
+        base_x = 47 + i * 9
+        sub = Canvas(96, 48, palette)
+        fur, tipmat = colours.get(palette, ("fur", "white"))
+        sub.capsule(base_x, ground - 2, base_x + 5, ground - 6, 2.6, 2.4, fur)
+        sub.capsule(base_x + 5, ground - 6, base_x + 7, ground - 9, 2.2, 1.0, tipmat)
+        for y in range(48):
+            for x in range(96):
+                if sub.mat[y][x] is not None:
+                    c.mat[y][x], c.lum[y][x], c.fixed[y][x] = sub.mat[y][x], sub.lum[y][x], None
+                    c.ramps = {**c.ramps, **{f"{palette}_{k}": v for k, v in sub.ramps.items()}}
+                    c.mat[y][x] = f"{palette}_{sub.mat[y][x]}"
+    return c.to_image(flat=True)
+
+
+def zzz(t=0.0):
+    """10 x 10: a small floating z for a den with sleepers."""
+    from PIL import Image
+    img = Image.new("RGBA", (10, 10), (0, 0, 0, 0))
+    px = img.load()
+    ink = (250, 246, 230, 255)
+    edge = (60, 50, 40, 255)
+    for (x, y) in ((2, 2), (3, 2), (4, 2), (5, 2), (5, 3), (4, 4), (3, 5), (2, 6), (3, 6), (4, 6), (5, 6)):
+        for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            if px[x + dx, y + dy][3] == 0:
+                px[x + dx, y + dy] = edge
+    for (x, y) in ((2, 2), (3, 2), (4, 2), (5, 2), (5, 3), (4, 4), (3, 5), (2, 6), (3, 6), (4, 6), (5, 6)):
+        px[x, y] = ink
+    return img
+
+
 def tray_icon():
     """32 x 32 fox face for the tray."""
     import fox_art
@@ -621,6 +736,13 @@ SPRITES = {
     **{f"pumpkin_4_{k}_{shape}_jack": ([pumpkin(4, sw, g, shape, jack=True) for sw in (0, 1, 0, -1)], 260, True,
                                        (20, 30))
        for k, g in PUMPKIN_SIZES.items() for shape in PUMPKIN_SHAPES},
+    **{f"corn_{s}": ([corn(s, sw) for sw in (0, 1, 2, 1, 0, -1, -2, -1)], 300, True, (60, 98)) for s in range(5)},
+    "hoe": ([hoe()], 1000, False, (14, 58)),
+    "den": ([den()], 1000, False, (48, 46)),
+    "den_orange": ([den(("orange",))], 1000, False, (48, 46)),
+    "den_grey": ([den(("grey",))], 1000, False, (48, 46)),
+    "den_both": ([den(("orange", "grey"))], 1000, False, (48, 46)),
+    "zzz": ([zzz()], 1000, False, (5, 9)),
     "scarecrow": ([scarecrow(sw) for sw in (0, 1, 2, 1, 0, -1, -2, -1)], 260, True, (24, 85)),
 }
 for colour in LEAF_COLOURS:

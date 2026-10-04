@@ -4,7 +4,7 @@ import random
 
 from pet import seasons
 from pet.fox import TROT, WALK, Fox, Step
-from pet.items import Acorn, Leaf, Prop, Pumpkin, Treasure, Tree
+from pet.items import Acorn, Corn, Den, Leaf, Prop, Pumpkin, Treasure, Tree
 from pet.visitors import Goose, Jay, Squirrel, Woolly, migrating_v
 
 LEAF_COLOURS = ("red", "orange", "yellow", "brown")
@@ -65,7 +65,24 @@ class World:
         else:
             for thing in self.of("pumpkin"):
                 thing.gone = True
-        props = {"scarecrow"}
+        if "corn" in wanted_items:
+            if not self.of("corn"):
+                self.plant_corn()
+        else:
+            for thing in self.of("corn"):
+                thing.gone = True
+        if "den" in wanted_items:
+            if not self.of("den"):
+                x = self.settings["items"]["den"].get("x")
+                if not (isinstance(x, (int, float)) and 0 < x < self.width):
+                    x = self.width * 0.5
+                self.add(Den(self, x))
+        else:
+            for thing in self.of("den"):
+                for fox in thing.sleepers:
+                    fox.leave_den()
+                thing.gone = True
+        props = {"scarecrow", "hoe"}
         for thing in self.of("prop"):
             if thing.variant not in wanted_items:
                 thing.gone = True
@@ -75,10 +92,13 @@ class World:
                 if not (isinstance(x, (int, float)) and 0 < x < self.width):
                     patch = self.settings["items"].get("pumpkins", {}).get("patch") or []
                     xs = [p["x"] for p in patch if isinstance(p, dict) and isinstance(p.get("x"), (int, float))]
-                    x = (max(xs) + 70 * self.scale) if xs else self.width * 0.32  # next to the pumpkin patch
-                    x = min(self.width - 40.0, x)
+                    if name == "hoe":  # leaning by the patch, on its left
+                        x = (min(xs) - 34 * self.scale) if xs else self.width * 0.22
+                    else:              # the scarecrow keeps watch on the right
+                        x = (max(xs) + 70 * self.scale) if xs else self.width * 0.32
+                    x = max(40.0, min(self.width - 40.0, x))
                 self.add(Prop(self, x, name))
-        for name in wanted_items - {"pumpkins"} - props:
+        for name in wanted_items - {"pumpkins", "corn", "den"} - props:
             if not any(t.variant == name for t in self.of("tree")):
                 x = self.settings["items"][name].get("x")
                 x = x if isinstance(x, (int, float)) and 0 < x < self.width else self.width * 0.72
@@ -96,6 +116,19 @@ class World:
                 for fox in have:
                     fox.gone = True
         self.things = [t for t in self.things if not t.gone]
+
+    def plant_corn(self, replant=False):
+        """Put out the corn field: the saved one, still growing, or a freshly planted row."""
+        item = self.settings["items"].setdefault("corn", {"out": True, "x": None, "planted": None})
+        for thing in self.of("corn"):
+            thing.gone = True
+        if replant or not isinstance(item.get("planted"), (int, float)):
+            item["planted"] = self.now().timestamp()
+            self.dirty = True
+        x = item.get("x")
+        if not (isinstance(x, (int, float)) and 0 < x < self.width):
+            x = self.width * 0.12  # off to the left, away from the oak
+        return self.add(Corn(self, x, item["planted"]))
 
     def grow_pumpkins(self, replant=False):
         """Put out the pumpkin patch: the saved pumpkins, or three new sprouts."""
@@ -210,8 +243,15 @@ class World:
         left, right = tree.base_range()
         return left <= x <= right
 
+    def den(self):
+        dens = self.of("den")
+        return dens[0] if dens else None
+
     def nap_spot(self, fox):
-        """Under the oak if there is one (that's where acorns fall), else where it is."""
+        """The den if there is one (it curls up inside), else under the oak, else where it is."""
+        den = self.den()
+        if den is not None:
+            return den.entrance_x()
         tree = self.tree()
         if tree is None:
             return None
@@ -260,7 +300,8 @@ class World:
         side = 1 if leaf.x >= fox.x else -1
         under = max(40.0, min(self.width - 40.0, leaf.x - side * 22 * self.scale))
         fox.do(Step("trot", to_x=under, speed=TROT * 1.15), Step("crouch", self.rng.uniform(0.3, 0.7), face=leaf.x),
-               Step("pounce", to_x=leaf.x, leap=24, then=lambda: self.catch_leaf(fox, leaf)), Step("happy", 1.0))
+               Step("pounce", to_x=leaf.x, leap=30, then=lambda: self.catch_leaf(fox, leaf)), Step("dive"),
+               Step("hop"), Step("happy", 1.0))
 
     def catch_leaf(self, fox, leaf):
         """The pounce lands: a leaf close by is caught (it disappears under the paws)."""

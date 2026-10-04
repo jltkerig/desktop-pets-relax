@@ -221,3 +221,78 @@ class Prop(Thing):
     def __init__(self, world, x, variant):
         super().__init__(world, x, world.ground, variant)
         self.variant = variant
+
+
+class Corn(Thing):
+    """A row of corn that grows from shoots to tall stalks with ears, then dries golden for autumn.
+
+    Like the pumpkins, its stage comes from when it was planted, so it keeps growing between runs.
+    """
+    kind = "corn"
+    draggable = True
+    z = 5
+    STAGE_SECONDS = 10 * 60
+    STAGES = 5
+
+    def __init__(self, world, x, planted):
+        super().__init__(world, x, world.ground, "corn_0")
+        self.variant = "corn"
+        self.planted = planted
+        self.anim.time = world.rng.uniform(0, 2)
+
+    @property
+    def stage(self):
+        age = self.world.now().timestamp() - self.planted
+        return max(0, min(self.STAGES - 1, int(age / self.STAGE_SECONDS)))
+
+    def update(self, dt):
+        name = f"corn_{self.stage}"
+        if self.anim.name != name:
+            self.anim.name = name
+        super().update(dt)
+
+
+class Den(Thing):
+    """The foxes' den: a grassy mound with a burrow. Sleepy foxes curl up inside it."""
+    kind = "den"
+    draggable = True
+    z = 3
+
+    def __init__(self, world, x):
+        super().__init__(world, x, world.ground, "den")
+        self.variant = "den"
+        self.sleepers = []  # foxes asleep inside
+        self.z_timer = 0.0
+
+    def entrance_x(self):
+        return self.x + 4 * self.world.scale
+
+    def update(self, dt):
+        self.sleepers = [f for f in self.sleepers if not f.gone and f.in_den]
+        palettes = sorted({f.palette for f in self.sleepers})
+        self.anim.name = ("den_both" if len(palettes) > 1 else f"den_{palettes[0]}" if palettes else "den")
+        if self.sleepers:
+            self.z_timer -= dt
+            if self.z_timer <= 0:
+                self.z_timer = 1.6
+                self.world.add(Zzz(self.world, self.entrance_x() + 10 * self.world.scale, self.y - 24 * self.world.scale))
+
+
+class Zzz(Thing):
+    """A little z drifting up from the den while the foxes sleep."""
+    kind = "zzz"
+    z = 35
+
+    def __init__(self, world, x, y):
+        super().__init__(world, x, y, "zzz")
+        self.age = 0.0
+        self.start_x = x
+
+    def update(self, dt):
+        self.age += dt
+        s = self.world.scale
+        self.y -= 9 * s * dt
+        self.x = self.start_x + math.sin(self.age * 2.2) * 3 * s
+        self.alpha = max(0.0, 1.0 - self.age / 2.6)
+        if self.age > 2.6:
+            self.gone = True

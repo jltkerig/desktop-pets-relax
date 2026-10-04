@@ -197,7 +197,7 @@ class Desktop(QWidget):
                 self.dragging = thing
                 if thing.kind == "fox":
                     thing.pick_up()
-        if self.dragging is not None and self.dragging.kind in ("tree", "pumpkin", "prop"):
+        if self.dragging is not None and self.dragging.kind in ("tree", "pumpkin", "prop", "corn", "den"):
             thing, start, start_x = self.press
             thing.x = max(40.0, min(self.world.width - 40.0, start_x + p.x() - start.x()))
         elif self.dragging is None and not event.buttons():
@@ -213,7 +213,7 @@ class Desktop(QWidget):
         if self.dragging is not None:
             if self.dragging.kind == "fox":
                 self.dragging.drop()
-            elif self.dragging.kind in ("tree", "prop"):
+            elif self.dragging.kind in ("tree", "prop", "corn", "den"):
                 self.settings["items"][self.dragging.variant]["x"] = round(self.dragging.x)
                 save.store(self.settings)
             elif self.dragging.kind == "pumpkin" and self.dragging.record is not None:
@@ -221,6 +221,9 @@ class Desktop(QWidget):
                 save.store(self.settings)
         elif self.press is not None and self.press[0].kind == "fox":
             self.press[0].poke()
+        elif self.press is not None and self.press[0].kind == "den":
+            for fox in list(self.press[0].sleepers):  # a knock on the den: sleepy foxes pop out
+                fox.poke()
         self.press = None
         self.dragging = None
 
@@ -259,6 +262,8 @@ class ToyBox:
             m.addAction("Shake down an acorn", lambda: self.world.drop_acorn(self.world.tree()))
         if self.world.of("pumpkin"):
             m.addAction("Plant new pumpkins", self._replant)
+        if self.world.of("corn"):
+            m.addAction("Plant new corn", self._replant_corn)
         if self.world.taskbar_spots:
             m.addAction("Dig up a taskbar treasure", self._dig)
         m.addAction("Zoomies!", self._zoomies)
@@ -321,6 +326,10 @@ class ToyBox:
         foxes = [f for f in self.world.of("fox") if not f.held]
         if foxes:
             self.world.dig_for_treasure(self.world.rng.choice(foxes))
+
+    def _replant_corn(self):
+        self.world.plant_corn(replant=True)
+        save.store(self.settings)
 
     def _replant(self):
         self.world.grow_pumpkins(replant=True)

@@ -2,7 +2,7 @@
   "frame_width": 74,
   "frame_height": 64,
   "frames": 4,
-  "ms": 120,
+  "ms": 100,
   "loop": true,
   "anchor": [
     42,

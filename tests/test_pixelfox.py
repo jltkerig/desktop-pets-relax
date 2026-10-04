@@ -65,7 +65,7 @@ class Sprites(unittest.TestCase):
     def test_both_foxes_have_every_animation_the_fox_uses(self):
         used = {"idle", "look", "walk", "trot", "stretch", "yawn", "scratch", "sleep", "wake", "tilt", "petted",
                 "held", "land", "crouch", "pounce", "dig", "bat", "watch", "happy", "sniff", "playbow", "roll",
-                "hop", "boop", "groom", "run"}
+                "hop", "boop", "groom", "run", "dive"}
         for palette in ("orange", "grey"):
             for anim in used:
                 self.assertTrue(sprites.exists(f"fox_{palette}_{anim}"), f"fox_{palette}_{anim}")
@@ -80,6 +80,8 @@ class Sprites(unittest.TestCase):
 class Foxes(unittest.TestCase):
     def test_an_acorn_landing_on_a_sleeping_fox_wakes_it_happily(self):
         world, clock = make_world(orange=True, grey=False)
+        world.settings["items"]["den"]["out"] = False  # napping out in the open, under the oak
+        world.rebuild()
         fox = world.of("fox")[0]
         fox.do(Step("sleep", 999))
         run(world, clock, 0.1)
@@ -111,8 +113,10 @@ class Foxes(unittest.TestCase):
         self.assertEqual(fox.y, world.ground)
         self.assertFalse(fox.held)
 
-    def test_a_sleepy_fox_naps_under_the_oak(self):
+    def test_a_sleepy_fox_naps_under_the_oak_when_the_den_is_put_away(self):
         world, clock = make_world(orange=True, grey=False, hour=23)
+        world.settings["items"]["den"]["out"] = False
+        world.rebuild()
         fox = world.of("fox")[0]
         fox.energy = 0.1
         fox.plan.clear()
@@ -302,6 +306,53 @@ class Zoomies(unittest.TestCase):
                 xs.append(fox.x)
         self.assertGreater(max(xs), world.width - 100)       # reached the far end
         self.assertLess(xs[-1], world.width - 300)          # and dashed back
+
+
+class CornField(unittest.TestCase):
+    def test_corn_grows_through_five_stages_and_keeps_its_planting_time(self):
+        world, clock = make_world(orange=False, grey=False)
+        field = world.of("corn")
+        self.assertEqual(len(field), 1)
+        corn = field[0]
+        seen = set()
+        for _ in range(10):
+            world.update(0.1)
+            seen.add(corn.anim.name)
+            clock[0] += datetime.timedelta(minutes=10)
+        self.assertEqual(seen, {f"corn_{s}" for s in range(5)})
+        planted = world.settings["items"]["corn"]["planted"]
+        again = World(1920, 1040, world.settings, rng=random.Random(9), clock=lambda: clock[0])
+        self.assertEqual(again.of("corn")[0].planted, planted)
+
+
+class DenAndHoe(unittest.TestCase):
+    def test_a_sleepy_fox_curls_up_in_the_den_and_comes_out_when_it_wakes(self):
+        world, clock = make_world(orange=True, grey=False, hour=23)
+        fox = world.of("fox")[0]
+        den = world.den()
+        self.assertIsNotNone(den)
+        fox.energy = 0.1
+        fox.plan.clear()
+        fox.step = None
+        run(world, clock, 40)
+        self.assertTrue(fox.in_den)
+        self.assertEqual(den.anim.name, "den_orange")
+        self.assertTrue(world.of("zzz"))
+        self.assertFalse(fox.contains(fox.x, fox.y - 10))  # hidden inside
+        fox.poke()
+        self.assertFalse(fox.in_den)
+        self.assertEqual(fox.alpha, 1.0)
+
+    def test_the_hoe_leans_by_the_pumpkins(self):
+        world, _ = make_world(orange=False, grey=False)
+        hoe = [t for t in world.of("prop") if t.variant == "hoe"][0]
+        leftmost = min(p.x for p in world.of("pumpkin"))
+        self.assertTrue(0 < leftmost - hoe.x <= 40 * world.scale)
+
+    def test_the_den_stays_out_all_year(self):
+        for season in ("winter", "spring", "summer", "autumn"):
+            world, _ = make_world(season, orange=False, grey=False)
+            self.assertIsNotNone(world.den(), season)
 
 
 if __name__ == "__main__":

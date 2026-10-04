@@ -254,7 +254,48 @@ def back(c, kick=0.0, eyes="happy"):
     head(c, 48, 52, tilt=-70 + k * 6, eyes=eyes)
 
 
-POSES = {"stand": stand, "sit": sit, "curl": curl, "held": held, "leap": leap, "bow": bow, "dig": dig, "back": back}
+def arc(c, angle=0.0, eyes="happy", tuck=1.0):
+    """A mousing leap: the body tilted by angle (degrees; positive is nose up), front paws tucked to the
+    chest, hind legs trailing, tail streaming behind."""
+    cx, cy = 31, 34
+    a = math.radians(-angle)
+
+    def p(x, y):  # a point on the body, turned with it
+        return cx + x * math.cos(a) - y * math.sin(a), cy + x * math.sin(a) + y * math.cos(a)
+
+    leg(c, p(-9, 3), p(-18, 8), far=True)
+    leg(c, p(-7, 3), p(-16, 10))
+    c.ellipse(cx, cy, 14.0, 6.0, "fur", angle=-angle)
+    c.ellipse(*p(-1, 4.2), 7.0, 1.8, "white", angle=-angle, bias=-0.25)
+    tail(c, p(-11, -1), p(-22, 1), p(-31, -4), thick=4.0)
+    # front paws tucked up under the chin, like a cat's
+    leg(c, p(8, 3), p(12 + 2 * (1 - tuck), 7 - 3 * tuck), far=True)
+    leg(c, p(10, 3), p(14 + 2 * (1 - tuck), 6 - 3 * tuck))
+    hx, hy = p(17, -6)
+    neck(c, p(10, -2), (hx, hy))
+    head(c, hx, hy, tilt=-angle, eyes=eyes, ear=0.4)
+
+
+def dive(c, wiggle=0.0, puff=0.0):
+    """Nose-first in the ground after a pounce: rump and tail up, tail wagging, a puff of leaves."""
+    leg(c, (20, 40), (17, GROUND), far=True)
+    leg(c, (23, 40), (22, GROUND))
+    c.ellipse(31, 46, 14.0, 6.0, "fur", angle=40)
+    tail(c, (21, 39), (14 + wiggle, 26), (12 + wiggle * 2.2, 15), thick=4.2)
+    leg(c, (38, 52), (44, GROUND), far=True)
+    leg(c, (40, 53), (46, GROUND))
+    neck(c, (40, 52), (47, 58))
+    head(c, 47, 60, tilt=70, eyes="closed")  # its face is buried; only the back of the head shows
+    for y in range(GROUND + 1, 64):          # tuck what would show below the ground away
+        for x in range(c.w):
+            c.mat[y][x] = None
+    for i, (dx, dy) in enumerate(((-6, -3), (5, -4), (-2, -7), (8, -1), (-9, -1))):
+        if puff > i * 0.18:
+            c.ellipse(48 + dx * (0.6 + puff * 0.6), GROUND + dy * (0.5 + puff), 1.2, 1.0,
+                      ("dirt", "tip", "fur")[i % 3])
+
+
+POSES = {"stand": stand, "sit": sit, "curl": curl, "held": held, "leap": leap, "bow": bow, "dig": dig, "back": back, "arc": arc, "dive": dive}
 
 
 # -- animations: name -> (frames as pose kwargs, milliseconds per frame, loop) -----------------------
@@ -294,10 +335,14 @@ ANIMATIONS = {
     "held": ([dict(pose="held", swing=s) for s in (0, 1, 2, 1, 0, -1, -2, -1)], 120, True),
     "land": ([dict(pose="bow", stretch=0.3, eyes="wide"), dict(pose="stand", crouch=0.6, eyes="open", stride=0),
               dict(pose="stand", crouch=0.2, eyes="happy", stride=0), dict(pose="sit", eyes="happy")], 110, False),
-    "crouch": ([dict(pose="stand", crouch=1.0, stride=0, eyes="wide", swish=w, head_dx=1) for w in (-2, 2, -2, 2)],
-               120, True),
-    "pounce": ([dict(pose="leap", rise=r, reach=1.0) for r in (0.2, 0.6, 0.9, 0.9, 0.5)] +
-               [dict(pose="bow", stretch=0.4, eyes="happy")], 90, False),
+    "crouch": ([dict(pose="stand", crouch=1.0, stride=0, eyes="wide", swish=w, head_dx=1, step=st) for w, st in
+                ((-3, 0.0), (3, 0.06), (-3, 0.0), (3, 0.94))], 100, True),
+    "pounce": ([dict(pose="arc", angle=a, eyes=e, tuck=t) for a, e, t in
+                ((38, "wide", 0.3), (26, "wide", 0.7), (10, "happy", 1.0), (-12, "happy", 1.0), (-34, "wide", 0.8),
+                 (-52, "wide", 0.5))], 85, False),
+    # landing nose-first in the leaves, rump up, tail wagging, then a happy pop back out
+    "dive": ([dict(pose="dive", wiggle=w, puff=p) for w, p in ((0, 0.3), (2, 0.7), (-2, 1.0), (2, 1.0), (-2, 0.8),
+                                                              (0, 0.5))], 120, False),
     "dig": ([dict(pose="dig", phase=i / 4) for i in range(4)], 90, True),
     "bat": ([dict(pose="stand", stride=0, crouch=0.4, paw_lift=p, eyes=e) for p, e in
              ((0, "open"), (0.5, "wide"), (1, "wide"), (0.4, "open"), (0, "happy"))], 110, False),

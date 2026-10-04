@@ -10,6 +10,9 @@ ITEMS = {
     "oak": {"label": "Oak tree", "seasons": ("autumn",)},
     "pumpkins": {"label": "Pumpkin patch", "seasons": ("autumn",)},
     "scarecrow": {"label": "Scarecrow", "seasons": ("autumn",)},
+    "corn": {"label": "Corn field", "seasons": ("autumn",)},
+    "hoe": {"label": "Garden hoe", "seasons": ("autumn",)},
+    "den": {"label": "Fox den", "seasons": ("winter", "spring", "summer", "autumn")},
 }
 
 # Visitors that drop by on their own, per season. Winter, spring and summer come next.

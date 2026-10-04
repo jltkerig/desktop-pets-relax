@@ -28,5 +28,7 @@ class Thing:
         return left, self.y - ay * s, w, h
 
     def contains(self, px, py):
+        if self.alpha <= 0:
+            return False  # hidden (a fox inside the den)
         left, top, w, h = self.rect()
         return left <= px < left + w and top <= py < top + h

@@ -47,6 +47,7 @@ class Fox(Thing):
         self.watched = set()  # visitors it has already sat and watched
         self.busy_with = None  # another fox it is playing with
         self.carrying = None   # a dug-up treasure in its mouth
+        self.in_den = False    # curled up inside the den (hidden; the den shows its tail tip)
         self.rng = world.rng
 
     # -- what other things call ------------------------------------------------------------------------
@@ -54,9 +55,18 @@ class Fox(Thing):
     def anim_name(self, short):
         return f"fox_{self.palette}_{short}"
 
+    def leave_den(self):
+        if self.in_den:
+            self.in_den = False
+            self.alpha = 1.0
+            den = self.world.den()
+            if den is not None and self in den.sleepers:
+                den.sleepers.remove(self)
+
     def do(self, *steps, interrupt=True):
         """Replace (or extend) the plan."""
         if interrupt:
+            self.leave_den()
             self.plan.clear()
             self.step = None
             self.asleep = False
@@ -159,7 +169,7 @@ class Fox(Thing):
         else:
             self.energy = max(0.0, self.energy - dt * (0.0035 if night else 0.0012))
             playing = self.step is not None and self.step.anim in ("pounce", "bat", "playbow", "roll", "hop", "trot", "boop",
-                                                                    "run")
+                                                                    "run", "dive")
             self.boredom = max(0.0, min(1.0, self.boredom + dt * (-0.02 if playing else 0.0025)))
         self.playful = max(0.0, min(1.0, 0.25 + self.energy * 0.6 - (0.3 if night else 0.0) + self.boredom * 0.3))
 
@@ -173,6 +183,12 @@ class Fox(Thing):
         if step.to_x is not None and abs(step.to_x - self.x) > 1:
             self.facing = 1 if step.to_x > self.x else -1
         self.asleep = step.anim == "sleep"
+        if self.asleep:
+            den = self.world.den()
+            if den is not None and abs(self.x - den.entrance_x()) < 24 * self.world.scale:
+                self.in_den = True     # into the den: it disappears inside, its tail tip shows in the doorway
+                self.alpha = 0.0
+                den.sleepers.append(self)
 
     def _run(self, step, dt):
         step.elapsed += dt
@@ -203,6 +219,7 @@ class Fox(Thing):
             if step.anim == "sleep":
                 self.asleep = False
                 self.just_woke = True
+                self.leave_den()
             if step.then:
                 step.then()
             self.step = None
@@ -273,7 +290,7 @@ class Fox(Thing):
             cursor = w.cursor_to_pounce(self)
             if cursor is not None and rng.random() < 0.5:
                 self.plan.extend([Step("crouch", rng.uniform(1.0, 2.0), face=cursor),
-                                  Step("pounce", to_x=cursor, leap=26), Step("hop"), Step("happy", 1.0)])
+                                  Step("pounce", to_x=cursor, leap=30), Step("dive"), Step("hop"), Step("happy", 1.0)])
                 return
             friend = w.friend_to_play(self)
             if friend is not None and rng.random() < 0.55:

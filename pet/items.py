@@ -498,3 +498,67 @@ class Crumb(StrawBit):
         self.anim = sprites.Anim("crumb")
         self.vx *= 0.6
         self.vy *= 0.6
+
+
+class Message(Thing):
+    """A Discord message a fox has "stolen": only a picture of it, copied off the screen, while the spot it
+    came from is covered over. It drops down to the fox, gets carried off and played with, and then flies
+    back into place. If anything goes wrong (the window moves, say) it simply vanishes and the cover goes."""
+    kind = "message"
+    z = 27
+
+    def __init__(self, world, key, home):
+        super().__init__(world, home[0], home[1], "acorn")  # the sprite is unused; the window draws the picture
+        self.key = key
+        self.home = home           # where it belongs, along the strip (its bottom centre)
+        self.size = (60.0, 14.0)   # replaced by the picture's real size once it's copied
+        self.state = "home"        # home, falling, carried, ground, returning
+        self.carried_by = None
+        self.ground_time = 0.0
+        self.alpha = 0.0           # invisible until it's actually pulled out
+
+    def rect(self):
+        w, h = self.size
+        return self.x - w / 2, self.y - h, w, h
+
+    def _fly(self, x, y, dt, speed=520):
+        dx, dy = x - self.x, y - self.y
+        dist = (dx * dx + dy * dy) ** 0.5
+        step = speed * self.world.scale / 2 * dt
+        if dist <= step:
+            self.x, self.y = x, y
+            return True
+        self.x += dx / dist * step
+        self.y += dy / dist * step
+        return False
+
+    def mouth(self, fox):
+        s = self.world.scale
+        return fox.x + fox.facing * 26 * s, fox.y - 10 * s
+
+    def update(self, dt):
+        w = self.world
+        if self.state == "falling":
+            self.alpha = 1.0
+            fox = self.carried_by
+            if fox is None or fox.gone:
+                self.state = "ground"
+            elif self._fly(*self.mouth(fox), dt, speed=700):
+                self.state = "carried"
+        elif self.state == "carried":
+            fox = self.carried_by
+            if fox is None or fox.gone or fox.held:
+                self.state, self.carried_by = "ground", None
+            else:
+                self.x, self.y = self.mouth(fox)
+                self.facing = fox.facing
+        elif self.state == "ground":
+            self.carried_by = None
+            self.y = min(w.ground, self.y + 300 * w.scale * dt)
+            self.ground_time += dt
+            if self.ground_time > 25:  # left lying about: it makes its own way home
+                self.state = "returning"
+        elif self.state == "returning":
+            self.carried_by = None
+            if self._fly(*self.home, dt, speed=380):
+                w.message_home(self)

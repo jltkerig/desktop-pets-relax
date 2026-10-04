@@ -28,6 +28,7 @@ DEFAULTS = {
               "scarecrow": {"out": True, "x": None}, "corn": {"out": True, "x": None, "planted": None},
               "hoe": {"out": True, "x": None}, "den": {"out": True, "x": None},
               "barrels": {"out": True, "x": None}, "haystack": {"out": True, "x": None}},
+    "mischief": {"discord": True, "treasure": True},  # Discord message stealing, taskbar treasure digging
     "season": "auto",
     "scale": 2,
 }
@@ -44,7 +45,7 @@ def load(path=None):
         for key in ("season", "scale"):
             if key in saved:
                 data[key] = saved[key]
-        for key in ("foxes", "items"):
+        for key in ("foxes", "items", "mischief"):
             if isinstance(saved.get(key), dict):
                 for name, value in saved[key].items():
                     if name in data[key] and isinstance(value, type(data[key][name])):

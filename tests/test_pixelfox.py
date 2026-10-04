@@ -645,5 +645,39 @@ class Chewing(unittest.TestCase):
         self.assertLess(smallest, 12 * world.scale)
 
 
+class DiscordMischief(unittest.TestCase):
+    def setUp(self):
+        self.world, self.clock = make_world(orange=True, grey=False)
+        self.fox = self.world.of("fox")[0]
+        self.world.discord_spot = {"x": 1400.0, "y": 600.0}
+
+    def test_a_message_is_stolen_played_with_and_put_back(self):
+        self.assertTrue(self.world.steal_message(self.fox))
+        self.assertEqual(self.world.screen_requests, [("steal", "message1")])
+        self.world.screen_requests.clear()
+        states = set()
+        for _ in range(120 * 30):
+            run(self.world, self.clock, 1 / 30)
+            for msg in self.world.of("message"):
+                states.add(msg.state)
+        self.assertTrue({"falling", "carried", "ground", "returning"} <= states, states)
+        self.assertFalse(self.world.of("message"))                      # back home
+        self.assertIn(("restore", "message1"), self.world.screen_requests)  # and the cover comes off
+
+    def test_one_message_at_a_time_and_it_can_be_switched_off(self):
+        self.assertTrue(self.world.steal_message(self.fox))
+        self.assertFalse(self.world.steal_message(self.fox))
+        world, _ = make_world(orange=True, grey=False)
+        world.discord_spot = {"x": 1400.0, "y": 600.0}
+        world.settings["mischief"]["discord"] = False
+        self.assertFalse(world.steal_message(world.of("fox")[0]))
+
+    def test_if_the_window_changes_the_message_just_vanishes(self):
+        self.world.steal_message(self.fox)
+        self.world.cancel_message("message1")
+        self.assertFalse(self.world.of("message"))
+        self.assertIn(("restore", "message1"), self.world.screen_requests)
+
+
 if __name__ == "__main__":
     unittest.main()

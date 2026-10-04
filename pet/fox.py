@@ -225,6 +225,8 @@ class Fox(Thing):
                     self.x += move if distance > 0 else -move
                 elif target.kind == "fox" and (target.step is None or target.step.anim != "walk"):
                     finished = True  # caught up with a friend who has stopped: done following
+                elif target.kind == "message":
+                    finished = True  # reached the message
         elif step.leap and step.to_x is not None:
             total = sprites.duration(self.anim.name)
             t = min(1.0, step.elapsed / total)
@@ -328,6 +330,11 @@ class Fox(Thing):
         if visitor is not None:
             self.watched.add(visitor)
             self.plan.extend([Step("watch", rng.uniform(4, 7), face=visitor.x), Step("tilt", face=visitor.x)])
+            return
+
+        # bored, and a Discord window in view? steal a message (and put it back afterwards)
+        if w.discord_spot is not None and self.boredom > 0.3 and w.daylight() != "night" and \
+                rng.random() < 0.08 and w.steal_message(self):
             return
 
         # bored? dig at a taskbar icon for treasure

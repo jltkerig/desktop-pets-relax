@@ -7,11 +7,11 @@ import json
 from pathlib import Path
 
 from PySide6.QtCore import QElapsedTimer, QPoint, QProcess, QRect, Qt, QTimer
-from PySide6.QtGui import QAction, QActionGroup, QCursor, QIcon, QPainter, QPixmap, QTransform
+from PySide6.QtGui import QAction, QActionGroup, QColor, QCursor, QIcon, QPainter, QPixmap, QTransform
 from PySide6.QtWidgets import (QApplication, QCheckBox, QGroupBox, QLabel, QMenu, QPushButton, QSystemTrayIcon,
                                QVBoxLayout, QWidget)
 
-from pet import save, screens, seasons, sprites
+from pet import discord, save, screens, seasons, sprites
 
 FRAME_MS = 33
 TASKBAR_SCRIPT = Path(__file__).resolve().parent / "taskbar_buttons.ps1"
@@ -72,6 +72,91 @@ class Stage:
         self.taskbar_timer = QTimer()
         self.taskbar_timer.timeout.connect(self.find_taskbar)
         self.taskbar_timer.start(TASKBAR_REFRESH_MS)
+        # Discord mischief: where a message could be stolen from, and the covers over stolen messages
+        self.discord = None          # (hwnd, bounds, band QRect in screen pixels)
+        self.covers = {}             # message key -> (QRect in screen pixels, QColor, hwnd, bounds)
+        self.discord_timer = QTimer()
+        self.discord_timer.timeout.connect(self.look_for_discord)
+        self.discord_timer.start(15000)
+        self.guard_timer = QTimer()
+        self.guard_timer.timeout.connect(self.guard_covers)
+        self.guard_timer.start(500)
+
+    # -- Discord mischief ------------------------------------------------------------------------------
+
+    def look_for_discord(self):
+        """Is there a visible Discord window with a message showing? Tell the world where."""
+        self.discord = None
+        self.world.discord_spot = None
+        if not self.world.mischief("discord") or self.covers:
+            return
+        found = discord.find_window()
+        if not found:
+            return
+        hwnd, (left, top, right, bottom) = found
+        ratio = QApplication.primaryScreen().devicePixelRatio()
+        # the chat column: past the server and channel lists, short of the member list and the typing box
+        x0, x1 = left + 340, min(right - 260, left + 340 + 520)
+        if x1 - x0 < 200:
+            return
+        for lift in (150, 210, 270, 330, 390):
+            band = QRect(int(x0), int(bottom - lift - 46), int(x1 - x0), 46)
+            corners = (band.topLeft(), band.topRight(), band.bottomLeft(), band.bottomRight(), band.center())
+            if not all(discord.shows_at(hwnd, p.x(), p.y()) for p in corners):
+                continue  # something covers this part of Discord
+            logical = QRect(int(band.x() / ratio), int(band.y() / ratio), int(band.width() / ratio), int(band.height() / ratio))
+            image = QApplication.primaryScreen().grabWindow(0, logical.x(), logical.y(), logical.width(), logical.height()).toImage()
+            if image.isNull():
+                continue
+            bg = image.pixelColor(2, image.height() // 2)
+            busy = sum(1 for y in range(0, image.height(), 3) for x in range(0, image.width(), 3)
+                       if abs(image.pixelColor(x, y).lightness() - bg.lightness()) > 40)
+            if busy > 25:  # some text here: a message
+                self.discord = (hwnd, (left, top, right, bottom), logical)
+                bottom_mid = QPoint(logical.center().x(), logical.bottom())
+                x, y = self.to_world(bottom_mid)
+                if x > -9999:
+                    self.world.discord_spot = {"x": x, "y": y}
+                return
+
+    def _handle_screen_requests(self):
+        while self.world.screen_requests:
+            action, key = self.world.screen_requests.pop(0)
+            if action == "steal":
+                self._steal(key)
+            elif action == "restore":
+                self.covers.pop(key, None)
+                self.update()
+
+    def _steal(self, key):
+        if not self.discord:
+            self.world.cancel_message(key)
+            return
+        hwnd, bounds, band = self.discord
+        if not discord.still_there(hwnd, bounds):
+            self.world.cancel_message(key)
+            return
+        picture = QApplication.primaryScreen().grabWindow(0, band.x(), band.y(), band.width(), band.height())
+        image = picture.toImage()
+        cover = image.pixelColor(2, image.height() // 2)  # Discord's background colour, to hide the gap
+        width = min(picture.width(), 150 * self.world.scale)
+        small = picture.scaledToWidth(int(width), Qt.SmoothTransformation)
+        self.world.images[key] = small
+        for msg in self.world.of("message"):
+            if msg.key == key:
+                msg.size = (float(small.width()), float(small.height()))
+        self.covers[key] = (band, cover, hwnd, bounds)
+        self.update()
+
+    def guard_covers(self):
+        """If the Discord window moves, closes or gets covered, the gap disappears at once."""
+        for key, (band, _, hwnd, bounds) in list(self.covers.items()):
+            ratio = QApplication.primaryScreen().devicePixelRatio()
+            centre = band.center()
+            if not discord.still_there(hwnd, bounds) or not discord.shows_at(hwnd, centre.x() * ratio, centre.y() * ratio):
+                self.covers.pop(key, None)
+                self.world.cancel_message(key)
+                self.update()
 
     # -- the monitors ----------------------------------------------------------------------------------
 
@@ -195,13 +280,18 @@ class Stage:
         self.world.update(dt, cursor)
         if self.world.grab_requests:
             self._grab_icons()
+        if self.world.screen_requests:
+            self._handle_screen_requests()
         if self.dragging is not None and self.dragging.kind == "fox" and cursor[0] > -9999:
             self.dragging.x, self.dragging.y = cursor[0], cursor[1] + 22 * self.world.scale
         if self.world.dirty:
             self.world.dirty = False
             save.store(self.settings)
         for d, old in zip(self.desktops, before):
-            d.update(old.united(d.area()))
+            if self.covers:
+                d.update()
+            else:
+                d.update(old.united(d.area()))
 
     # -- the mouse (any monitor) -----------------------------------------------------------------------
 
@@ -280,12 +370,16 @@ class Desktop(QWidget):
         painter.fillRect(event.rect(), Qt.transparent)
         painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
         view = self.rect()
+        for band, colour, _, _ in self.stage.covers.values():  # gaps where messages were "stolen" from
+            local = QRect(self.mapFromGlobal(band.topLeft()), band.size())
+            if local.intersects(view):
+                painter.fillRect(local, colour)
         for thing in self.world.drawing_order():
             left, top, w, h = thing.rect()
             x, y = int(round(left + self.dx)), int(round(top + self.dy))
             if not view.intersects(QRect(x, y, int(w), int(h))):
                 continue  # on another monitor
-            if thing.kind == "treasure":
+            if thing.kind in ("treasure", "message"):
                 pixmap = self.world.images.get(thing.key)
                 if pixmap is None:
                     continue
@@ -341,6 +435,15 @@ class ToyBoxWindow(QWidget):
             item_layout.addWidget(box)
             self.boxes[("item", name)] = box
         self.layout_.addWidget(items)
+        mischief = QGroupBox("Mischief")
+        mischief_layout = QVBoxLayout(mischief)
+        for key, label in (("discord", "Steal Discord messages (and put them back)"),
+                           ("treasure", "Dig up taskbar icons")):
+            box = QCheckBox(label)
+            box.toggled.connect(lambda on, k=key: toybox._set_mischief(k, on))
+            mischief_layout.addWidget(box)
+            self.boxes[("mischief", key)] = box
+        self.layout_.addWidget(mischief)
         self.note = QLabel()
         self.note.setWordWrap(True)
         self.layout_.addWidget(self.note)
@@ -355,6 +458,8 @@ class ToyBoxWindow(QWidget):
             box.blockSignals(True)
             if kind == "fox":
                 box.setChecked(bool(settings["foxes"].get(name)))
+            elif kind == "mischief":
+                box.setChecked(bool(settings.get("mischief", {}).get(name, True)))
             else:
                 box.setChecked(bool(settings["items"].get(name, {}).get("out")))
                 box.setEnabled(True)
@@ -420,6 +525,7 @@ class ToyBox:
         if self.world.taskbar_spots:
             m.addAction("Dig up a taskbar treasure", self._dig)
         m.addAction("Zoomies!", self._zoomies)
+        m.addAction("Steal a Discord message", self._steal_discord)
         visit = m.addMenu("Invite a visitor")
         for kind in seasons.VISITORS.get(self.world.season, ()):
             label = {"jay": "Blue jay", "woolly": "Woolly bear caterpillar", "migrants": "Geese flying south",
@@ -463,6 +569,12 @@ class ToyBox:
         if self.window.isVisible():
             self.window.refresh()
 
+    def _set_mischief(self, key, on):
+        self.settings.setdefault("mischief", {})[key] = on
+        save.store(self.settings)
+        if key == "discord" and not on:
+            self.world.discord_spot = None
+
     def _set_fox(self, palette, on):
         self.settings["foxes"][palette] = on
         self._changed()
@@ -470,6 +582,15 @@ class ToyBox:
     def _set_item(self, name, on):
         self.settings["items"].setdefault(name, {"out": on, "x": None})["out"] = on
         self._changed()
+
+    def _steal_discord(self):
+        """Look for a Discord message now and send a fox after it (if one is showing)."""
+        self.desktop.look_for_discord()
+        foxes = [f for f in self.world.of("fox") if not f.held and not f.asleep]
+        if self.world.discord_spot is None:
+            self.tray.showMessage("Pixel Fox", "No Discord message in view to steal (is Discord open and visible?)")
+        elif foxes:
+            self.world.steal_message(min(foxes, key=lambda f: abs(f.x - self.world.discord_spot["x"])))
 
     def _zoomies(self):
         foxes = [f for f in self.world.of("fox") if not f.held]

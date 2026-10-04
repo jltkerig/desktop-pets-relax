@@ -4,7 +4,7 @@ import random
 
 from pet import daylight, seasons
 from pet.fox import TROT, WALK, ZOOM, Fox, Step
-from pet.items import Acorn, Climbable, Corn, CornCob, Den, Leaf, Prop, Pumpkin, Treasure, Tree
+from pet.items import Acorn, Climbable, Corn, CornCob, Den, Leaf, Message, Prop, Pumpkin, Treasure, Tree
 from pet.visitors import Goose, Jay, Squirrel, Woolly, migrating_v
 
 LEAF_COLOURS = ("red", "orange", "yellow", "brown")
@@ -29,6 +29,8 @@ class World:
         self.taskbar_spots = []   # x of each taskbar icon, filled in by the window
         self.images = {}          # treasure key -> picture of the icon (set by the window)
         self.grab_requests = []   # (treasure key, x) the window should copy the icon for
+        self.discord_spot = None  # where a Discord message could be stolen from (set by the window), along the strip
+        self.screen_requests = []  # ("steal" | "restore", message key) for the window to act on
         self._treasures = 0
         self.rebuild()
 
@@ -504,6 +506,8 @@ class World:
 
     def treasure_spot(self, fox):
         """A taskbar icon to dig at, not too far away."""
+        if not self.mischief("treasure"):
+            return None
         near = [x for x in self.taskbar_spots if abs(x - fox.x) < 700 * self.scale / 2]
         spots = near or self.taskbar_spots
         return self.rng.choice(spots) if spots else None
@@ -523,6 +527,69 @@ class World:
                Step("hop", face=spot), Step("trot", to_x=run_to, speed=TROT * 1.2, then=lambda: self.drop_treasure(fox)),
                *self._after_treasure())
         return True
+
+    # -- Discord mischief -------------------------------------------------------------------------------
+
+    def mischief(self, kind):
+        return bool(self.settings.get("mischief", {}).get(kind, True))
+
+    def steal_message(self, fox):
+        """Sit under a Discord message, leap, pull it down, run off and play with it, then put it back."""
+        spot = self.discord_spot
+        if spot is None or self.of("message") or not self.mischief("discord"):
+            return False
+        self._treasures += 1
+        key = f"message{self._treasures}"
+        msg = self.add(Message(self, key, (spot["x"], spot["y"])))
+        self.screen_requests.append(("steal", key))
+        under = max(40.0, min(self.width - 40.0, spot["x"] - 20 * self.scale))
+        side = 1 if under < self.width / 2 else -1
+        away = max(60.0, min(self.width - 60.0, under + side * self.rng.uniform(220, 420) * self.scale))
+        back = max(40.0, min(self.width - 40.0, spot["x"] - 20 * self.scale))
+
+        def yank():
+            if not msg.gone:
+                msg.carried_by, msg.state = fox, "falling"
+                fox.carrying = msg
+
+        def drop():
+            if msg.state == "carried":
+                msg.state, msg.carried_by = "ground", None
+                msg.ground_time = 0.0
+            fox.carrying = None
+
+        def pick_up():
+            if not msg.gone and msg.state == "ground":
+                msg.carried_by, msg.state = fox, "carried"
+                fox.carrying = msg
+
+        def send_home():
+            fox.carrying = None
+            if not msg.gone:
+                msg.carried_by, msg.state = None, "returning"
+
+        fox.do(Step("walk", to_x=under, speed=WALK), Step("look", face=spot["x"]), Step("crouch", 0.8, face=spot["x"]),
+               Step("hop", face=spot["x"], then=yank), Step("happy", 0.8),
+               Step("trot", to_x=away, speed=TROT * 1.3, then=drop), Step("playbow", 1.0), Step("roll", 1.8),
+               Step("happy", 1.0), Step("idle", self.rng.uniform(3, 6)),
+               Step("walk", follow=msg, speed=WALK, then=pick_up),
+               Step("walk", to_x=back, speed=WALK), Step("hop", face=spot["x"], then=send_home),
+               Step("happy", 1.0), Step("tilt", face=spot["x"]))
+        return True
+
+    def message_home(self, msg):
+        """The message is back in its place: take the cover away."""
+        msg.gone = True
+        self.screen_requests.append(("restore", msg.key))
+        for fox in self.of("fox"):
+            if fox.carrying is msg:
+                fox.carrying = None
+
+    def cancel_message(self, key):
+        """Something changed on screen (the window moved, say): the stolen picture just vanishes."""
+        for msg in self.of("message"):
+            if msg.key == key:
+                self.message_home(msg)
 
     def _after_treasure(self):
         """What it does with its prize: sometimes plays, sometimes settles down to chew it up."""

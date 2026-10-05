@@ -406,7 +406,7 @@ class Stage:
             if abs(x - sx) + abs(y - sy) > DRAG_START:
                 self.dragging = thing
                 if thing.kind == "pumpkin" and self.world.decos_in_season() and \
-                        abs(y - sy) > abs(x - sx) and self.world.pick_pumpkin(thing) is not None:
+                        self.world.pick_pumpkin(thing) is not None:  # (only a ripe one: young ones slide)
                     thing = self.dragging = self.world.of("deco")[-1]  # lifted out of the patch: picked
                     self.press = (thing, (x, y), thing.x)
                 if thing.kind == "fox" or getattr(thing, "is_cob", False) or getattr(thing, "is_ball", False) or \

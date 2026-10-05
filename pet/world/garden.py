@@ -42,16 +42,23 @@ class Garden:
         return deco
 
     def surface_under(self, x, y):
-        """The first thing to sit on below (x, y), if it's let go there: (climbable, level) or None."""
+        """Something to sit on where a pumpkin is let go at (x, y): (climbable, level) or None. Let go above a
+        top, it lands on the first top below; let go on the thing itself (over a bale, say), it goes on top."""
         s = self.scale
+        if y >= self.ground - 2 * s:
+            return None  # let go down on the ground
         best = None
         for c in self.of("climb"):
             if not c.available or c.variant == "slide":
                 continue
-            for i, (dx, h) in enumerate(c.levels):
-                top = c.y - h * s
-                if abs(x - (c.x + dx * s)) <= 14 * s and top >= y - 8 * s and (best is None or top < best[2]):
-                    best = (c, i, top)
+            column = [(i, c.y - h * s) for i, (dx, h) in enumerate(c.levels) if abs(x - (c.x + dx * s)) <= 14 * s]
+            if not column:
+                continue
+            on = [(i, top) for i, top in column if top - 8 * s <= y <= top + 18 * s]  # let go on that bale/barrel
+            below = [(i, top) for i, top in column if top >= y - 8 * s]                # or somewhere above it
+            i, top = min(on or below or column, key=lambda it: it[1])  # the highest of those
+            if best is None or top < best[2]:
+                best = (c, i, top)
         return best[:2] if best else None
 
     def place_deco(self, deco):

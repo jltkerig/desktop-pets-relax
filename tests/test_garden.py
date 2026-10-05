@@ -303,6 +303,18 @@ class DecoratingPumpkins(unittest.TestCase):
         run(world, clock, 0.1)
         self.assertAlmostEqual(deco.x, hay.x + dx * world.scale, delta=10 * world.scale)
 
+    def test_let_go_right_on_a_bale_it_goes_on_top(self):
+        world, clock = self.world()
+        hay = next(c for c in world.of("climb") if c.variant == "haystack")
+        deco = world.add_deco()
+        deco.pick_up()
+        dx, h = hay.levels[-1]
+        deco.x, deco.y = hay.x + dx * world.scale, hay.y - (h - 10) * world.scale  # down inside the top bale
+        deco.drop()
+        run(world, clock, 2)
+        self.assertIs(deco.holder, hay)
+        self.assertEqual(deco.y, hay.y - h * world.scale)
+
     def test_let_go_under_a_tree_it_sits_on_the_ground(self):
         world, clock = self.world()
         tree = world.tree()

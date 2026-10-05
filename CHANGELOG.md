@@ -3,6 +3,16 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.16.0
+
+- **Lusher trees:** the summer and autumn oak is now a full, rounded crown of overlapping clumps of leaves, each
+  lit on its own with deep shade in among them, colours drifting across in patches, and branches peeking
+  through underneath. The birch has airy clusters of small leaves all along its branches (green in summer,
+  gold and orange in autumn), with its white trunk showing between them.
+- **Fixed: pumpkins wouldn't go on the haystack.** Let a decorating pumpkin go right on a bale (not only above
+  it) and it sits on top; it picks the bale you let go over. A ripe pumpkin in the patch is picked whichever
+  way you drag it (young ones still just slide along).
+
 ## 1.15.0
 
 - **The sun and moon are a clock now**, so you can tell the time at a glance: the sun crosses the sky from 6 AM

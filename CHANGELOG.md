@@ -3,6 +3,12 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.16.1
+
+- **Leaf-shaped leaves:** the oak's and birch's crowns are made of real leaf shapes instead of round blobs:
+  pointed leaves with a vein down the middle, one half catching the light. The oak's are wavy-edged and spray
+  outward from the middle of the crown; the birch's are small and hang down along the branches.
+
 ## 1.16.0
 
 - **Lusher trees:** the summer and autumn oak is now a full, rounded crown of overlapping clumps of leaves, each

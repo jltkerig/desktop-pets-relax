@@ -41,10 +41,11 @@ def _branch(c, x1, y1, x2, y2, width):
             _px(c, x, y + k, "bark", level)
 
 
-def _oak_trunk(c, rng, sway):
-    """The oak's trunk, roots, bark and big branches (the same in every season)."""
+def _oak_trunk(c, rng, sway, top=120, branches=True):
+    """The oak's trunk, roots, bark and (if branches) the big branches up into a leafy crown. A leafless oak
+    stops the trunk lower (top) and forks it into its own V of limbs instead."""
     # the trunk: straight stepped sides, tapering upward, with a flared base
-    for y in range(120, OAK_GROUND + 1):
+    for y in range(top, OAK_GROUND + 1):
         rise = OAK_GROUND - y
         half = 12 - min(rise, 70) * 0.06            # 12 wide at the base, narrowing to about 8
         if rise < 10:
@@ -73,10 +74,27 @@ def _oak_trunk(c, rng, sway):
         if c.mat[y][x] == "bark" and c.fixed[y][x] != 0:
             c.fixed[y][x] = 3 if c.fixed[y][x] >= 2 else 2
     # branches reaching up into the crown
-    for x1, y1, x2, y2, w in ((OAK_X - 3, 152, OAK_X - 44, 104, 5), (OAK_X + 3, 146, OAK_X + 46, 100, 5),
+    for x1, y1, x2, y2, w in (() if not branches else ((OAK_X - 3, 152, OAK_X - 44, 104, 5), (OAK_X + 3, 146, OAK_X + 46, 100, 5),
                               (OAK_X, 136, OAK_X - 6, 86, 5), (OAK_X - 30, 120, OAK_X - 60, 100, 3),
-                              (OAK_X + 30, 116, OAK_X + 62, 96, 3)):
+                              (OAK_X + 30, 116, OAK_X + 62, 96, 3))):
         _branch(c, x1, y1, x2 + sway, y2, w)
+
+
+def _limb(c, x1, y1, x2, y2, w1, w2):
+    """A thick, tapering limb going up from (x1, y1) (w1 wide) to (x2, y2) (w2 wide), lit like the trunk: light
+    on the left, dark on the right, with a rounded end."""
+    for y in range(int(y2), int(y1) + 1):
+        t = (y1 - y) / max(1, y1 - y2)
+        cx, half = x1 + (x2 - x1) * t, (w1 + (w2 - w1) * t) / 2
+        left, right = int(round(cx - half)), int(round(cx + half))
+        for x in range(left, right + 1):
+            band = (x - left) / max(1, right - left)
+            _px(c, x, y, "bark", 3 if band < 0.15 else 2 if band < 0.4 else 1 if band < 0.75 else 0)
+    c.ellipse(x2, y2, w2 / 2, w2 / 2 * 0.8, "bark", bias=0.1)
+
+
+# a leafless oak's trunk forks into a thick V: (base x, base y, top x, top y, base width, top width) for each arm
+BARE_FORK = [(OAK_X - 4, 132, OAK_X - 30, 92, 10, 6), (OAK_X + 4, 132, OAK_X + 28, 90, 10, 6)]
 
 
 # the crown's colours: (cut-off, leaf colour) from the top of the crown to the bottom
@@ -236,16 +254,19 @@ def bare_oak_shape(seed=7):
             forks.append((x2, y2))
         # carry on, bending a little upward toward the light
         bend = (math.pi / 2 - angle) * 0.12
-        grow(x2, y2, angle + bend + rng.uniform(-0.25, 0.25), length * rng.uniform(0.78, 0.9),
+        grow(x2, y2, angle + bend + rng.uniform(-0.25, 0.25), length * rng.uniform(0.82, 0.92),
              max(1, width - 1), depth - 1)
-        if rng.random() < (0.75 if width >= 3 else 0.5):  # and a side branch
+        if rng.random() < (0.75 if width >= 3 else 0.45):  # and a side branch
             side = rng.choice((-1, 1))
             grow(x2, y2, angle + side * rng.uniform(0.45, 0.85), length * rng.uniform(0.6, 0.75),
                  max(1, width - 1), depth - 1)
 
-    for angle in (2.55, 2.05, 1.62, 1.2, 0.68):  # five main limbs from the top of the trunk, fanned out
-        sx = OAK_X + math.cos(angle) * 4
-        grow(sx, 132, angle + rng.uniform(-0.08, 0.08), rng.uniform(28, 34), 5, 7)
+    (lx1, ly1, lx2, ly2, _, _), (rx1, ry1, rx2, ry2, _, _) = BARE_FORK
+    left_mid, right_mid = ((lx1 + lx2) / 2, (ly1 + ly2) / 2), ((rx1 + rx2) / 2, (ry1 + ry2) / 2)
+    for (sx, sy), angle, width in (((lx2, ly2), 2.45, 5), ((lx2, ly2), 1.95, 5), ((lx2, ly2), 1.3, 4),
+                                   ((rx2, ry2), 1.85, 4), ((rx2, ry2), 1.15, 5), ((rx2, ry2), 0.7, 5),
+                                   (left_mid, 2.8, 4), (right_mid, 0.35, 4)):
+        grow(sx, sy, angle + rng.uniform(-0.08, 0.08), rng.uniform(21, 25), width, 7)
     # perches: a few forks spread across the top of the crown
     perches = []
     for x, y in sorted(forks, key=lambda p: p[1]):
@@ -265,10 +286,13 @@ def oak_bare(sway=0.0, seed=7, snow=False, spring=False):
     the twigs, and violets and daffodils growing underneath."""
     c = Canvas(OAK_W, OAK_H)
     rng = random.Random(seed)
-    _oak_trunk(c, rng, sway)
+    _oak_trunk(c, rng, sway, top=132, branches=False)
 
     def lean(y):
         return sway * max(0.0, (140 - y) / 140) * 1.6  # higher up sways more
+
+    for x1, y1, x2, y2, w1, w2 in BARE_FORK:  # the trunk forks into a thick V
+        _limb(c, x1 + lean(y1), y1, x2 + lean(y2), y2, w1, w2)
 
     for x1, y1, x2, y2, width in BARE_SEGMENTS:
         if width >= 2:
@@ -945,10 +969,10 @@ def _rock(c, rng, cx, cy, w, h, mat="stone", moss=False):
                         c.mat[y + 1][x], c.fixed[y + 1][x] = "moss", 1
 
 
-def den(occupants=()):
+def den(occupants=(), snow=False):
     """112 x 56: a fox den. A lumpy earth mound set with stones: a big flat rock over the doorway,
     boulders on either side, pebbles and crumbly dirt clumps, grass and a root. occupants: fox palettes
-    asleep inside, shown as sleepy snouts poking out of the doorway."""
+    asleep inside, shown as sleepy snouts and ears poking out of the doorway. snow: snow lying over the top."""
     c = Canvas(112, 56)
     rng = random.Random(4)
     ground = 54
@@ -996,13 +1020,34 @@ def den(occupants=()):
             top += 1  # stand the tuft on the mound's surface
         for dx, hgt in ((-1.6, 4), (0, 6), (1.6, 4.5)):
             c.capsule(gx, top + 1, gx + dx, top - hgt, 0.6, 0.35, "grass")
-    # sleeping foxes: their snouts poking out of the doorway, chins on their paws, eyes shut
+    if snow:  # a blanket of snow over the top of the mound and its stones (not in the doorway), grass buried
+        srng = random.Random(11)
+        for y in range(c.h):
+            for x in range(c.w):
+                if c.mat[y][x] in ("grass", "handle") and y < ground - 2:
+                    c.mat[y][x] = None
+        for x in range(c.w):
+            top = next((y for y in range(c.h) if c.mat[y][x] is not None), None)
+            if top is None or top > ground - 3:
+                continue
+            depth = 2 + (srng.random() < 0.5) + (1 if 30 < x < 85 else 0)
+            for k in range(depth):
+                y = top - 1 + k
+                if 0 <= y < c.h:
+                    c.mat[y][x], c.fixed[y][x] = "snow", (3 if k == 0 else 2 if k < depth - 1 else 1)
+    # sleeping foxes: their snouts and ears poking out of the doorway, chins on their paws, eyes shut
     sleepers = occupants[:2]
     for i, palette in enumerate(sleepers):
         side = (-1 if i == 0 else 1) if len(sleepers) > 1 else 1
         hx, hy = door_x + side * (4 if len(sleepers) > 1 else 0) - side * 2, ground - 4
         sub = Canvas(112, 56, palette)
         sub.ellipse(hx + side * 4, ground - 0.8, 2.4, 1.1, "dark")                         # a front paw
+        for ex in (-2.6, 1.6):  # two tall, pointed ears, pale inside and dark at the tips
+            bx = hx + side * ex
+            sub.polygon([(bx - 1.8, hy - 1.5), (bx + 1.8, hy - 1.5), (bx + side * 0.8, hy - 8)], "fur", lum=0.55)
+            sub.pixel(bx + side * 0.3, hy - 3.5, "white", 1)
+            sub.pixel(bx + side * 0.8, hy - 7.5, "dark", 0)
+            sub.pixel(bx + side * 0.8, hy - 6.5, "dark", 1)
         sub.ellipse(hx, hy, 4.2, 3.4, "fur")                                               # the top of the head
         sub.capsule(hx + side * 1, hy + 0.5, hx + side * 6.5, hy + 1.8, 2.3, 1.2, "fur")   # the snout
         sub.ellipse(hx + side * 3.5, hy + 2.6, 3.2, 1.1, "white", bias=-0.1)              # pale chin
@@ -1732,6 +1777,10 @@ SPRITES = {
     "den_orange": ([den(("orange",))], 1000, False, (56, 54)),
     "den_grey": ([den(("grey",))], 1000, False, (56, 54)),
     "den_both": ([den(("orange", "grey"))], 1000, False, (56, 54)),
+    "den_snow": ([den(snow=True)], 1000, False, (56, 54)),
+    "den_snow_orange": ([den(("orange",), snow=True)], 1000, False, (56, 54)),
+    "den_snow_grey": ([den(("grey",), snow=True)], 1000, False, (56, 54)),
+    "den_snow_both": ([den(("orange", "grey"), snow=True)], 1000, False, (56, 54)),
     "zzz": ([zzz()], 1000, False, (5, 9)),
     "scarecrow": ([scarecrow(sw) for sw in (0, 1, 2, 1, 0, -1, -2, -1)], 260, True, (24, 85)),
 }

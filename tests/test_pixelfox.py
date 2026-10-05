@@ -1049,6 +1049,19 @@ class DenSnouts(unittest.TestCase):
         self.assertTrue(changed)
         self.assertTrue(all(y >= 40 for _, y in changed))  # low down in the doorway, chin on the ground
 
+    def test_the_den_is_snowed_over_when_the_oak_is(self):
+        world, clock = make_world("winter", orange=False, grey=False)
+        world.settings["snow"] = True
+        run(world, clock, 0.1)
+        self.assertEqual(world.den().anim.name, "den_snow")
+        world.settings["snow"] = False
+        run(world, clock, 0.1)
+        self.assertEqual(world.den().anim.name, "den")
+        world.settings["season"] = "autumn"
+        world.settings["snow"] = True  # snow only ever lies in winter
+        run(world, clock, 0.1)
+        self.assertEqual(world.den().anim.name, "den")
+
 
 class OakThroughTheYear(unittest.TestCase):
     def oak(self, season, snow=False):

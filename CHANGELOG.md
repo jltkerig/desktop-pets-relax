@@ -3,6 +3,13 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.5.1
+
+- **Winter oak:** the trunk now forks into a thick V of two limbs instead of ending flat at the top, with a
+  fuller, more even crown of branches above it (the snowy and spring oaks too).
+- **The den in winter:** on snowy days the den is snowed over too, the grass buried under it.
+- **Sleeping foxes in the den** show their ears as well as their snouts poking out of the doorway.
+
 ## 1.5.0
 
 - **An oak for every season**, out all year and changing in place when the season does:

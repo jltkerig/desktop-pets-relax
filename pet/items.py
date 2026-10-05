@@ -576,7 +576,9 @@ class Den(Thing):
     def update(self, dt):
         self.sleepers = [f for f in self.sleepers if not f.gone and f.in_den]
         palettes = sorted({f.palette for f in self.sleepers})
-        self.anim.name = ("den_both" if len(palettes) > 1 else f"den_{palettes[0]}" if palettes else "den")
+        snow = "_snow" if self.world.season == "winter" and self.world.snowy else ""  # snowed over, like the oak
+        self.anim.name = (f"den{snow}_both" if len(palettes) > 1 else f"den{snow}_{palettes[0]}" if palettes
+                          else f"den{snow}")
         if self.sleepers:
             self.z_timer -= dt
             if self.z_timer <= 0:

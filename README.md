@@ -62,6 +62,7 @@ Right-click the icon for the menu:
 - **Pet:** move the cursor back and forth over a fox. It only ever reacts happily.
 - **Click:** a happy hop. A napping fox wakes up and stretches.
 - **Drag a fox:** you pick it up, and it lands when you let go.
+- **Spring:** daffodils, tulips and violets that butterflies land on, and songbirds that sing.
 - **Winter:** a sled to rock, a tree stump the foxes climb, and a little Christmas tree whose lights blaze when
   clicked.
 - **Click the oak:** something different falls out each season: a branch, snow, a caterpillar, a butterfly,

@@ -1572,25 +1572,45 @@ def inchworm(pose="crawl", t=0.0):
     return c.to_image()
 
 
-def butterfly(t=0.0):
-    """14 x 12: a monarch butterfly seen from the front, wings beating (wide open .. edge on)."""
+BUTTERFLIES = {"monarch": "monarch", "white": "wing_white", "sulphur": "wing_sulphur", "azure": "wing_azure"}
+
+
+def butterfly(t=0.0, kind="monarch", span=None):
+    """14 x 12: a butterfly seen from the front, wings beating (wide open .. edge on). kind: monarch (orange
+    and black), white (a cabbage white), sulphur (lemon yellow) or azure (sky blue). span: how open the wings
+    are (otherwise from t)."""
     c = Canvas(14, 12)
-    span = 0.25 + 0.75 * abs(math.cos(t * math.pi))  # how open the wings look
+    mat = BUTTERFLIES[kind]
+    if span is None:
+        span = 0.25 + 0.75 * abs(math.cos(t * math.pi))
     for side in (-1, 1):
         upper = [(7, 5), (7 + side * 6.2 * span, 1.2), (7 + side * 6.0 * span, 5.6)]
         lower = [(7, 6), (7 + side * 4.4 * span, 6.4), (7 + side * 3.2 * span, 10)]
-        c.polygon(upper, "monarch", lum=0.6)
-        c.polygon(lower, "monarch", lum=0.45)
-        if span > 0.5:  # black edges with white dots, black veins
+        c.polygon(upper, mat, lum=0.6)
+        c.polygon(lower, mat, lum=0.45)
+        if span > 0.5 and kind == "monarch":  # black edges with white dots, black veins
             c.pixel(7 + side * 5.6 * span, 2, "bug_black", 0)
             c.pixel(7 + side * 5.6 * span, 4.4, "bug_black", 0)
             c.pixel(7 + side * 4.8 * span, 2.8, "white", 3)
             c.pixel(7 + side * 3 * span, 3.6, "bug_black", 0)
             c.pixel(7 + side * 2.6 * span, 8, "bug_black", 0)
+        elif span > 0.5 and kind == "white":  # black wing tips and a spot
+            c.pixel(7 + side * 5.8 * span, 1.6, "bug_black", 0)
+            c.pixel(7 + side * 3.6 * span, 3.4, "bug_black", 1)
+        elif span > 0.5:  # a dark edge and an eyespot
+            c.pixel(7 + side * 5.8 * span, 2.2, mat, 0)
+            c.pixel(7 + side * 3.0 * span, 7.6, "star" if kind == "azure" else "ladybug", 2)
     c.capsule(7, 3.5, 7, 9, 0.6, 0.5, "bug_black")  # body
     for side in (-1, 1):
         c.capsule(7, 3.5, 7 + side * 1.8, 0.8, 0.2, 0.2, "bug_black")  # antennae
     return c.to_image()
+
+
+COMMON.update({
+    "wing_white": ("#a8aca0", "#d8dcd2", "#f2f4ee", "#ffffff", "#5e625a"),
+    "wing_sulphur": ("#b8a414", "#e0cc28", "#f4e450", "#fcf490", "#5e540a"),
+    "wing_azure": ("#3a5aa8", "#5a82d0", "#82a8ec", "#b4cef8", "#1c2c5a"),
+})
 
 
 def beetle(kind="junebug", pose="crawl", t=0.0):
@@ -1773,6 +1793,140 @@ def xmas_tree(t=0.0, snow=False, sparkle=False):
     return c.to_image()
 
 
+# -- spring: flower beds, songbirds ---------------------------------------------------------------------------
+
+COMMON.update({
+    "tulip_red": ("#8a1020", "#c01e30", "#e03a48", "#f4707a", "#4a0610"),
+    "tulip_pink": ("#a8406a", "#d0608c", "#ec88ac", "#f8b8d0", "#5a1e38"),
+    "tulip_yellow": ("#b8900c", "#e4bc1c", "#f6d840", "#fcee88", "#5e4806"),
+    "robin_back": ("#3e342c", "#5a4c40", "#766656", "#94846e", "#1e1812"),
+    "robin_breast": ("#9a3e14", "#c85a20", "#e47a36", "#f4a060", "#4e1c06"),
+    "bluebird": ("#1e3a8a", "#2e56b8", "#4878dc", "#78a2f0", "#0e1c48"),
+    "goldfinch": ("#b8980c", "#e4c418", "#f8e030", "#fcf080", "#5e4c04"),
+    "note": ("#1a1a24", "#2a2a38", "#3c3c50", "#5a5a74", "#0a0a10"),
+})
+
+# the flower heads in each bed (frame x, y), so butterflies can land on them: written to the sprite's JSON
+FLOWER_BEDS = {
+    "daffodils": [(8, 9), (15, 5), (22, 8), (29, 4), (36, 10)],
+    "tulips": [(7, 8), (14, 4), (21, 7), (28, 3), (35, 8)],
+    "violets": [(6, 14), (11, 12), (17, 13), (23, 11), (29, 13), (34, 14)],
+}
+TULIP_COLOURS = ("tulip_red", "tulip_pink", "tulip_yellow", "tulip_red", "violet")
+
+
+def flower_bed(kind, sway=0.0):
+    """44 x 24: a clump of spring flowers. kind: daffodils (yellow, orange trumpets), tulips (red, pink, yellow
+    and purple cups) or violets (a low mound of heart-shaped leaves dotted with small purple flowers)."""
+    c = Canvas(44, 24)
+    ground = 22
+    rng = random.Random({"daffodils": 1, "tulips": 2, "violets": 3}[kind])
+    heads = FLOWER_BEDS[kind]
+    if kind == "violets":
+        for x in range(4, 40, 3):  # the leaves, in a low mound
+            c.ellipse(x + rng.uniform(-1, 1), ground - 2 - rng.uniform(0, 3) * (1 - abs(x - 22) / 22),
+                      2.6, 2.0, "stalk", bias=rng.uniform(-0.2, 0.2))
+        for x, y in heads:
+            hx = x + sway * 0.4
+            _twig(c, x, ground - 3, hx, y + 1, "stalk", 1)
+            for a in range(5):
+                ang = a / 5 * 2 * math.pi - math.pi / 2
+                c.ellipse(hx + math.cos(ang) * 1.4, y + math.sin(ang) * 1.2, 1.0, 1.0, "violet")
+            c.pixel(hx, y, "daffodil", 3)
+        return c.to_image()
+    for k, (x, y) in enumerate(heads):  # long leaves first, then a stem and a flower for each
+        side = -1 if k % 2 else 1
+        _twig(c, x, ground, x + side * 3, ground - (ground - y) * 0.6, "stalk", 2)
+        _twig(c, x - side, ground, x - side * 2, ground - (ground - y) * 0.45, "stalk", 1)
+    for k, (x, y) in enumerate(heads):
+        lean = sway * (1 - y / ground) * 1.4
+        hx = x + lean
+        _twig(c, x, ground, hx, y + 2, "stalk", 1)
+        if kind == "daffodils":
+            for a in range(6):
+                ang = a / 6 * 2 * math.pi
+                c.ellipse(hx + math.cos(ang) * 2.0, y + math.sin(ang) * 1.6, 1.3, 1.1, "daffodil")
+            c.ellipse(hx + 1.0, y + 0.3, 1.4, 1.3, "daffodil_cup")
+        else:  # a tulip: a closed cup of petals
+            mat = TULIP_COLOURS[k % len(TULIP_COLOURS)]
+            c.ellipse(hx, y, 2.4, 2.8, mat)
+            c.polygon([(hx - 2.4, y - 0.5), (hx - 1.2, y - 3.6), (hx, y - 1.4), (hx + 1.2, y - 3.6), (hx + 2.4, y - 0.5)],
+                      mat, lum=0.7)
+    for x in range(2, 42):  # a little earth at the foot
+        c.pixel(x, ground + 1, "dirt", 1 if x % 3 else 2)
+    return c.to_image()
+
+
+SONGBIRDS = {  # back, breast, head, beak
+    "robin": ("robin_back", "robin_breast", "bug_black", "beak"),
+    "bluebird": ("bluebird", "robin_breast", "bluebird", "bug_black"),
+    "goldfinch": ("goldfinch", "goldfinch", "goldfinch", "daffodil_cup"),
+}
+
+
+def songbird(kind="robin", pose="perch", t=0.0):
+    """20 x 20: a small songbird facing right: a robin (orange breast), a bluebird or a goldfinch (yellow, black
+    wings and cap). pose: perch, hop, fly, sing (head up, beak open), peck, worm (a robin tugging up a worm)."""
+    c = Canvas(20, 20)
+    back, breast, head, beak = SONGBIRDS[kind]
+    s = math.sin(t * 2 * math.pi)
+    wing = "bug_black" if kind == "goldfinch" else back
+    if pose == "fly":
+        c.capsule(6, 10, 1, 9 + s, 1.4, 1.0, back, -0.3)
+        c.ellipse(10, 10, 4.6, 2.8, back)
+        c.ellipse(11, 11.4, 3.4, 1.4, breast, bias=0.1)
+        c.polygon([(8, 9), (12, 9), (8 - s, 9 - s * 5.5), (5, 9 - s * 5)], wing, lum=0.5)
+        hx, hy = 14.5, 8.5
+    else:
+        hop = max(0.0, s) * 2 if pose == "hop" else 0.0
+        bow = (2.5 + abs(s) * 1.5) if pose in ("peck", "worm") else 0.0
+        by = 12 - hop
+        c.capsule(8, by + 1, 3, by + 4, 1.3, 1.0, back, -0.3)                  # tail
+        c.capsule(10, by + 3, 9.5, 18 - hop, 0.4, 0.4, "bark")                  # legs
+        c.capsule(12, by + 3, 12.5, 18 - hop, 0.4, 0.4, "bark")
+        c.ellipse(10.5, by, 4.4, 3.6, back, angle=-10)
+        c.ellipse(12, by + 1.2, 3.0, 2.6, breast, bias=0.15)                    # the breast
+        c.polygon([(7.5, by - 1.5), (11.5, by - 1.5), (7, by + 2.5)], wing, lum=0.35)  # folded wing
+        if kind == "goldfinch":
+            c.pixel(9, by, "white", 3)  # white wing bar
+        if pose == "sing":
+            hx, hy = 14.5, 6.5 - hop
+        else:
+            hx, hy = 14 + bow * 0.6, 8 - hop + bow * 2
+    c.ellipse(hx, hy, 2.6, 2.4, head)
+    if kind == "goldfinch":
+        c.ellipse(hx - 0.4, hy - 1.2, 1.6, 0.9, "bug_black")  # black cap
+    if kind == "robin":
+        c.pixel(hx + 0.2, hy - 1.2, "white", 3)  # the white ring round its eye
+    open_ = pose == "sing" and t < 0.75
+    if open_:
+        c.capsule(hx + 2, hy - 0.6, hx + 4.4, hy - 1.8, 0.4, 0.3, beak)
+        c.capsule(hx + 2, hy + 0.4, hx + 4.0, hy + 1.2, 0.4, 0.3, beak)
+    else:
+        c.capsule(hx + 2, hy, hx + 4.2, hy + 0.3, 0.5, 0.3, beak)
+    if pose == "worm":  # a wiggly pink worm stretching from its beak to the ground
+        stretch = 2 + abs(s) * 3
+        c.chain([(hx + 4, hy + 0.5 + k * stretch / 4 + (0.5 if k % 2 else -0.5)) for k in range(5)], [0.5] * 5,
+                ["tulip_pink"] * 5)
+    c.pixel(hx + 0.6, hy - 0.6, "eye")
+    return c.to_image()
+
+
+def note(double=False):
+    """8 x 10: a music note (or two joined) floating up from a singing bird."""
+    c = Canvas(8, 10)
+    c.ellipse(2, 8, 1.6, 1.2, "note", angle=-20)
+    _twig(c, 3, 8, 3, 1, "note", 1)
+    if double:
+        c.ellipse(6, 7, 1.6, 1.2, "note", angle=-20)
+        _twig(c, 7, 7, 7, 0, "note", 1)
+        _twig(c, 3, 1, 7, 0, "note", 1)
+        _twig(c, 3, 2, 7, 1, "note", 1)
+    else:
+        _twig(c, 3, 1, 5, 3, "note", 1)
+    return c.to_image()
+
+
 def tray_icon():
     """32 x 32 fox face for the tray."""
     import fox_art
@@ -1855,6 +2009,22 @@ SPRITES = {
     "buzz_bubble": ([word_bubble("BZZZZZ!")], 1000, False, (4, 13)),
     "spider": ([spider(t) for t in (0.0, 0.25, 0.5, 0.75)], 140, True, (6, 2)),
     "silk": ([silk()], 1000, False, (0, 0)),
+    **{f"butterfly_{kind}": ([butterfly(t, kind) for t in (0.0, 0.25, 0.5, 0.75)], 70, True, (7, 7))
+       for kind in ("white", "sulphur", "azure")},
+    **{f"butterfly_{kind}_rest": ([butterfly(kind=kind, span=sp) for sp in (1.0, 0.8, 0.45, 0.3, 0.45, 0.8)], 260,
+                                  True, (7, 10))
+       for kind in BUTTERFLIES},
+    **{kind: ([flower_bed(kind, sw) for sw in (0, 1, 0, -1)], 520, True, (22, 22), {"perches": heads})
+       for kind, heads in FLOWER_BEDS.items()},
+    **{f"{kind}_bob": ([flower_bed(kind, sw) for sw in (2, -2, 1.5, -1.2, 0.6, 0)], 90, False, (22, 22),
+                       {"perches": heads})
+       for kind, heads in FLOWER_BEDS.items()},
+    **{f"{kind}_{pose}": ([songbird(kind, pose, i / n) for i in range(n)], ms, True, (10, 18))
+       for kind in SONGBIRDS
+       for pose, n, ms in (("perch", 2, 600), ("hop", 4, 90), ("fly", 4, 70), ("sing", 4, 140), ("peck", 4, 110))},
+    "robin_worm": ([songbird("robin", "worm", i / 4) for i in range(4)], 160, True, (10, 18)),
+    "note": ([note()], 1000, False, (4, 9)),
+    "note_double": ([note(True)], 1000, False, (4, 9)),
     "sled": ([sled()], 1000, False, (22, 16)),
     "sled_snow": ([sled(snow=True)], 1000, False, (22, 16)),
     "sled_wobble": ([sled(tilt=a) for a in (0, 2, -1.5, 1, -0.5, 0)], 80, False, (22, 16)),

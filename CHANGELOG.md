@@ -3,6 +3,18 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.8.0
+
+- **Spring flower beds** in the Toy Box: **daffodils**, **tulips** (red, pink, yellow and purple) and **violets**.
+  They sway in the breeze; click one and it bobs, and sometimes a butterfly that was resting in it flies up.
+- **Butterflies** (monarchs, cabbage whites, sulphurs and azures) flutter in, land on the flowers to rest with
+  their wings slowly opening and closing, flutter about some more and go on their way. A fox coming close, or a
+  click, sends them off.
+- **Songbirds:** a robin, a bluebird or a goldfinch (sometimes a pair) perches in the budding oak, on something,
+  or hops about on the ground, singing now and then with music notes floating up, and the foxes stop to listen.
+  A robin on the ground sometimes tugs up a worm. Click one, or let a fox dash at it, and it flies off.
+- "Invite a visitor" in spring: Butterflies, Songbirds.
+
 ## 1.7.1
 
 - The tree stump is out all year round now, not just in winter (snowy on snowy winter days).

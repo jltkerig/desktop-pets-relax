@@ -559,7 +559,8 @@ class ToyBox:
             label = {"jay": "Blue jay", "woolly": "Woolly bear caterpillar", "migrants": "Geese flying south",
                      "geese": "Geese stopping by to honk", "squirrel": "Squirrel",
                      "turkeys": "Wild turkeys", "crows": "Crows", "junebug": "June beetle",
-                     "ladybug": "Ladybug", "cicada": "Cicada"}.get(kind, kind.title())
+                     "ladybug": "Ladybug", "cicada": "Cicada", "butterflies": "Butterflies",
+                     "songbirds": "Songbirds"}.get(kind, kind.title())
             visit.addAction(label, lambda k=kind: self.world.invite_visitor(k))
 
         m.addSeparator()

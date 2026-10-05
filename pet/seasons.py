@@ -18,13 +18,16 @@ ITEMS = {
     "sled": {"label": "Sled", "seasons": ("winter",)},
     "stump": {"label": "Tree stump", "seasons": ("winter", "spring", "summer", "autumn")},
     "xmas_tree": {"label": "Christmas tree", "seasons": ("winter",)},
+    "daffodils": {"label": "Daffodils", "seasons": ("spring",)},
+    "tulips": {"label": "Tulips", "seasons": ("spring",)},
+    "violets": {"label": "Violets", "seasons": ("spring",)},
 }
 
 # Visitors that drop by on their own, per season. Crows are about all year round.
 VISITORS = {
     "autumn": ("squirrel", "jay", "woolly", "migrants", "geese", "turkeys", "crows", "cicada"),
     "winter": ("crows",),
-    "spring": ("crows",),
+    "spring": ("crows", "butterflies", "songbirds"),
     "summer": ("crows", "junebug", "ladybug"),
 }
 

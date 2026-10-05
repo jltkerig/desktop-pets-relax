@@ -288,7 +288,7 @@ class Field(unittest.TestCase):
         self.assertTrue(0 < scarecrow[0].x - rightmost <= 80 * world.scale)
         world.settings["season"] = "spring"
         world.rebuild()
-        self.assertFalse(world.of("prop"))
+        self.assertFalse([t for t in world.of("prop") if t.variant == "scarecrow"])  # autumn only
 
     def test_a_fox_chases_and_catches_a_falling_leaf(self):
         from pet.items import Leaf
@@ -1266,6 +1266,87 @@ class WinterThings(unittest.TestCase):
         world, _ = self.winter()
         holders = {getattr(p.holder, "variant", None) for p in crow_perches(world)}
         self.assertTrue({"sled", "xmas_tree", "stump"} <= holders)
+
+
+class Spring(unittest.TestCase):
+    def spring(self, seed=3, **foxes):
+        world, clock = make_world("spring", seed=seed, **{"orange": False, "grey": False, **foxes})
+        run(world, clock, 0.1)
+        return world, clock
+
+    def bed(self, world, kind):
+        return next(t for t in world.of("prop") if t.variant == kind)
+
+    def test_daffodils_tulips_and_violets_come_out_in_spring(self):
+        world, _ = self.spring()
+        for kind in ("daffodils", "tulips", "violets"):
+            self.assertGreaterEqual(len(self.bed(world, kind).flower_heads()), 5, kind)
+        world, _ = make_world("summer", orange=False, grey=False)
+        self.assertFalse([t for t in world.of("prop") if t.variant in ("daffodils", "tulips", "violets")])
+
+    def test_butterflies_land_on_the_flowers_and_move_on(self):
+        landed = False
+        for seed in range(6):
+            world, clock = self.spring(seed=seed)
+            fly = world.invite_visitor("butterflies")
+            heads = []
+            for _ in range(120 * 10):
+                run(world, clock, 0.1, fps=10)
+                if fly.state == "rest":
+                    landed = True
+                    heads = [h for t in world.of("prop") if t.variant in ("daffodils", "tulips", "violets")
+                             for h in t.flower_heads()]
+                    self.assertTrue(any(abs(fly.x - x) < 1 and abs(fly.y - y) < 1 for x, y in heads))
+                    self.assertTrue(fly.anim.name.endswith("_rest"))
+                if fly.gone:
+                    break
+            self.assertTrue(fly.gone, seed)
+        self.assertTrue(landed)
+
+    def test_clicking_flowers_bobs_them_and_sometimes_a_butterfly_flies_up(self):
+        flew = False
+        for seed in range(10):
+            world, _ = self.spring(seed=seed)
+            tulips = self.bed(world, "tulips")
+            tulips.click()
+            self.assertEqual(tulips.anim.name, "tulips_bob")
+            flew = flew or bool(world.of("butterfly"))
+        self.assertTrue(flew)
+
+    def test_songbirds_sing_and_the_foxes_listen(self):
+        sang = False
+        for seed in range(6):
+            world, clock = self.spring(seed=seed, orange=True)
+            bird = world.invite_visitor("songbirds")
+            for _ in range(100 * 10):
+                run(world, clock, 0.1, fps=10)
+                sang = sang or bool(world.of("note"))
+                if bird.gone:
+                    break
+            self.assertTrue(bird.gone, seed)
+        self.assertTrue(sang)
+
+    def test_a_robin_on_the_ground_pulls_up_a_worm(self):
+        from pet.visitors import Perch, SongBird
+        wormed = False
+        for seed in range(8):
+            world, clock = self.spring(seed=seed)
+            robin = world.add(SongBird(world, "robin"))
+            robin.perch = Perch(x=900.0)
+            for _ in range(70 * 10):
+                run(world, clock, 0.1, fps=10)
+                wormed = wormed or robin.anim.name == "robin_worm"
+            if wormed:
+                break
+        self.assertTrue(wormed)
+
+    def test_a_click_sends_a_songbird_off(self):
+        world, clock = self.spring()
+        bird = world.invite_visitor("songbirds")
+        run(world, clock, 8)
+        bird.click()
+        run(world, clock, 20)
+        self.assertTrue(bird.gone)
 
 
 def qt_available():

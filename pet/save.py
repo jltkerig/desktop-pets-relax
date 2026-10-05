@@ -29,7 +29,8 @@ DEFAULTS = {
               "hoe": {"out": True, "x": None}, "den": {"out": True, "x": None},
               "barrels": {"out": True, "x": None}, "haystack": {"out": True, "x": None},
               "sled": {"out": True, "x": None}, "stump": {"out": True, "x": None},
-              "xmas_tree": {"out": True, "x": None}},
+              "xmas_tree": {"out": True, "x": None}, "daffodils": {"out": True, "x": None},
+              "tulips": {"out": True, "x": None}, "violets": {"out": True, "x": None}},
     "mischief": {"discord": True, "treasure": True},  # Discord message stealing, taskbar treasure digging
     "season": "auto",
     "snow": "auto",  # snow on the winter oak: "auto" (some days), or true / false as chosen from the tray menu

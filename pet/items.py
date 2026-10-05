@@ -442,7 +442,9 @@ class Prop(Thing):
         self.variant = variant
         self.hat_on = True  # the scarecrow's hat (the crows like to borrow it)
 
-    CLICKS = {"scarecrow": "surprised", "hoe": "wobble", "sled": "wobble", "xmas_tree": "sparkle"}
+    CLICKS = {"scarecrow": "surprised", "hoe": "wobble", "sled": "wobble", "xmas_tree": "sparkle",
+              "daffodils": "bob", "tulips": "bob", "violets": "bob"}
+    FLOWERS = ("daffodils", "tulips", "violets")
     SNOWY = ("sled", "xmas_tree")  # these get a coat of snow on snowy winter days
 
     @property
@@ -466,6 +468,18 @@ class Prop(Thing):
 
     def click(self):
         self.react()
+        w = self.world
+        if self.variant in self.FLOWERS and w.rng.random() < 0.4 and len(w.of("butterfly")) < 4:
+            from pet.visitors import Flutterby  # a butterfly that was resting in the flowers flies up
+            x, y = w.rng.choice(self.flower_heads())
+            w.add(Flutterby(w, x=x, y=y))
+
+    def flower_heads(self):
+        """Where the flowers in a flower bed are (screen coordinates), for butterflies to land on."""
+        m = sprites.meta(self.anim.name if self.anim.name.startswith(self.variant) else self.variant)
+        ax, ay = m["anchor"]
+        s = self.world.scale
+        return [(self.x + (px - ax) * s, self.y - (ay - py) * s) for px, py in m.get("perches", [])]
 
     def lose_hat(self):
         self.hat_on = False
@@ -480,6 +494,27 @@ class Prop(Thing):
         resting = self.anim.name in (self.variant, self.variant + "_nohat", self.variant + "_snow")
         if self.anim.name != self.look and (self.anim.done or resting):
             self.anim.play(self.look)  # back to normal
+
+
+class Note(Thing):
+    """A music note floating up from a singing bird."""
+    kind = "note"
+    z = 36
+
+    def __init__(self, world, x, y, double=False):
+        super().__init__(world, x, y, "note_double" if double else "note")
+        self.age = 0.0
+        self.start_x = x
+        self.drift = world.rng.uniform(-6, 6)
+
+    def update(self, dt):
+        self.age += dt
+        s = self.world.scale
+        self.y -= 14 * s * dt
+        self.x = self.start_x + (math.sin(self.age * 3) * 3 + self.drift * self.age) * s
+        self.alpha = max(0.0, 1.0 - self.age / 1.8)
+        if self.age > 1.8:
+            self.gone = True
 
 
 class Hat(Thing):

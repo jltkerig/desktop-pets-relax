@@ -6,7 +6,8 @@ import random
 from pet import daylight, seasons
 from pet.fox import TROT, WALK, ZOOM, Fox, Step
 from pet.items import Acorn, Climbable, Corn, CornCob, Den, Leaf, Message, Prop, Pumpkin, Treasure, Tree
-from pet.visitors import Beetle, Cicada, Goose, Jay, Squirrel, Woolly, crow_party, migrating_v, turkey_flock
+from pet.visitors import (Beetle, Cicada, Flutterby, Goose, Jay, Squirrel, Woolly, crow_party, migrating_v,
+                          songbirds, turkey_flock)
 
 LEAF_COLOURS = ("red", "orange", "yellow", "brown")
 
@@ -163,8 +164,9 @@ class World:
                 if not (isinstance(x, (int, float)) and 0 < x < self.width):
                     x = self.width * share
                 self.add(Climbable(self, x, name, self.settings["items"][name].get("layout")))
-        props = {"scarecrow", "hoe", "sled", "xmas_tree"}
-        first_spot = {"sled": 0.62, "xmas_tree": 0.3}  # winter things, where they go the first time
+        props = {"scarecrow", "hoe", "sled", "xmas_tree", "daffodils", "tulips", "violets"}
+        first_spot = {"sled": 0.62, "xmas_tree": 0.3,  # winter and spring things, where they go the first time
+                      "daffodils": 0.07, "tulips": 0.66, "violets": 0.78}
         for thing in self.of("prop"):
             if thing.variant not in wanted_items:
                 thing.gone = True
@@ -349,6 +351,10 @@ class World:
             choices.remove("turkeys")
         if "crows" in choices and self.of("crow"):
             choices.remove("crows")
+        if "butterflies" in choices and self.of("butterfly"):
+            choices.remove("butterflies")
+        if "songbirds" in choices and self.of("songbird"):
+            choices.remove("songbirds")
         if kind is not None:
             choices = [kind] if kind in choices else []
         if not choices:
@@ -370,6 +376,10 @@ class World:
             return [self.add(turkey) for turkey in turkey_flock(self)][0]
         if pick == "crows":
             return [self.add(crow) for crow in crow_party(self)][0]
+        if pick == "butterflies":
+            return [self.add(Flutterby(self)) for _ in range(self.rng.randint(1, 3))][0]
+        if pick == "songbirds":
+            return [self.add(bird) for bird in songbirds(self)][0]
         if pick in ("junebug", "ladybug"):
             return self.add(Beetle(self, self.tree(), pick))
         if pick == "cicada":
@@ -457,7 +467,7 @@ class World:
 
     def visitor_to_watch(self, fox):
         for kind in ("squirrel", "jay", "woolly", "goose", "frog", "turkey", "crow", "inchworm", "butterfly",
-                     "beetle", "cicada", "spider"):
+                     "beetle", "cicada", "spider", "songbird"):
             for v in self.of(kind):
                 if v not in fox.watched and abs(v.x - fox.x) < 600 * self.scale / 2 and 0 < v.x < self.width:
                     return v

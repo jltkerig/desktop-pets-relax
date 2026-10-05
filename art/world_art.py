@@ -1682,7 +1682,7 @@ def beetle(kind="junebug", pose="crawl", t=0.0):
 
 
 def cicada(pose="sit", t=0.0):
-    """10 x 14: a cicada on the trunk, head up. buzz: its body thrums. fly: wings out."""
+    """10 x 14: a cicada on the trunk, head up. buzz: its body thrums. (Flying: cicada_flying.)"""
     c = Canvas(10, 14)
     shake = (0.5 if int(t * 8) % 2 else -0.5) if pose == "buzz" else 0.0
     if pose == "fly":
@@ -1696,6 +1696,24 @@ def cicada(pose="sit", t=0.0):
     c.ellipse(5 + shake, 3.2, 2.6, 1.6, "cicada", bias=0.1)  # the broad head
     for side in (-1, 1):
         c.pixel(5 + side * 2.2 + shake, 3, "ladybug", 2)  # red eyes
+    return c.to_image()
+
+
+def cicada_flying(t=0.0):
+    """16 x 12: a cicada in flight, seen from the side and facing right: a stout body held level, the broad head
+    in front with a red eye, legs tucked under, and clear wings beating in a blur above its back."""
+    c = Canvas(16, 12)
+    beat = math.sin(t * 2 * math.pi)
+    for k, lum in ((0, 0.5), (1, 0.75)):  # the far wing, then the near one, swept up and down
+        tip_y = 2.5 - beat * 2.4 + k * 0.6
+        c.polygon([(9.5, 6), (3.5 - k, tip_y + 0.5), (1.5 - k * 0.5, tip_y + 2.5), (7.5, 7)], "wing_clear", lum=lum)
+    c.ellipse(7.5, 7.2, 4.6, 2.1, "cicada")                  # the body, level
+    for x in (4.5, 6.0, 7.5):                                # rings along the abdomen
+        c.pixel(x, 8, "cicada", 0)
+    c.ellipse(12.2, 6.8, 1.9, 1.8, "cicada", bias=0.1)       # the broad head
+    c.pixel(12.8, 6, "ladybug", 2)                           # a red eye
+    for x in (8.5, 10.0):                                    # legs tucked up underneath
+        c.pixel(x, 9.4, "cicada", 0)
     return c.to_image()
 
 
@@ -2819,7 +2837,7 @@ SPRITES = {
     "ladybug_fly": ([beetle("ladybug", "fly", t) for t in (0.0, 0.25, 0.5, 0.75)], 50, True, (5, 11)),
     "cicada_sit": ([cicada("sit")], 1000, False, (5, 13)),
     "cicada_buzz": ([cicada("buzz", t) for t in (0.0, 0.125, 0.25, 0.375)], 40, True, (5, 13)),
-    "cicada_fly": ([cicada("fly", t) for t in (0.0, 0.25, 0.5, 0.75)], 50, True, (5, 13)),
+    "cicada_fly": ([cicada_flying(t) for t in (0.0, 0.25, 0.5, 0.75)], 50, True, (8, 11)),
     "buzz_bubble": ([word_bubble("BZZZZZ!")], 1000, False, (4, 13)),
     "spider": ([spider(t) for t in (0.0, 0.25, 0.5, 0.75)], 140, True, (6, 2)),
     "silk": ([silk()], 1000, False, (0, 0)),

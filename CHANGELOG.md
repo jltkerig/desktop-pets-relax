@@ -3,6 +3,11 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.11.2
+
+- The **cicada flies sideways**, seen from the side with its body level and its clear wings beating above its
+  back, instead of flying along head-up as it sits on the trunk.
+
 ## 1.11.1
 
 - **Turkey hens:** a flock is now mostly hens with a tom or two. Hens are smaller and plainer (soft brown with

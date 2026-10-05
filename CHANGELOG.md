@@ -3,6 +3,17 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.17.0
+
+- **The version is in the tray menu** (at the top, "Pixel Fox 1.17.0") and in the Toy Box window's title. It
+  checks GitHub now and then: when there's a newer version it says so, and **Update to ... and restart** does
+  it in one go (or **Check for updates and restart** any time).
+- **Fixed: starting Pixel Fox.exe while Pixel Fox was already running never updated it** (the update was
+  skipped so files weren't swapped under the running copy, and the second copy just closed). Now, if there's
+  an update, the running copy is closed, updated, and started again. The screen saver is left alone. The update
+  check also asks for a fresh copy of the version (no stale cached one).
+- **The original oak and birch are back**, exactly as they were before 1.16.0.
+
 ## 1.16.1
 
 - **Leaf-shaped leaves:** the oak's and birch's crowns are made of real leaf shapes instead of round blobs:

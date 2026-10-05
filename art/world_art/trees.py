@@ -89,98 +89,75 @@ CROWN_COLOURS = {
 }
 
 
-def _leaf_at(px, py, leaf):
-    """Where (px, py) falls on a leaf, or None if it's off it. leaf: (x, y, half length, half width, angle in
-    radians the tip points to, lobes). A leaf is pointed at the tip, fuller toward its base; lobes > 0 gives it a
-    wavy oak edge. Returns (u, v): u -1 at the stalk .. 1 at the tip, v -1 .. 1 across (0 on the middle vein)."""
-    x, y, length, width, angle, lobes = leaf
-    dx, dy = px - x, py - y
-    ca, sa = math.cos(angle), math.sin(angle)
-    u, across = (dx * ca + dy * sa) / length, -dx * sa + dy * ca
-    if not -1.0 <= u <= 1.0:
-        return None
-    half = width * (1 - u * u) ** 0.7 * (1.12 - 0.32 * u)  # pointed tip, rounder base
-    if lobes:
-        half *= 0.86 + 0.2 * abs(math.cos(u * math.pi * lobes / 2))  # oak lobes
-    if half <= 0 or abs(across) > half:
-        return None
-    return u, across / half
-
-
-def _leaf_light(u, v, angle, size):
-    """How a leaf is lit: the half facing up-left catches the light, a darker vein down the middle (on leaves big
-    enough to show one), and a slightly darker rim."""
-    facing = -math.sin(angle) * 0.6 - math.cos(angle) * 0.4  # which side of the vein faces the light
-    lum = 0.2 + (0.22 if v * facing > 0 else -0.12) - 0.25 * max(0.0, abs(v) - 0.7) / 0.3 - 0.1 * max(0.0, u)
-    if size >= 6 and abs(v) < 0.14 and -0.85 < u < 0.8:
-        lum -= 0.3
-    return lum
-
-
 def oak(sway=0.0, seed=7, season="autumn"):
     """220 x 232. Flat pixel-art trunk and branches; a big leafy crown. sway moves the crown a little.
     season: "autumn" (gold, orange, red and brown) or "summer" (vibrant greens, shading to blue, green acorns)."""
     c = Canvas(OAK_W, OAK_H)
     rng = random.Random(seed)
     _oak_trunk(c, rng, sway)
-    # the crown: dozens of overlapping clumps of leaves, each lit on its own (bright top-left, shaded
-    # bottom-right), the lower ones in front; darker underneath and to the right, like one big rounded tree
+    # the crown: one leafy mass with a bumpy oak outline, lit as a single rounded shape
     cx0, cy0 = OAK_CROWN[0] + sway, OAK_CROWN[1]
-    rx0, ry0 = 76, 52
-    clumps = []  # big oak leaves: (x, y, half length, half width, angle, lobes)
-    for _ in range(2500):  # scatter leaves of mixed sizes over the crown's oval, tips spraying outward
-        a, d = rng.uniform(0, 2 * math.pi), math.sqrt(rng.random())
-        x, y = cx0 + math.cos(a) * d * rx0, cy0 + math.sin(a) * d * ry0 * (0.9 if math.sin(a) > 0 else 1.0)
-        r = rng.choice((rng.uniform(9, 12), rng.uniform(7, 9), rng.uniform(5, 7))) * (1.0 - 0.15 * d * d)
-        if all(math.hypot(x - lx, (y - ly) * 1.2) > (r + ll) * 0.4 for lx, ly, ll, *_ in clumps):
-            out = math.atan2((y - cy0) * 1.4, x - cx0) if d > 0.15 else rng.uniform(-math.pi, 0)
-            angle = out + rng.uniform(-0.6, 0.6)
-            clumps.append((x, y, r * 1.05, r * 0.6, angle, 3))
-    clumps.sort(key=lambda k: k[1])  # top ones first: lower leaves overlap them, in front
-    holes = [(OAK_X - 38 + sway * 0.5, 112, 4.0, 3.0), (OAK_X + 40 + sway * 0.5, 107, 3.6, 2.8),
-             (OAK_X - 4 + sway * 0.5, 120, 3.2, 2.6), (cx0 + 30, cy0 - 18, 2.6, 2.0)]
-
-    def clump_colour(k, lx, ly):
-        top = max(0.0, min(1.0, (ly - (cy0 - ry0)) / (2 * ry0)))  # 0 at the top of the crown, 1 at the bottom
-        side = (lx - cx0) / rx0
-        drift = (math.sin(lx * 0.07 + ly * 0.03 + 1.1) + math.sin(ly * 0.09 - lx * 0.02 + 2.0)) * 0.16
-        v = top * 0.5 + side * 0.08 + drift + rng.uniform(-0.1, 0.1) + 0.16  # patches drift across, not stripes
-        cuts = CROWN_COLOURS[season]
-        mat = next(m for cut, m in cuts if v < cut)
-        if mat == cuts[-1][1] and ly < cy0 + ry0 * 0.45:
-            mat = cuts[-2][1]  # the deepest shade only underneath, where the shadow is
-        return mat
-
-    colours = [clump_colour(k, lx, ly) for k, (lx, ly, *_) in enumerate(clumps)]
-    owner = {}
+    rx0, ry0 = 74, 50  # the core; lobes of different sizes make the outline
+    lumps = [(cx0, cy0, rx0, ry0)]
+    for i in range(20):  # big and small lobes, unevenly spaced, so the silhouette is irregular
+        a = i / 20 * 2 * math.pi + rng.uniform(-0.2, 0.2)
+        reach = rng.uniform(0.78, 1.08)
+        lumps.append((cx0 + math.cos(a) * rx0 * reach, cy0 + math.sin(a) * ry0 * reach - (5 if math.sin(a) < 0 else 0),
+                      rng.uniform(11, 27), rng.uniform(9, 20)))
+    lobes = list(lumps)
+    def in_lobes(x, y):
+        return any(((x - lx) / lrx) ** 2 + ((y - ly) / lry) ** 2 <= 1 for lx, ly, lrx, lry in lobes)
+    for _ in range(26):  # small leafy tufts sitting on the edge, half poking out
+        a = rng.uniform(0, 2 * math.pi)
+        if math.sin(a) > 0.75:
+            continue  # not hanging below the crown's middle, where the trunk is
+        d = 0.0
+        while in_lobes(cx0 + math.cos(a) * d * 1.4, cy0 + math.sin(a) * d) and d < 120:
+            d += 1  # walk out from the centre to the edge
+        lumps.append((cx0 + math.cos(a) * d * 1.4, cy0 + math.sin(a) * d, rng.uniform(3, 6), rng.uniform(2.5, 4.5)))
+    notches = []  # bites out of the edge give it corners
+    for _ in range(9):
+        a = rng.uniform(0, 2 * math.pi)
+        d = 0.0
+        while in_lobes(cx0 + math.cos(a) * d * 1.4, cy0 + math.sin(a) * d) and d < 120:
+            d += 1
+        notches.append((cx0 + math.cos(a) * (d * 1.4 + 2), cy0 + math.sin(a) * (d + 1.5), rng.uniform(4, 7), rng.uniform(3, 5)))
+    holes = [(cx0 - 30 + rng.uniform(-4, 4), cy0 + 18, 3.6, 2.6), (cx0 + 36 + rng.uniform(-4, 4), cy0 - 10, 3.0, 2.2),
+             (cx0 + 6, cy0 + 30, 2.6, 2.0)]
+    def inside(x, y, shapes):
+        return any(((x - lx) / lrx) ** 2 + ((y - ly) / lry) ** 2 <= 1 for lx, ly, lrx, lry in shapes)
+    def in_crown(x, y):
+        return inside(x, y, lumps) and not inside(x, y, notches) and not inside(x, y, holes)
+    # calm colour: broad patches that flow from golden on top, through orange, to deep red and brown below
+    cell = {}
+    def colour(x, y):
+        key = ((x + 3 * ((y // 4) % 2)) // 6, y // 4)  # leaf clusters about 6 x 4, staggered like brickwork
+        if key not in cell:
+            kx, ky = key[0] * 6, key[1] * 4
+            top = max(0.0, min(1.0, (ky - (cy0 - ry0 - 20)) / (2 * ry0 + 40)))  # 0 at the top, 1 at the bottom
+            side = (kx - cx0) / (rx0 + 30)                                     # -1 left .. 1 right
+            wave = (math.sin(kx * 0.045 + 1.3) + math.sin(ky * 0.06 + 0.4)) / 4  # gentle, wide drifts
+            v = top * 0.42 + side * 0.06 + wave * 1.1 + 0.12 + rng.uniform(-0.07, 0.07)
+            v = 0.5 + (v - 0.5) * 0.7  # fewer extremes: mostly warm orange and red, a little gold and brown
+            cuts = CROWN_COLOURS[season]
+            mat = next(m for cut, m in cuts if v < cut)
+            # near a boundary, mix the two colours in a checkerboard so the change is soft
+            for cut, m in cuts[:-1]:
+                if abs(v - cut) < 0.045 and (key[0] + key[1]) % 2:
+                    nxt = cuts[[c_ for c_, _ in cuts].index(cut) + 1][1]
+                    mat = nxt if v < cut else m
+            cell[key] = (mat, rng.uniform(-0.04, 0.04))
+        return cell[key]
     for y in range(0, 160):
         for x in range(0, OAK_W):
-            px_, py_ = x + 0.5, y + 0.5
-            if any(((px_ - hx) / hrx) ** 2 + ((py_ - hy) / hry) ** 2 <= 1 for hx, hy, hrx, hry in holes):
+            if not in_crown(x + 0.5, y + 0.5):
                 continue
-            for k in range(len(clumps) - 1, -1, -1):  # the front-most leaf here
-                if abs(px_ - clumps[k][0]) > clumps[k][2] or abs(py_ - clumps[k][1]) > clumps[k][2]:
-                    continue
-                at = _leaf_at(px_, py_, clumps[k])
-                if at is not None:
-                    owner[(x, y)] = (k, at)
-                    break
-            else:  # a gap between clumps, inside the crown: the deep shade in among the leaves
-                if ((px_ - cx0) / (rx0 * 0.92)) ** 2 + ((py_ - cy0) / (ry0 * 0.88)) ** 2 <= 1:
-                    owner[(x, y)] = (-1, None)
-    deep = CROWN_COLOURS[season][-1][1]
-    for (x, y), (k, at) in owner.items():
-        if k < 0:
-            c.mat[y][x], c.lum[y][x], c.fixed[y][x] = deep, -1.0, None
-            continue
-        u, v = at
-        gx, gy = (x + 0.5 - cx0) / rx0, (y + 0.5 - cy0) / ry0
-        lum = _leaf_light(u, v, clumps[k][4], clumps[k][2]) \
-            - 0.32 * max(0.0, gx * 0.45 + gy * 0.75) + 0.12 * max(0.0, -gx * 0.5 - gy * 0.6)  # rounded crown
-        # a dark edge where this leaf lies over the one behind it
-        if any(0 <= owner.get((x + dx, y + dy), (k,))[0] < k for dx, dy in ((0, -1), (-1, 0), (1, 0), (0, 1))):
-            lum -= 0.5
-        c.mat[y][x], c.lum[y][x], c.fixed[y][x] = colours[k], lum, None
+            nx, ny = (x + 0.5 - cx0) / (rx0 + 16), (y + 0.5 - cy0) / (ry0 + 14)
+            mat, jitter = colour(x, y)
+            lum = Canvas._shade(max(-1, min(1, nx)), max(-1, min(1, ny)), jitter)
+            if rng.random() < 0.012:  # an occasional small shadow between leaves
+                lum -= 0.25
+            c.mat[y][x], c.lum[y][x], c.fixed[y][x] = mat, lum, None
     # keep only the crown piece joined to the middle (no floating crumbs)
     seen, stack = set(), [(int(cx0), int(cy0))]
     while stack:
@@ -551,13 +528,13 @@ def birch(season="summer", sway=0.0, snow=False):
     leaves = {"summer": ("leaf_summer_light", "leaf_green", "leaf_summer_light"),
               "autumn": ("leaf_yellow", "leaf_yellow", "leaf_orange")}.get(season)
     lrng = random.Random(21)
-    if leaves:
-        _birch_leaves(c, lrng, leaves, lean)
     for x, y in BIRCH_TIPS:
         lx = x + lean(y) * 1.3
-        if leaves:
-            continue
-        if season == "spring":
+        if leaves:  # small leaves in loose clusters along the hanging twigs
+            for _ in range(5):
+                c.ellipse(lx + lrng.uniform(-2.5, 2.5), y + lrng.uniform(-3, 2), lrng.uniform(1.0, 1.8), 1.0,
+                          lrng.choice(leaves), angle=lrng.uniform(-40, 40))
+        elif season == "spring":
             if lrng.random() < 0.5:  # a catkin dangling
                 _twig(c, lx, y, lx + 0.4, y + 4, "catkin", 2)
                 c.pixel(lx + 0.4, y + 4, "catkin", 3)
@@ -576,44 +553,6 @@ def birch(season="summer", sway=0.0, snow=False):
                 for k in range(int((1 - d * d) * 5) + 1):
                     _px(c, x, BIRCH_GROUND - k, "snow", 3 if k == int((1 - d * d) * 5) else 2)
     return c.to_image()
-
-
-def _birch_leaves(c, rng, leaves, lean):
-    """A light, airy birch crown: small pointed leaves hanging along each limb and round the twigs, each lit on
-    its own, with sky and white bark showing between them."""
-    clumps = []  # (x, y, half length, half width, angle, lobes)
-
-    def leaf(x, y, size):
-        angle = math.pi / 2 + rng.uniform(-0.75, 0.75)  # hanging down, every which way a little
-        clumps.append((x, y, size, size * 0.55, angle, 0))
-
-    for x1, y1, x2, y2, _ in BIRCH_LIMBS:
-        n = int(math.hypot(x2 - x1, y2 - y1) / 3.5)
-        for k in range(n + 1):
-            f = 0.3 + 0.7 * k / max(1, n)
-            x, y = x1 + (x2 - x1) * f, y1 + (y2 - y1) * f
-            for _ in range(2):
-                leaf(x + lean(y) + rng.uniform(-3, 3), y + rng.uniform(0, 4), rng.uniform(3.2, 4.6))
-    for x, y in BIRCH_TIPS:
-        leaf(x + lean(y) * 1.3 + rng.uniform(-1.5, 1.5), y + rng.uniform(-1, 2), rng.uniform(2.8, 3.8))
-    clumps.sort(key=lambda k: k[1])  # higher ones behind, lower ones in front
-    top, bottom = min(k[1] for k in clumps), max(k[1] for k in clumps)
-    mats = [leaves[0] if (k[1] - top) / max(1, bottom - top) + rng.uniform(-0.25, 0.25) < 0.45 else
-            rng.choice(leaves[1:]) for k in clumps]
-    owner = {}
-    for k, lf in enumerate(clumps):
-        lx, ly, size = lf[0], lf[1], lf[2]
-        for y in range(int(ly - size) - 1, int(ly + size) + 2):
-            for x in range(int(lx - size) - 1, int(lx + size) + 2):
-                if 0 <= x < c.w and 0 <= y < c.h:
-                    at = _leaf_at(x + 0.5, y + 0.5, lf)
-                    if at is not None:
-                        owner[(x, y)] = (k, at)
-    for (x, y), (k, (u, v)) in owner.items():
-        lum = _leaf_light(u, v, clumps[k][4], clumps[k][2])
-        if any(owner.get((x + dx, y + dy), (k,))[0] < k for dx, dy in ((0, -1), (-1, 0), (1, 0))):
-            lum -= 0.45  # a dark edge where it lies over another leaf
-        c.mat[y][x], c.lum[y][x], c.fixed[y][x] = mats[k], lum, None
 
 
 def _pansies(c, ground, centre, spread, seed=3):

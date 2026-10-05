@@ -5,7 +5,8 @@
 #   - The version is __version__ in pet\__init__.py; the newest is the one on GitHub's main branch.
 #   - A copy made with "git clone" is updated with "git pull". A downloaded ZIP is updated by downloading
 #     the newest ZIP and copying it over the top. Your settings in user-data are never touched.
-#   - Skipped while Pixel Fox is already running, or if a file named "no-update" is in the app's folder.
+#   - If Pixel Fox is running and there's an update, it's closed first and started again afterwards.
+#   - Skipped if a file named "no-update" is in the app's folder.
 $PixelFoxRepo = "jltkerig/desktop-pets-relax"
 $PixelFoxBranch = "main"
 
@@ -14,29 +15,35 @@ function Get-PixelFoxVersion([string]$text) {
     return $null
 }
 
-function Test-PixelFoxRunning {
+function Get-PixelFoxRunning {
+    # the desktop pets (not the screen saver, which runs with --scr)
     try {
-        $running = Get-CimInstance Win32_Process -Filter "Name like 'python%'" -ErrorAction Stop |
-            Where-Object { $_.CommandLine -like "*pixelfox.py*" }
-        return [bool]$running
-    } catch { return $false }
+        return @(Get-CimInstance Win32_Process -Filter "Name like 'python%'" -ErrorAction Stop |
+            Where-Object { $_.CommandLine -like "*pixelfox.py*" -and $_.CommandLine -notlike "*--scr*" })
+    } catch { return @() }
 }
 
 # Returns $true if it installed an update (start.ps1 then starts again, so the new start.ps1 is used).
 function Update-PixelFox([string]$ProjectPath) {
     if (Test-Path (Join-Path $ProjectPath "no-update")) { return $false }
-    if (Test-PixelFoxRunning) { return $false }  # don't swap files under a running copy
     try {
         # GitHub needs TLS 1.2, which older Windows PowerShell doesn't use by default
         [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
         $local = Get-PixelFoxVersion (Get-Content -Raw (Join-Path $ProjectPath "pet\__init__.py"))
         $url = "https://raw.githubusercontent.com/$PixelFoxRepo/$PixelFoxBranch/pet/__init__.py"
-        $remote = Get-PixelFoxVersion (Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 8).Content
+        $remote = Get-PixelFoxVersion (Invoke-WebRequest -Uri "$($url)?t=$([DateTime]::UtcNow.Ticks)" -UseBasicParsing -TimeoutSec 8).Content  # (?t= : not a cached copy)
         if (-not $remote -or ($local -and $remote -le $local)) {
             Write-Host "Pixel Fox $local is up to date."
             return $false
         }
         Write-Host "Updating Pixel Fox from $local to $remote..."
+        # don't swap files under a running copy: close it first (it starts again, updated, straight after)
+        $running = Get-PixelFoxRunning
+        if ($running.Count -gt 0) {
+            Write-Host "Closing the running Pixel Fox so it can be updated..."
+            foreach ($p in $running) { Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue }
+            Start-Sleep -Milliseconds 800
+        }
 
         if ((Test-Path (Join-Path $ProjectPath ".git")) -and (Get-Command git -ErrorAction SilentlyContinue)) {
             & git -C $ProjectPath pull --ff-only origin $PixelFoxBranch | Out-Host

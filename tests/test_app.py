@@ -152,5 +152,28 @@ class Version(unittest.TestCase):
         self.assertIn("Update-PixelFox", (ROOT / "start.ps1").read_text(encoding="utf-8"))
 
 
+
+class Updates(unittest.TestCase):
+    def test_reading_versions_and_spotting_a_newer_one(self):
+        from pet import updates
+        self.assertEqual(updates.parse('__version__ = "1.16.1"'), (1, 16, 1))
+        self.assertIsNone(updates.parse("nothing here"))
+        checker = updates.Checker("1.16.1", fetcher=lambda: (1, 17, 0))
+        self.assertIsNone(checker.available())  # not checked yet
+        checker.check()
+        self.assertEqual(checker.available(), "1.17.0")
+        same = updates.Checker("1.17.0", fetcher=lambda: (1, 17, 0))
+        same.check()
+        self.assertIsNone(same.available())
+        offline = updates.Checker("1.16.1", fetcher=lambda: None)
+        offline.check()
+        self.assertIsNone(offline.available())
+
+    def test_the_updater_closes_a_running_copy_rather_than_skipping(self):
+        script = (ROOT / "update.ps1").read_text(encoding="utf-8")
+        self.assertIn("Stop-Process", script)
+        self.assertIn('-notlike "*--scr*"', script)  # never the screen saver
+
+
 if __name__ == "__main__":
     unittest.main()

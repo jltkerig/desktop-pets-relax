@@ -1,11 +1,13 @@
 """The tray icon's menu and the Toy Box window: foxes and items to put out, things to do, the season,
 size, weather, sky and mischief settings."""
-from PySide6.QtCore import Qt
+from pathlib import Path
+
+from PySide6.QtCore import QProcess, Qt
 from PySide6.QtGui import QAction, QActionGroup, QIcon
 from PySide6.QtWidgets import (QCheckBox, QGroupBox, QLabel, QMenu, QPushButton, QSystemTrayIcon, QTabWidget,
                                QVBoxLayout, QWidget)
 
-from pet import __version__, save, seasons, sprites
+from pet import __version__, save, seasons, sprites, updates
 
 
 class ToyBoxWindow(QWidget):
@@ -15,7 +17,7 @@ class ToyBoxWindow(QWidget):
     def __init__(self, toybox):
         super().__init__(None, Qt.Tool | Qt.WindowStaysOnTopHint)
         self.toybox = toybox
-        self.setWindowTitle("Toy Box")
+        self.setWindowTitle(f"Toy Box - Pixel Fox {__version__}")
         self.setWindowIcon(toybox.tray.icon())
         self.layout_ = QVBoxLayout(self)
         self.boxes = {}  # (kind, name) -> its checkboxes (an item out in two seasons is on both seasons' tabs)
@@ -105,6 +107,7 @@ class ToyBox:
         self.tray.setContextMenu(self.menu)
         self.tray.show()
         self.window = ToyBoxWindow(self)
+        self.updates = updates.Checker(__version__).start()  # is there a newer Pixel Fox on GitHub?
         self.tray.activated.connect(self._clicked)
 
     def _clicked(self, reason):
@@ -114,6 +117,11 @@ class ToyBox:
     def build(self):
         m = self.menu
         m.clear()
+        newer = self.updates.available()
+        title = m.addAction(f"Pixel Fox {__version__}" + (f"  (version {newer} is out)" if newer else ""))
+        title.setEnabled(False)
+        m.addAction(f"Update to {newer} and restart" if newer else "Check for updates and restart", self._update)
+        m.addSeparator()
         m.addAction("Open the toy box...", self.window.open)
         m.addSection("Foxes")
         for palette, label in (("orange", "Orange fox"), ("grey", "Grey fox")):
@@ -275,6 +283,13 @@ class ToyBox:
     def _set_snow(self, on):
         self.settings["snow"] = bool(on)
         save.store(self.settings)
+
+    def _update(self):
+        """Close, then start again through start.ps1, which updates first (a moment later, once this has gone)."""
+        start = Path(__file__).resolve().parents[2] / "start.ps1"
+        QProcess.startDetached("powershell", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden",
+                                              "-Command", f"Start-Sleep -Seconds 2; & '{start}'"])
+        self.app.quit()
 
     def _move_a_folder(self):
         foxes = [f for f in self.world.of("fox") if not f.held and f.dragging_folder is None]

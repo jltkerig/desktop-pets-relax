@@ -19,6 +19,8 @@ from pet import weather  # noqa: E402
 
 REAL_FETCH = weather.fetch
 weather.fetch = lambda lat, lon: None  # tests never ask the internet about the weather
+from pet import updates  # noqa: E402
+updates.fetch = lambda timeout=10: None  # nor about updates
 
 assert "pixelfox-test-" in str(save.USER_DIR), "tests must never use the real user-data folder"
 

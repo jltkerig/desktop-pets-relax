@@ -11,7 +11,7 @@ from PySide6.QtGui import QAction, QActionGroup, QColor, QCursor, QIcon, QPainte
 from PySide6.QtWidgets import (QApplication, QCheckBox, QGroupBox, QLabel, QMenu, QPushButton, QSystemTrayIcon,
                                QTabWidget, QVBoxLayout, QWidget)
 
-from pet import __version__, discord, save, screens, seasons, sprites, weather
+from pet import __version__, desktop_icons, discord, save, screens, seasons, sprites, weather
 
 FRAME_MS = 33
 TASKBAR_SCRIPT = Path(__file__).resolve().parent / "taskbar_buttons.ps1"
@@ -53,6 +53,7 @@ class Stage:
         self.frames = Frames()
         self.desktops = []
         self.press = None       # (thing, press point in the strip, thing's start x)
+        self.trail = []         # (time, x, y) of the cursor lately, while holding a ball: how hard it's thrown
         self.dragging = None
         self.last_pet = 0.0
         self.elapsed = 0.0
@@ -88,6 +89,11 @@ class Stage:
         self.active_timer.start(2000)
         # rain and snow from the local weather, fetched in the background every half hour
         self.weather = weather.Watcher(self.settings).start()
+        # the folder icons on the desktop, for the foxes to move about (looked for every few seconds)
+        self.movers = {}  # folder name -> desktop_icons.Mover, while a fox has it
+        self.folder_timer = QTimer()
+        self.folder_timer.timeout.connect(self.look_for_folders)
+        self.folder_timer.start(5000)
 
     def check_discord_use(self):
         if not self.world.mischief("discord"):
@@ -295,6 +301,65 @@ class Stage:
                                                   Qt.FastTransformation)
         self.world.grab_requests.clear()
 
+    # -- desktop folders (on the main monitor) -------------------------------------------------------------
+
+    def look_for_folders(self):
+        """Where the folder icons on the main monitor are, along the strip (none if mischief is off)."""
+        main = self.main_desktop()
+        if not desktop_icons.ON_WINDOWS or main is None or not self.world.mischief("folders") or self.movers:
+            if not self.movers:
+                self.world.folder_spots = []
+            return
+        ratio = main.screen_.devicePixelRatio()
+        screen = main.screen_.geometry()
+        spots = []
+        for icon in desktop_icons.folders():
+            # physical pixels -> Qt's: the main monitor starts at 0, 0 in both
+            box = QRect(int(icon["left"] / ratio), int(icon["top"] / ratio), int(icon["width"] / ratio),
+                        int(icon["height"] / ratio))
+            if not main.geometry().contains(box.center()) or not screen.contains(box):
+                continue
+            x, y = self.to_world(QPoint(box.center().x(), box.bottom()))
+            if x > -9999:
+                spots.append({"name": icon["name"], "x": x, "y": y, "w": float(box.width()),
+                              "h": float(box.height()), "home": icon["place"],
+                              "left": float(main.slice["offset"]), "right": float(main.slice["offset"] + main.width())})
+        self.world.folder_spots = spots
+
+    def _move_folders(self):
+        """Move the real folder icons to keep up with the foxes (only the latest place for each)."""
+        main = self.main_desktop()
+        latest = {}
+        for action, name, x, y, w, h in self.world.folder_requests:
+            latest[name] = (action, x, y, w, h)
+        self.world.folder_requests.clear()
+        if main is None or not desktop_icons.ON_WINDOWS:
+            return
+        ratio = main.screen_.devicePixelRatio()
+        for name, (action, x, y, w, h) in latest.items():
+            mover = self.movers.get(name)
+            if mover is None:
+                mover = self.movers[name] = desktop_icons.Mover(name)
+                spot_home = next((f.home for f in self.world.of("folder") if f.name == name), None)
+                if mover.ok and spot_home and name not in self.settings["folder_homes"]:
+                    self.settings["folder_homes"][name] = list(spot_home)  # so it can be put back
+                    save.store(self.settings)
+            top_left = main.mapToGlobal(QPoint(int(x - w / 2 + main.dx), int(y - h + main.dy)))
+            mover.move_box(top_left.x() * ratio, top_left.y() * ratio)
+            if action == "drop":
+                self.movers.pop(name, None)
+
+    def put_folders_back(self):
+        homes = dict(self.settings.get("folder_homes", {}))
+        for folder in self.world.of("folder"):
+            folder.let_go()
+        self.world.folder_requests.clear()
+        self.movers.clear()
+        desktop_icons.put_back(homes)
+        self.settings["folder_homes"] = {}
+        save.store(self.settings)
+        QTimer.singleShot(300, self.look_for_folders)
+
     # -- the loop --------------------------------------------------------------------------------------
 
     def tick(self):
@@ -308,10 +373,13 @@ class Stage:
             self._grab_icons()
         if self.world.screen_requests:
             self._handle_screen_requests()
+        if self.world.folder_requests:
+            self._move_folders()
         if self.dragging is not None and self.dragging.kind == "fox" and cursor[0] > -9999:
             self.dragging.x, self.dragging.y = cursor[0], cursor[1] + 22 * self.world.scale
         elif self.dragging is not None and getattr(self.dragging, "held", False) and cursor[0] > -9999:
-            self.dragging.x, self.dragging.y = cursor  # a corn cob in your hand
+            self.dragging.x, self.dragging.y = cursor  # a corn cob (or a ball) in your hand
+            self.trail = [p for p in self.trail if self.elapsed - p[0] < 0.12] + [(self.elapsed, *cursor)]
         if self.world.dirty:
             self.world.dirty = False
             save.store(self.settings)
@@ -333,8 +401,9 @@ class Stage:
             thing, (sx, sy), _ = self.press
             if abs(x - sx) + abs(y - sy) > DRAG_START:
                 self.dragging = thing
-                if thing.kind == "fox" or getattr(thing, "is_cob", False):
+                if thing.kind == "fox" or getattr(thing, "is_cob", False) or getattr(thing, "is_ball", False):
                     thing.pick_up()
+                    self.trail = []
         if self.dragging is not None and self.dragging.kind in DRAGGED_ALONG:
             thing, (sx, _), start_x = self.press
             thing.x = max(40.0, min(self.world.width - 40.0, start_x + x - sx))
@@ -345,9 +414,19 @@ class Stage:
                 self.last_pet = self.elapsed
                 thing.pet()
 
+    def throw_speed(self):
+        """(vx, vy) in pixels per second, from the last moment of the cursor's movement."""
+        trail = getattr(self, "trail", [])
+        if len(trail) < 2 or trail[-1][0] - trail[0][0] <= 0:
+            return 0.0, 0.0
+        (t0, x0, y0), (t1, x1, y1) = trail[0], trail[-1]
+        return (x1 - x0) / (t1 - t0), (y1 - y0) / (t1 - t0)
+
     def released(self):
         if self.dragging is not None:
-            if self.dragging.kind == "fox" or getattr(self.dragging, "is_cob", False):
+            if getattr(self.dragging, "is_ball", False):
+                self.dragging.throw(*self.throw_speed())  # how fast your hand was moving as you let go
+            elif self.dragging.kind == "fox" or getattr(self.dragging, "is_cob", False):
                 self.dragging.drop()
             elif self.dragging.kind in PLACED_ITEMS:
                 self.world.keep_off_seams(self.dragging)  # dropped across two monitors: onto one of them
@@ -387,6 +466,8 @@ class Desktop(QWidget):
         """The part of this window everything covers (only that part is redrawn)."""
         area = QRect()
         for thing in self.world.things:
+            if thing.kind == "folder":
+                continue  # the real icon is drawn by Windows
             left, top, w, h = thing.rect()
             r = QRect(int(left + self.dx) - 2, int(top + self.dy) - 2, int(w) + 4, int(h) + 4)
             if r.intersects(self.rect()):
@@ -404,6 +485,8 @@ class Desktop(QWidget):
             if local.intersects(view):
                 painter.fillRect(local, colour)
         for thing in self.world.drawing_order():
+            if thing.kind == "folder":
+                continue  # the real icon is drawn by Windows
             left, top, w, h = thing.rect()
             x, y = int(round(left + self.dx)), int(round(top + self.dy))
             if not view.intersects(QRect(x, y, int(w), int(h))):
@@ -473,7 +556,8 @@ class ToyBoxWindow(QWidget):
         mischief = QGroupBox("Mischief")
         mischief_layout = QVBoxLayout(mischief)
         for key, label in (("discord", "Steal Discord messages (and put them back)"),
-                           ("treasure", "Dig up taskbar icons")):
+                           ("treasure", "Dig up taskbar icons"),
+                           ("folders", "Move folders about on the desktop")):
             box = QCheckBox(label)
             box.toggled.connect(lambda on, k=key: toybox._set_mischief(k, on))
             mischief_layout.addWidget(box)
@@ -570,6 +654,10 @@ class ToyBox:
             m.addAction("Replant the garden", self._replant_crops)
         if self.world.taskbar_spots:
             m.addAction("Dig up a taskbar treasure", self._dig)
+        if self.world.folder_spots and self.world.mischief("folders"):
+            m.addAction("Move a desktop folder", self._move_a_folder)
+        if self.settings.get("folder_homes"):
+            m.addAction("Put the desktop folders back", self.desktop.put_folders_back)
         m.addAction("Zoomies!", self._zoomies)
         m.addAction("Make it blustery", lambda: self.world.blustery())
         m.addAction("Make it rain", lambda: self.world.make_it("rain"))
@@ -683,6 +771,13 @@ class ToyBox:
     def _set_snow(self, on):
         self.settings["snow"] = bool(on)
         save.store(self.settings)
+
+    def _move_a_folder(self):
+        foxes = [f for f in self.world.of("fox") if not f.held and f.dragging_folder is None]
+        if foxes and not self.world.of("folder") and self.world.folder_spots:
+            fox = self.world.rng.choice(foxes)
+            spot = min(self.world.folder_spots, key=lambda f: abs(f["x"] - fox.x))
+            self.world.move_folder(fox, spot, by_itself=False)
 
     def _replant(self):
         self.world.grow_pumpkins(replant=True)

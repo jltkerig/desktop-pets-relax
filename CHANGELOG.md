@@ -3,6 +3,19 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.11.0
+
+- **Dug-up taskbar icons are bouncy balls:** pick one up with the mouse and throw it. It flies off as fast as
+  you threw it and bounces off the ground and the edges of the screen. A fox races after it, catches it on a low
+  bounce and brings it back to where you threw it from. Tap one to bounce it up into the air.
+- **The foxes move folders about on the desktop** (Windows): now and then a bored fox sits under a folder icon,
+  leaps and pulls it down, drags it along the bottom of the screen and drops it somewhere else. It's the real
+  icon moving, the same as dragging it yourself; the folder and what's in it are never touched. Only folders
+  (not files or shortcuts), only on the main monitor, at most one every eight minutes or so, and not when the
+  desktop is set to Auto arrange icons. Where each folder was is remembered: **Put the desktop folders back** in
+  the tray menu moves them all back. **Move a desktop folder** sends a fox to do it now. Turn it off in the Toy
+  Box under Mischief ("Move folders about on the desktop").
+
 ## 1.10.0
 
 - **A tidier Toy Box:** tabs for All year, Winter, Spring, Summer and Autumn (this season's tab opens first and

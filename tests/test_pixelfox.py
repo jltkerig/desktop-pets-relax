@@ -1861,6 +1861,152 @@ class LocalWeather(unittest.TestCase):
         self.assertFalse(world.of("firefly"))
 
 
+def loose_ball(world, x=300.0, height=200):
+    import types
+    from pet.items import Treasure
+    ball = world.add(Treasure(world, types.SimpleNamespace(x=x), "ball"))
+    ball.carried_by = None
+    ball.x, ball.y = x, world.ground - height
+    return ball
+
+
+class BouncyBalls(unittest.TestCase):
+    def test_a_thrown_icon_bounces_and_settles(self):
+        world, clock = season_world("autumn")  # no foxes to fetch it
+        ball = loose_ball(world)
+        ball.pick_up()
+        self.assertTrue(ball.held)
+        ball.throw(400, -300)
+        heights = []
+        for _ in range(30 * 8):
+            run(world, clock, 1 / 30)
+            heights.append(world.ground - ball.y)
+        landed = [i for i in range(1, len(heights)) if heights[i] == 0 and heights[i - 1] > 0]
+        self.assertGreater(len(landed), 2)  # bounce, bounce, bounce
+        self.assertTrue(ball.resting)
+        self.assertGreater(ball.x, 300)
+
+    def test_it_bounces_off_the_edge_of_the_screen(self):
+        world, clock = season_world("autumn")
+        ball = loose_ball(world, x=world.width - 100)
+        ball.throw(3000, 0)
+        run(world, clock, 3)
+        self.assertLess(ball.x, world.width - 5)
+        self.assertGreater(ball.x, 0)
+
+    def test_a_fox_fetches_it_back(self):
+        world, clock = season_world("autumn", orange=True)
+        fox = world.of("fox")[0]
+        ball = loose_ball(world, x=500)
+        ball.throw(700, -400)
+        self.assertIs(ball.chased_by, fox)
+        carried = False
+        for _ in range(30 * 20):
+            run(world, clock, 1 / 30)
+            carried = carried or ball.carried_by is fox
+        self.assertTrue(carried)
+        self.assertIsNone(ball.carried_by)  # dropped
+        self.assertLess(abs(ball.x - ball.thrown_from), 80 * world.scale)  # back where it was thrown from
+
+    def test_a_tap_sends_it_up(self):
+        world, clock = season_world("autumn")
+        ball = loose_ball(world, height=0)
+        ball.click()
+        run(world, clock, 0.2)
+        self.assertGreater(world.ground - ball.y, 10)
+
+    def test_you_cant_grab_one_out_of_a_foxs_mouth(self):
+        world, _ = season_world("autumn", orange=True)
+        ball = loose_ball(world)
+        ball.carried_by = world.of("fox")[0]
+        self.assertFalse(ball.draggable)
+
+
+class DesktopFolders(unittest.TestCase):
+    def setup(self, height=600):
+        world, clock = season_world("autumn", orange=True)
+        world.folder_spots = [{"name": "Homework", "x": 400.0, "y": world.ground - height, "w": 76.0, "h": 70.0,
+                               "home": [20, 300], "left": 0.0, "right": float(world.width)}]
+        fox = world.of("fox")[0]
+        fox.boredom = 1.0
+        return world, clock, fox
+
+    def test_a_fox_pulls_a_folder_down_drags_it_and_drops_it(self):
+        world, clock, fox = self.setup()
+        self.assertTrue(world.move_folder(fox))
+        folder = world.of("folder")[0]
+        self.assertEqual(folder.home, [20, 300])
+        states, moves = set(), []
+        for _ in range(30 * 60):
+            run(world, clock, 1 / 30)
+            states.add(folder.state)
+            moves += [r for r in world.folder_requests if r[1] == "Homework"]
+            world.folder_requests.clear()
+            if folder.gone:
+                break
+        self.assertTrue({"falling", "dragged", "dropped"} <= states)
+        self.assertEqual(moves[-1][0], "drop")
+        _, _, x, y, _, _ = moves[-1]
+        self.assertEqual(y, world.ground - 2 * world.scale)  # on the ground
+        self.assertGreater(abs(x - 400), 60)                 # somewhere else
+        self.assertIsNone(fox.dragging_folder)
+
+    def test_not_another_one_for_a_while(self):
+        world, clock, fox = self.setup()
+        spot = dict(world.folder_spots[0])
+        world.move_folder(fox)
+        world.folder_spots = [spot]
+        self.assertIsNone(world.folder_to_move(fox))  # one at a time, and then a rest
+        run(world, clock, 70)
+        self.assertIsNone(world.folder_to_move(fox))
+
+    def test_mischief_off_means_no_folders_moved(self):
+        world, clock, fox = self.setup()
+        world.settings["mischief"]["folders"] = False
+        self.assertIsNone(world.folder_to_move(fox))
+        self.assertFalse(world.move_folder(fox))
+
+    def test_picking_the_fox_up_makes_it_let_go(self):
+        world, clock, fox = self.setup(height=10)
+        world.move_folder(fox)
+        folder = world.of("folder")[0]
+        for _ in range(30 * 30):
+            run(world, clock, 1 / 30)
+            if folder.state == "dragged":
+                break
+        self.assertEqual(folder.state, "dragged")
+        fox.pick_up()
+        run(world, clock, 0.1)
+        self.assertTrue(folder.gone)
+        self.assertIsNone(fox.dragging_folder)
+
+    def test_folder_homes_are_saved_and_checked(self):
+        path = Path(os.environ["PIXELFOX_USER_DIR"]) / "homes.json"
+        self.assertEqual(save.load(path)["folder_homes"], {})
+        self.assertTrue(save.load(path)["mischief"]["folders"])
+        path.write_text(json.dumps({"folder_homes": {"Homework": [20, 300], "bad": "x", "worse": [1]}}))
+        self.assertEqual(save.load(path)["folder_homes"], {"Homework": [20, 300]})
+
+    def test_away_from_windows_nothing_happens(self):
+        from pet import desktop_icons
+        if desktop_icons.ON_WINDOWS:
+            self.skipTest("only checks the non-Windows fallbacks")
+        self.assertIsNone(desktop_icons.find_listview())
+        self.assertEqual(desktop_icons.folders(), [])
+        self.assertEqual(desktop_icons.put_back({"Homework": [1, 2]}), 0)
+        self.assertFalse(desktop_icons.Mover("Homework").ok)
+
+    def test_only_real_folders_count(self):
+        from pet import desktop_icons
+        with tempfile.TemporaryDirectory() as desk:
+            (Path(desk) / "Homework").mkdir()
+            (Path(desk) / "notes.txt").write_text("hi")
+            self.assertTrue(desktop_icons.is_folder("Homework", [desk]))
+            self.assertFalse(desktop_icons.is_folder("notes.txt", [desk]))
+            self.assertFalse(desktop_icons.is_folder("This PC", [desk]))
+            self.assertFalse(desktop_icons.is_folder("..", [desk]))
+
+
 def qt_available():
     try:
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")

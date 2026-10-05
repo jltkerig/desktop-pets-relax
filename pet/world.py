@@ -32,6 +32,9 @@ class World:
         self.weather_timer = self.rng.uniform(15 * 60, 60 * 60)  # until the next chance of a blustery spell
         self.seams = list(seams)
         self.dirty = False  # settings changed here (pumpkins planted); the window saves them
+        self.folder_spots = []      # folder icons on the desktop {name, x, y (bottom), w, h}, set by the window
+        self.folder_requests = []   # ("move" | "drop", name, x, y, w, h) for the window to move the real icon
+        self.folder_rest = 0.0      # seconds until a fox may move another folder by itself
         self.weather = None         # the local weather report (pet/weather.py), set by the window; None: no idea
         self.shower = (None, 0.0)   # ("rain" | "snow", seconds left): a shower asked for from the tray menu
         # self.seams: where one monitor ends and the next begins, along the strip
@@ -319,6 +322,7 @@ class World:
         self.leave_paw_prints()
         self.night_lights(dt)
         self.precipitation(dt)
+        self.folder_rest = max(0.0, self.folder_rest - dt)
         self.things = [t for t in self.things if not t.gone]
 
     def blustery(self, minutes=None):
@@ -832,6 +836,93 @@ class World:
         if treasure is not None:
             treasure.carried_by = None
             fox.carrying = None
+
+    # -- desktop folders ---------------------------------------------------------------------------------
+
+    def folder_to_move(self, fox):
+        """A desktop folder icon a fox could go and move, if folder mischief is on and it's been a while."""
+        if not self.folder_spots or not self.mischief("folders") or self.of("folder") or self.folder_rest > 0:
+            return None
+        return min(self.folder_spots, key=lambda f: abs(f["x"] - fox.x))
+
+    def move_folder(self, fox, spot=None, by_itself=True):
+        """Sit under a folder icon, leap and pull it down, drag it off along the ground and drop it there."""
+        from pet.items import Folder
+        spot = spot or self.folder_to_move(fox)
+        if spot is None or fox.held or fox.asleep and by_itself:
+            return False
+        s = self.scale
+        left, right = spot.get("left", 0.0), spot.get("right", float(self.width))
+        folder = self.add(Folder(self, spot["name"], spot["x"], spot["y"], spot["w"], spot["h"], (left, right)))
+        folder.home = spot.get("home")
+        self.folder_spots = [f for f in self.folder_spots if f["name"] != spot["name"]]
+        self.folder_rest = 8 * 60  # not another one for a good while
+        side = 1 if spot["x"] >= fox.x else -1
+        under = max(40.0, min(self.width - 40.0, spot["x"] - side * 10 * s))
+        high = folder.floor() - spot["y"]  # how far above the ground it is
+        away = spot["x"] + side * self.rng.uniform(140, 320) * s
+        if away > right - 60 or away < left + 60:
+            away = spot["x"] - side * self.rng.uniform(140, 320) * s
+        away = max(left + 60.0, min(right - 60.0, away))
+
+        def yank():
+            if folder.state == "up":
+                folder.state = "falling"
+
+        def grab():
+            if folder.gone or folder.state not in ("down", "falling"):
+                return
+            folder.state, folder.fox, fox.dragging_folder = "dragged", fox, folder
+
+        def drop():
+            if folder.fox is fox:
+                folder.let_go()
+
+        if high > 30 * s:  # up out of reach: a leap to pull it down
+            reach = [Step("watch", 1.0, face=spot["x"]), Step("crouch", 0.6, face=spot["x"]),
+                     Step("pounce", to_x=under, leap=min(70.0, high / s * 0.4 + 20), then=yank), Step("land"),
+                     Step("tilt", 0.8, face=spot["x"])]
+        else:
+            reach = [Step("sniff", face=spot["x"], then=yank)]
+        fox.do(Step("walk", to_x=under, speed=WALK * 1.5), *reach,
+               Step("walk", follow=folder, speed=WALK * 1.5), Step("sniff", 0.5, then=grab),
+               Step("walk", to_x=away, speed=WALK * 1.6, then=drop), Step("happy", 1.0), Step("playbow", 1.0))
+        return True
+
+    def ball_thrown(self, ball):
+        """You threw a dug-up icon: the nearest fox that's awake and free races after it to fetch it."""
+        free = [f for f in self.of("fox") if not f.asleep and not f.held and not f.vy and f.carrying is None
+                and f.alpha > 0 and not f.up_high]
+        if not free:
+            return None
+        if ball.chased_by in free:
+            fox = ball.chased_by
+        else:
+            fox = min(free, key=lambda f: abs(f.x - ball.x))
+        ball.chased_by = fox
+        fox.busy_with = None
+        fox.do(Step("tilt", 0.25, face=ball.x), Step("run", follow=ball, speed=ZOOM * 0.75,
+                                                       then=lambda: self.catch_ball(fox, ball, tries=1)))
+        return fox
+
+    def catch_ball(self, fox, ball, tries):
+        """Got there: grab it (and bring it back to where it was thrown from), or keep chasing."""
+        if ball.gone or ball.held or ball.carried_by is not None or ball.chased_by is not fox:
+            return
+        if abs(ball.x - fox.x) > 50 * self.scale or not ball.low():
+            if tries < 4:  # it bounced off again: after it!
+                fox.do(Step("run", follow=ball, speed=ZOOM * 0.75,
+                            then=lambda: self.catch_ball(fox, ball, tries + 1)))
+            else:
+                ball.chased_by = None
+                fox.do(Step("tilt", face=ball.x), Step("happy", 0.8))
+            return
+        ball.carried_by, fox.carrying, ball.chased_by = fox, ball, None
+        ball.vx = ball.vy = 0.0
+        home = ball.thrown_from if ball.thrown_from is not None else fox.x
+        fox.do(Step("hop", face=ball.x), Step("trot", to_x=home, speed=TROT * 1.2),
+               Step("idle", 0.4, then=lambda: self.drop_treasure(fox)), Step("playbow", 1.0), Step("happy", 1.0),
+               Step("watch", 2.5))
 
     def pool_near(self, fox, reach):
         near = [p for p in self.of("prop") if p.variant == "pool" and abs(p.x - fox.x) < reach * self.scale / 2]

@@ -83,6 +83,10 @@ Right-click the icon for the menu:
 - **Crows** chat, play with what's lying about, and sometimes borrow the scarecrow's hat. Click one to shoo them;
   if it drops the hat, click the hat to put it back.
 - **Rest the cursor near the bottom of the screen:** a playful fox may crouch, wiggle and pounce on it.
+- **Throw a dug-up taskbar icon:** pick it up and fling it. It bounces like a ball and a fox fetches it back.
+- **Desktop folders:** now and then a fox pulls a folder icon down and drags it somewhere else along the bottom
+  of the screen (only the icon moves). **Put the desktop folders back** in the tray menu puts them all back;
+  untick "Move folders about on the desktop" in the Toy Box to stop it.
 - **At night:** jack-o'-lanterns and the Christmas tree glow, fireflies blink on summer nights, and an owl
   comes to sit in the oak or the birch. On snowy days the foxes leave paw prints.
 
@@ -110,6 +114,7 @@ pet/items.py       the oak (all four seasons), falling leaves, branches, snow, a
 pet/visitors.py    the squirrel, blue jay, woolly bear, geese, frog, turkeys, crows, butterflies, the owl...
 pet/seasons.py     which season it is and what belongs to it
 pet/view.py        the see-through window, the mouse, the tray menu
+pet/desktop_icons.py  the desktop's folder icons: where they are, and moving them (Windows)
 pet/weather.py     is it raining or snowing where you are? (Open-Meteo, every half hour, in the background)
 pet/save.py        user-data/world.json: what's out and where
 art/make_art.py    draws every sprite into art/sprites/ (python art/make_art.py --preview to see them all)

@@ -40,7 +40,9 @@ DEFAULTS = {
               "tomatoes": {"out": True, "x": None, "planted": None},
               "dahlias": {"out": True, "x": None}, "dandelions": {"out": True, "x": None},
               "cattails": {"out": True, "x": None, "planted": None}},
-    "mischief": {"discord": True, "treasure": True},  # Discord message stealing, taskbar treasure digging
+    # Discord message stealing, taskbar treasure digging, moving folder icons about on the desktop
+    "mischief": {"discord": True, "treasure": True, "folders": True},
+    "folder_homes": {},  # where each desktop folder icon was before a fox first moved it: name -> [x, y]
     "season": "auto",
     "snow": "auto",  # snow on the winter oak: "auto" (some days), or true / false as chosen from the tray menu
     "scale": 2,
@@ -64,6 +66,11 @@ def load(path=None):
                 for name, value in saved[key].items():
                     if name in data[key] and isinstance(value, type(data[key][name])):
                         data[key][name] = value
+    homes = saved.get("folder_homes") if isinstance(saved, dict) else None
+    if isinstance(homes, dict):
+        data["folder_homes"] = {name: [int(p[0]), int(p[1])] for name, p in homes.items()
+                                if isinstance(name, str) and isinstance(p, list) and len(p) == 2
+                                and all(isinstance(v, (int, float)) for v in p)}
     if data["season"] not in ("auto", "winter", "spring", "summer", "autumn"):
         data["season"] = "auto"
     if data["scale"] not in (1, 2, 3):

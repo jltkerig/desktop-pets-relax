@@ -52,6 +52,7 @@ class Fox(Thing):
         self.just_woke = False
         self.watched = set()  # visitors it has already sat and watched
         self.busy_with = None  # another fox it is playing with
+        self.dragging_folder = None  # a desktop folder icon it's dragging along
         self.carrying = None   # a dug-up treasure in its mouth
         self.in_den = False    # curled up inside the den (hidden; the den shows its tail tip)
         self.rng = world.rng
@@ -247,6 +248,10 @@ class Fox(Thing):
                     finished = True  # caught up with a friend who has stopped: done following
                 elif target.kind == "message":
                     finished = True  # reached the message
+                elif target.kind == "folder":
+                    finished = True  # at the fallen folder
+                elif getattr(target, "is_ball", False) and target.low():
+                    finished = True  # caught up with a bouncing ball, low enough to grab
         elif step.leap and step.to_x is not None:
             total = sprites.duration(self.anim.name)
             t = min(1.0, step.elapsed / total)
@@ -381,6 +386,9 @@ class Fox(Thing):
         # bored? dig at a taskbar icon for treasure
         if w.taskbar_spots and self.boredom > 0.3 and rng.random() < 0.15 and w.dig_for_treasure(self):
             return  # dig_for_treasure filled in the plan
+        # bored? go and move a folder on the desktop (now and then)
+        if self.boredom > 0.3 and w.folder_to_move(self) is not None and rng.random() < 0.1 and w.move_folder(self):
+            return  # move_folder filled in the plan
 
         # a ripe pumpkin to inspect
         pumpkin = w.pumpkin_near(self, 700)

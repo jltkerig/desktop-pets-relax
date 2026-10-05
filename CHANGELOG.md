@@ -3,6 +3,15 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.7.0
+
+- **More for the winterscape**, in the Toy Box for winter (each can be put out or away, and dragged about):
+  - **A sled:** wooden slats on red runners curling up at the front. Click it and it rocks.
+  - **A tree stump:** flat, ringed top and a shelf fungus. The foxes hop up on it to enjoy the view; on a snowy
+    day a knock tips the snow off its top.
+  - **A small Christmas tree:** a gold star and coloured lights that twinkle. Click it and they all blaze.
+  - On snowy days all three wear a coat of snow, and crows perch on them (the star is a favourite).
+
 ## 1.6.0
 
 - **Screen saver:** `Pixel Fox.scr`. Right-click it and choose **Install**, then pick it in Windows' screen saver

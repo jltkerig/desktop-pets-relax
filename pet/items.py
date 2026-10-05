@@ -442,17 +442,27 @@ class Prop(Thing):
         self.variant = variant
         self.hat_on = True  # the scarecrow's hat (the crows like to borrow it)
 
-    CLICKS = {"scarecrow": "scarecrow_surprised", "hoe": "hoe_wobble"}
+    CLICKS = {"scarecrow": "surprised", "hoe": "wobble", "sled": "wobble", "xmas_tree": "sparkle"}
+    SNOWY = ("sled", "xmas_tree")  # these get a coat of snow on snowy winter days
+
+    @property
+    def snow(self):
+        return "_snow" if self.variant in self.SNOWY and self.world.snowed_over else ""
 
     @property
     def look(self):
         """The sprite it shows when nothing's happening."""
-        return self.variant if self.hat_on or self.variant != "scarecrow" else "scarecrow_nohat"
+        if self.variant == "scarecrow" and not self.hat_on:
+            return "scarecrow_nohat"
+        return self.variant + self.snow
 
     def react(self):
+        """Its reaction to a click: the scarecrow looks surprised, the hoe and sled wobble, the Christmas tree's
+        lights all blaze."""
         reaction = self.CLICKS.get(self.variant)
         if reaction:
-            self.anim.play(reaction if self.look == self.variant else reaction + "_nohat")
+            hatless = "_nohat" if self.variant == "scarecrow" and not self.hat_on else ""
+            self.anim.play(f"{self.variant}{self.snow}_{reaction}{hatless}")
 
     def click(self):
         self.react()
@@ -467,7 +477,7 @@ class Prop(Thing):
 
     def update(self, dt):
         super().update(dt * (1 + self.world.wind * 4))
-        resting = self.anim.name in (self.variant, self.variant + "_nohat")
+        resting = self.anim.name in (self.variant, self.variant + "_nohat", self.variant + "_snow")
         if self.anim.name != self.look and (self.anim.done or resting):
             self.anim.play(self.look)  # back to normal
 
@@ -617,6 +627,7 @@ class Climbable(Thing):
         "haystack": [(-16, 15), (0, 31)],
         "haystack_row": [(-32, 15), (0, 15)],
         "haystack_steps": [(-32, 15), (0, 31), (32, 47)],
+        "stump": [(0, 15)],  # the flat, sawn top
     }
     HAY = ("haystack", "haystack_row", "haystack_steps")
 
@@ -653,8 +664,13 @@ class Climbable(Thing):
             self.levels = self.LEVELS[self.layout]
             w.settings["items"].setdefault("haystack", {"out": True, "x": None})["layout"] = self.layout
             w.dirty = True
+        elif self.variant == "stump" and w.snowed_over:  # a knock: the snow on top tumbles off
+            for _ in range(3):
+                w.add(SnowClump(w, self.x + w.rng.uniform(-8, 8) * w.scale, self.y - 16 * w.scale))
 
     def update(self, dt):
+        if self.variant == "stump":
+            self.anim.name = "stump_snow" if self.world.snowed_over else "stump"
         super().update(dt)
         self.timer += dt
         if self.state == "falling" and self.anim.done:

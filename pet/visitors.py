@@ -507,6 +507,7 @@ class HeadPerch(Perch):
 # where a crow can sit on each kind of item, in sprite pixels from its anchor
 SCARECROW_ARMS = [(-14, 51), (14, 51)]               # the two outstretched arms (and his head: HeadPerch)
 DEN_PERCHES = [(-2, 32), (-20, 27), (18, 26)]        # the tops of the mound's lumps
+PROP_PERCHES = {"sled": [(-8, 10), (8, 10)], "xmas_tree": [(0, 43)]}  # along the sled; on the star
 PUMPKIN_HEIGHT = {"s": 0.75, "m": 1.0, "l": 1.3}
 PUMPKIN_SHAPE_HEIGHT = {"round": 1.0, "tall": 1.32, "squat": 0.74}
 
@@ -526,6 +527,8 @@ def crow_perches(world):
             spots += [Perch(thing, (x - thing.x) / s, (thing.y - y) / s) for x, y in thing.perch_points()]
         elif thing.kind == "prop" and thing.variant == "scarecrow":
             spots += [HeadPerch(thing)] + [Perch(thing, dx, dy) for dx, dy in SCARECROW_ARMS]
+        elif thing.kind == "prop" and thing.variant in PROP_PERCHES:
+            spots += [Perch(thing, dx, dy) for dx, dy in PROP_PERCHES[thing.variant]]
         elif thing.kind == "climb" and thing.available:
             spots += [Perch(thing, dx, dy) for dx, dy in thing.levels]
         elif thing.kind == "den":

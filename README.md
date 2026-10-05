@@ -62,6 +62,8 @@ Right-click the icon for the menu:
 - **Pet:** move the cursor back and forth over a fox. It only ever reacts happily.
 - **Click:** a happy hop. A napping fox wakes up and stretches.
 - **Drag a fox:** you pick it up, and it lands when you let go.
+- **Winter:** a sled to rock, a tree stump the foxes climb, and a little Christmas tree whose lights blaze when
+  clicked.
 - **Click the oak:** something different falls out each season: a branch, snow, a caterpillar, a butterfly,
   autumn leaves (and now and then a spider on its thread).
 - **Drag the oak:** you can move it anywhere along the bottom of the screen, and it remembers the spot.

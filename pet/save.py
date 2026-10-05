@@ -27,7 +27,9 @@ DEFAULTS = {
     "items": {"oak": {"out": True, "x": None}, "pumpkins": {"out": True, "x": None, "patch": []},
               "scarecrow": {"out": True, "x": None}, "corn": {"out": True, "x": None, "planted": None},
               "hoe": {"out": True, "x": None}, "den": {"out": True, "x": None},
-              "barrels": {"out": True, "x": None}, "haystack": {"out": True, "x": None}},
+              "barrels": {"out": True, "x": None}, "haystack": {"out": True, "x": None},
+              "sled": {"out": True, "x": None}, "stump": {"out": True, "x": None},
+              "xmas_tree": {"out": True, "x": None}},
     "mischief": {"discord": True, "treasure": True},  # Discord message stealing, taskbar treasure digging
     "season": "auto",
     "snow": "auto",  # snow on the winter oak: "auto" (some days), or true / false as chosen from the tray menu

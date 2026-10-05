@@ -59,6 +59,11 @@ class World:
         return seasons.season_for(self.now().date()) if chosen == "auto" else chosen
 
     @property
+    def snowed_over(self):
+        """Snow lying on everything: a snowy winter day."""
+        return self.season == "winter" and self.snowy
+
+    @property
     def snowy(self):
         """Is there snow on the oak? You can choose from the tray menu; otherwise it snows on some winter days
         and not others (the same all day)."""
@@ -148,7 +153,7 @@ class World:
                 for fox in thing.sleepers:
                     fox.leave_den()
                 thing.gone = True
-        climbables = {"barrels": 0.88, "haystack": 0.40}  # where each goes the first time
+        climbables = {"barrels": 0.88, "haystack": 0.40, "stump": 0.16}  # where each goes the first time
         for thing in self.of("climb"):
             if thing.variant not in wanted_items:
                 thing.gone = True
@@ -158,7 +163,8 @@ class World:
                 if not (isinstance(x, (int, float)) and 0 < x < self.width):
                     x = self.width * share
                 self.add(Climbable(self, x, name, self.settings["items"][name].get("layout")))
-        props = {"scarecrow", "hoe"}
+        props = {"scarecrow", "hoe", "sled", "xmas_tree"}
+        first_spot = {"sled": 0.62, "xmas_tree": 0.3}  # winter things, where they go the first time
         for thing in self.of("prop"):
             if thing.variant not in wanted_items:
                 thing.gone = True
@@ -168,7 +174,9 @@ class World:
                 if not (isinstance(x, (int, float)) and 0 < x < self.width):
                     patch = self.settings["items"].get("pumpkins", {}).get("patch") or []
                     xs = [p["x"] for p in patch if isinstance(p, dict) and isinstance(p.get("x"), (int, float))]
-                    if name == "hoe":  # leaning by the patch, on its left
+                    if name in first_spot:
+                        x = self.width * first_spot[name]
+                    elif name == "hoe":  # leaning by the patch, on its left
                         x = (min(xs) - 34 * self.scale) if xs else self.width * 0.22
                     else:              # the scarecrow keeps watch on the right
                         x = (max(xs) + 70 * self.scale) if xs else self.width * 0.32

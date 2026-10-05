@@ -1203,6 +1203,69 @@ class OakThroughTheYear(unittest.TestCase):
                 self.assertTrue(any(a > 0 for a in near), (look, x, y))
 
 
+class WinterThings(unittest.TestCase):
+    def winter(self, snow=False, orange=False):
+        world, clock = make_world("winter", orange=orange, grey=False)
+        world.settings["snow"] = snow
+        run(world, clock, 0.1)
+        return world, clock
+
+    def thing(self, world, variant):
+        return next(t for t in world.things if getattr(t, "variant", None) == variant)
+
+    def test_the_sled_stump_and_christmas_tree_come_out_in_winter_only(self):
+        world, _ = self.winter()
+        for name in ("sled", "stump", "xmas_tree"):
+            self.assertTrue(any(getattr(t, "variant", None) == name for t in world.things), name)
+        world, _ = make_world("summer", orange=False, grey=False)
+        for name in ("sled", "stump", "xmas_tree"):
+            self.assertFalse(any(getattr(t, "variant", None) == name for t in world.things), name)
+
+    def test_they_get_a_coat_of_snow_on_snowy_days(self):
+        world, clock = self.winter(snow=True)
+        self.assertEqual(self.thing(world, "sled").anim.name, "sled_snow")
+        self.assertEqual(self.thing(world, "xmas_tree").anim.name, "xmas_tree_snow")
+        self.assertEqual(self.thing(world, "stump").anim.name, "stump_snow")
+        world.settings["snow"] = False
+        run(world, clock, 0.1)
+        self.assertEqual(self.thing(world, "sled").anim.name, "sled")
+        self.assertEqual(self.thing(world, "stump").anim.name, "stump")
+
+    def test_clicks_wobble_the_sled_and_light_up_the_tree(self):
+        for snow in (False, True):
+            world, clock = self.winter(snow=snow)
+            sled, tree = self.thing(world, "sled"), self.thing(world, "xmas_tree")
+            sled.click()
+            tree.click()
+            self.assertTrue(sled.anim.name.endswith("_wobble"))
+            self.assertTrue(tree.anim.name.endswith("_sparkle"))
+            run(world, clock, 2)
+            self.assertEqual(sled.anim.name, sled.look)
+            self.assertEqual(tree.anim.name, tree.look)
+
+    def test_knocking_the_snowy_stump_tips_its_snow_off(self):
+        world, _ = self.winter(snow=True)
+        self.thing(world, "stump").click()
+        self.assertTrue(world.of("snow"))
+
+    def test_a_fox_hops_up_on_the_stump(self):
+        world, clock = self.winter(orange=True)
+        fox = world.of("fox")[0]
+        stump = self.thing(world, "stump")
+        world.climb(fox, stump)
+        highest = world.ground
+        for _ in range(200):
+            run(world, clock, 0.1, fps=10)
+            highest = min(highest, fox.y)
+        self.assertLessEqual(highest, world.ground - 14 * world.scale)
+
+    def test_crows_perch_on_the_sled_and_the_christmas_tree_star(self):
+        from pet.visitors import crow_perches
+        world, _ = self.winter()
+        holders = {getattr(p.holder, "variant", None) for p in crow_perches(world)}
+        self.assertTrue({"sled", "xmas_tree", "stump"} <= holders)
+
+
 def qt_available():
     try:
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")

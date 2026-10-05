@@ -15,6 +15,9 @@ ITEMS = {
     "den": {"label": "Fox den", "seasons": ("winter", "spring", "summer", "autumn")},
     "barrels": {"label": "Oak barrels", "seasons": ("winter", "spring", "summer", "autumn")},
     "haystack": {"label": "Haystack", "seasons": ("summer", "autumn")},
+    "sled": {"label": "Sled", "seasons": ("winter",)},
+    "stump": {"label": "Tree stump", "seasons": ("winter",)},
+    "xmas_tree": {"label": "Christmas tree", "seasons": ("winter",)},
 }
 
 # Visitors that drop by on their own, per season. Crows are about all year round.

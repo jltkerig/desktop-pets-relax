@@ -115,6 +115,7 @@ pet/visitors.py    the squirrel, blue jay, woolly bear, geese, frog, turkeys, cr
 pet/seasons.py     which season it is and what belongs to it
 pet/view.py        the see-through window, the mouse, the tray menu
 pet/desktop_icons.py  the desktop's folder icons: where they are, and moving them (Windows)
+pet/sky.py         where the sun and moon are (and the moon's phase)
 pet/weather.py     is it raining or snowing where you are? (Open-Meteo, every half hour, in the background)
 pet/save.py        user-data/world.json: what's out and where
 art/make_art.py    draws every sprite into art/sprites/ (python art/make_art.py --preview to see them all)

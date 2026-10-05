@@ -3,6 +3,16 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.13.0
+
+- **The sun by day and the moon by night**, behind all your windows: it rises on the left, arcs across the
+  screen (across all your monitors side by side) and sets on the right, where the real sun and moon are for
+  your area (the same place used for sunrise and sunset; mirrored in the southern hemisphere). The moon shows
+  its real phase, from a thin crescent to full. Clicks go straight through it. It's in the screen saver's sky
+  too (dimmed behind the clouds when it rains or snows). Turn it off with **Sun and moon in the sky** in the
+  tray menu.
+- Fixed a rare start-up error if the window was asked to draw before it was fully set up.
+
 ## 1.12.0
 
 - **Decorate with pumpkins (autumn):** **Add a pumpkin** and **Add a jack-o'-lantern** in the tray menu drop a

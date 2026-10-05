@@ -2776,6 +2776,61 @@ def snowflake(big=False):
     return _dots(5, 5, dots)
 
 
+# -- the sun and the moon -------------------------------------------------------------------------------------
+
+
+def sun_disc(t=0.0):
+    """26 x 26: the sun, a warm round disc with short rays all round that shimmer (t: which rays are long)."""
+    from PIL import Image
+    img = Image.new("RGBA", (26, 26), (0, 0, 0, 0))
+    px = img.load()
+    c, r = 12.5, 7.2
+    for y in range(26):
+        for x in range(26):
+            dx, dy = x - c, y - c
+            d = math.hypot(dx, dy)
+            if d <= r:
+                f = d / r
+                light = 1 - 0.55 * f - 0.25 * max(0.0, (dx + dy) / (2 * r))  # brighter at the top left
+                px[x, y] = (255, int(200 + 50 * light), int(70 + 120 * light), 255)
+            elif d <= r + 1.2:
+                px[x, y] = (236, 150, 40, 255)  # a deeper orange rim
+    for k in range(12):  # rays: alternate long and short, swapping as t changes
+        a = k * math.pi / 6 + math.pi / 12
+        long_ = (k + int(t * 2)) % 2 == 0
+        for step in range(3 if long_ else 2):
+            rr = r + 2.6 + step * 1.1
+            x, y = int(round(c + math.cos(a) * rr)), int(round(c + math.sin(a) * rr))
+            if 0 <= x < 26 and 0 <= y < 26:
+                px[x, y] = (255, 214, 90, 255 - step * 50)
+    return img
+
+
+def moon_disc(frame=4):
+    """22 x 22: the moon in one of 8 phases (0 new, 2 first quarter lit on the right, 4 full, 6 last quarter lit
+    on the left), pale and cratered, the dark part just faintly showing."""
+    from PIL import Image
+    img = Image.new("RGBA", (22, 22), (0, 0, 0, 0))
+    px = img.load()
+    c, r = 10.5, 8.6
+    theta = frame * 2 * math.pi / 8
+    craters = ((-3.0, -2.5, 2.0), (2.5, 1.0, 2.4), (-1.0, 4.0, 1.5), (4.0, -3.5, 1.2), (-4.5, 2.0, 1.1))
+    for y in range(22):
+        for x in range(22):
+            nx, ny = (x - c) / r, (y - c) / r
+            if nx * nx + ny * ny > 1:
+                continue
+            w = math.sqrt(max(0.0, 1 - ny * ny))
+            lit = nx > math.cos(theta) * w if theta <= math.pi else nx < -math.cos(theta) * w
+            crater = any(math.hypot(x - c - cx, y - c - cy) < cr for cx, cy, cr in craters)
+            if lit:
+                shade = 0.92 - 0.12 * math.hypot(nx, ny) - (0.14 if crater else 0.0)
+                px[x, y] = (int(250 * shade), int(246 * shade), int(222 * shade), 255)
+            else:
+                px[x, y] = (70, 78, 104, 110 if not crater else 125)  # the dark side, faintly
+    return img
+
+
 def tray_icon():
     """32 x 32 fox face for the tray."""
     import fox_art
@@ -2861,6 +2916,8 @@ SPRITES = {
     "owl_fly": ([owl("fly", i / 4) for i in range(4)], 90, True, (10, 13)),
     "firefly": ([firefly(True), firefly(False), firefly(False), firefly(True)], 260, True, (2, 2)),
     "pawprint": ([pawprint()], 1000, False, (3, 2)),
+    "sun": ([sun_disc(t) for t in (0.0, 0.5)], 900, True, (13, 13)),
+    "moon": ([moon_disc(f) for f in range(8)], 1000, False, (11, 11)),
     "raindrop": ([raindrop()], 1000, True, (1, 7)),
     "rain_splash": ([rain_splash(i) for i in range(3)], 70, False, (3, 3)),
     "snowflake": ([snowflake()], 1000, True, (1, 2)),

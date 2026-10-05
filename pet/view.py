@@ -11,7 +11,7 @@ from PySide6.QtGui import QAction, QActionGroup, QColor, QCursor, QIcon, QImage,
 from PySide6.QtWidgets import (QApplication, QCheckBox, QGroupBox, QLabel, QMenu, QPushButton, QSystemTrayIcon,
                                QTabWidget, QVBoxLayout, QWidget)
 
-from pet import __version__, desktop_icons, discord, save, screens, seasons, sprites, weather
+from pet import __version__, desktop_icons, discord, save, screens, seasons, sky, sprites, weather
 
 FRAME_MS = 33
 TASKBAR_SCRIPT = Path(__file__).resolve().parent / "taskbar_buttons.ps1"
@@ -151,6 +151,15 @@ class Stage:
         self.active_timer.start(2000)
         # rain and snow from the local weather, fetched in the background every half hour
         self.weather = weather.Watcher(self.settings).start()
+        # the sun or the moon, behind every window, moved along its arc every half minute
+        self.sky = SkyWindow(self)
+        self.sky.place()
+        self.sky_timer = QTimer()
+        self.sky_timer.timeout.connect(self.sky.place)
+        self.sky_timer.start(30000)
+        self.shimmer = QTimer()  # the sun's rays shimmer
+        self.shimmer.timeout.connect(lambda: self.sky.update() if self.sky.isVisible() else None)
+        self.shimmer.start(900)
         # the folder icons on the desktop, for the foxes to move about (looked for every few seconds)
         self.movers = {}  # folder name -> desktop_icons.Mover, while a fox has it
         self.folder_timer = QTimer()
@@ -298,6 +307,8 @@ class Stage:
             desktop = Desktop(self, screen, s)
             desktop.show()
             self.desktops.append(desktop)
+        if getattr(self, "sky", None) is not None:
+            QTimer.singleShot(0, self.sky.place)
         for screen in QApplication.screens():  # a taskbar moved or resized, a resolution changed
             if screen not in self._watched:
                 self._watched.add(screen)
@@ -538,6 +549,60 @@ class Stage:
         self.dragging = None
 
 
+class SkyWindow(QWidget):
+    """The sun by day, the moon by night (in its phase), behind every other window: a small window kept at the
+    bottom of the stack that clicks go straight through, moved along its arc across all the monitors."""
+
+    def __init__(self, stage):
+        super().__init__(None, Qt.FramelessWindowHint | Qt.Tool | Qt.WindowStaysOnBottomHint |
+                         Qt.WindowTransparentForInput | Qt.WindowDoesNotAcceptFocus | Qt.NoDropShadowWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WA_ShowWithoutActivating)
+        self.stage = stage
+        self.frames = Frames()
+        self.look = None  # (sprite, frame, facing)
+
+    def zoom(self):
+        return self.stage.world.scale + 1
+
+    def place(self):
+        """Put it where the sun or moon is now (hidden if neither is up, or it's switched off)."""
+        world, settings = self.stage.world, self.stage.settings
+        found = sky.placement(world.now(), settings) if settings.get("sky", True) else None
+        desktops = self.stage.desktops
+        if found is None or not desktops:
+            self.hide()
+            return
+        body, across, up, frame, mirrored = found
+        self.look = (body, frame, -1 if mirrored and body == "moon" else 1)
+        meta = sprites.meta(body)
+        w, h = meta["frame_width"] * self.zoom(), meta["frame_height"] * self.zoom()
+        margin = w
+        x = margin + across * max(1.0, world.width - 2 * margin)  # along the strip, across every monitor
+        d = next((d for d in desktops if d.slice["offset"] <= x < d.slice["offset"] + d.width()), desktops[-1])
+        horizon, top = d.height() * 0.62, d.height() * 0.08
+        y = horizon - up * (horizon - top)
+        corner = d.mapToGlobal(QPoint(int(x - d.slice["offset"] - w / 2), int(y - h / 2)))
+        self.setGeometry(corner.x(), corner.y(), w, h)
+        if not self.isVisible():
+            self.show()
+        self.lower()  # and stay behind everything
+        self.update()
+
+    def paintEvent(self, event):
+        if self.look is None:
+            return
+        body, frame, facing = self.look
+        painter = QPainter(self)
+        painter.setCompositionMode(QPainter.CompositionMode_Source)
+        painter.fillRect(self.rect(), Qt.transparent)
+        painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
+        if body == "sun":
+            frame = int(self.stage.elapsed / 0.9) % 2  # the rays shimmer
+        painter.drawPixmap(0, 0, self.frames.get(body, frame, self.zoom(), facing))
+        painter.end()
+
+
 class Desktop(QWidget):
     """One monitor's see-through window, showing its slice of the strip."""
 
@@ -574,7 +639,7 @@ class Desktop(QWidget):
         painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
         view = self.rect()
         out = {m.key for m in self.world.of("message") if m.state != "home"}
-        for key, (band, colour, _, _) in self.stage.covers.items():  # gaps where messages were "stolen" from
+        for key, (band, colour, _, _) in getattr(self.stage, "covers", {}).items():  # gaps where messages were stolen
             if key not in out:
                 continue  # not pulled out yet: nothing to hide
             local = QRect(self.mapFromGlobal(band.topLeft()), band.size())
@@ -602,7 +667,7 @@ class Desktop(QWidget):
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             where = self.mapToGlobal(event.position().toPoint())
-            for key, (band, _, _, _) in list(self.stage.covers.items()):
+            for key, (band, _, _, _) in list(getattr(self.stage, "covers", {}).items()):
                 if band.contains(where):
                     self.world.send_message_home(key)  # clicked the gap: the message flies back
                     return
@@ -790,6 +855,7 @@ class ToyBox:
             action.setChecked(current == key)
             group.addAction(action)
         self._check(m, self._weather_label(), self.settings.get("weather", True), self._set_weather)
+        self._check(m, "Sun and moon in the sky", self.settings.get("sky", True), self._set_sky)
         size_menu = m.addMenu("Size")
         sizes = QActionGroup(size_menu)
         for value in (1, 2, 3):
@@ -862,6 +928,11 @@ class ToyBox:
         for crop in list(self.world.of("crop")):
             self.world.plant_crop(crop.variant, replant=True)
         save.store(self.settings)
+
+    def _set_sky(self, on):
+        self.settings["sky"] = bool(on)
+        save.store(self.settings)
+        self.desktop.sky.place()
 
     def _weather_label(self):
         report = self.desktop.weather.current() if self.settings.get("weather", True) else None

@@ -2230,6 +2230,61 @@ class DesktopFolders(unittest.TestCase):
             self.assertFalse(desktop_icons.is_folder("..", [desk]))
 
 
+class SunAndMoon(unittest.TestCase):
+    MINNEAPOLIS = {"location": {"lat": 44.98, "lon": -93.27}}
+    SYDNEY = {"location": {"lat": -33.87, "lon": 151.21}}
+
+    def at(self, hour, zone="America/Chicago", day=5):
+        from zoneinfo import ZoneInfo
+        return datetime.datetime(2026, 10, day, hour, tzinfo=ZoneInfo(zone))
+
+    def test_the_sun_rises_on_the_left_and_sets_on_the_right(self):
+        from pet import sky
+        morning, noon, evening = (sky.placement(self.at(h), self.MINNEAPOLIS) for h in (8, 14, 18))
+        self.assertEqual({morning[0], noon[0], evening[0]}, {"sun"})
+        self.assertLess(morning[1], 0.25)
+        self.assertGreater(evening[1], 0.75)
+        self.assertGreater(noon[2], morning[2])  # higher in the middle of its arc
+        self.assertGreater(noon[2], evening[2])
+
+    def test_the_moon_at_night_in_its_phase_and_nothing_when_neither_is_up(self):
+        from pet import sky
+        body, across, up, frame, _ = sky.placement(self.at(3), self.MINNEAPOLIS)  # it rose at 1:15am
+        self.assertEqual(body, "moon")
+        self.assertEqual(frame, 6)  # a waning moon, last quarter
+        self.assertIsNone(sky.placement(self.at(23), self.MINNEAPOLIS))  # set at 4:35pm, not up again yet
+
+    def test_the_southern_hemisphere_sees_it_the_other_way_round(self):
+        from pet import sky
+        morning = sky.placement(self.at(8, "Australia/Sydney"), self.SYDNEY)
+        afternoon = sky.placement(self.at(17, "Australia/Sydney"), self.SYDNEY)
+        self.assertGreater(morning[1], 0.75)  # rises on the right
+        self.assertLess(afternoon[1], 0.25)
+        self.assertTrue(morning[4])           # mirrored
+
+    def test_moon_phases(self):
+        from pet import sky
+        utc = datetime.timezone.utc
+        self.assertEqual(sky.phase_frame(datetime.datetime(2026, 10, 10, 12, tzinfo=utc)), 0)  # new
+        self.assertEqual(sky.phase_frame(datetime.datetime(2026, 10, 18, 12, tzinfo=utc)), 2)  # first quarter
+        self.assertEqual(sky.phase_frame(datetime.datetime(2026, 10, 26, 12, tzinfo=utc)), 4)  # full
+
+    def test_without_astral_a_rough_guess(self):
+        from pet import sky
+        real = sky._place
+        sky._place = lambda settings: (None, None)
+        try:
+            self.assertEqual(sky.placement(datetime.datetime(2026, 10, 5, 12, 30).astimezone())[0], "sun")
+        finally:
+            sky._place = real
+
+    def test_the_sky_setting(self):
+        path = Path(os.environ["PIXELFOX_USER_DIR"]) / "sky.json"
+        self.assertTrue(save.load(path)["sky"])
+        path.write_text(json.dumps({"sky": False}))
+        self.assertFalse(save.load(path)["sky"])
+
+
 def qt_available():
     try:
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")

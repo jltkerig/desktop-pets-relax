@@ -13,7 +13,7 @@ from PySide6.QtCore import QElapsedTimer, QRect, Qt, QTimer
 from PySide6.QtGui import QColor, QLinearGradient, QPainter
 from PySide6.QtWidgets import QMessageBox, QWidget
 
-from pet import screens, weather
+from pet import screens, sky, sprites, weather
 from pet.view import Frames
 from pet.world import World
 
@@ -99,6 +99,7 @@ class SaverWindow(QWidget):
             for x, y, phase in self.stars:
                 twinkle = 0.55 + 0.45 * ((t * 1.3 + phase) % 6.3 > 3.15)
                 painter.fillRect(x, y, 2, 2, QColor(255, 255, 240, int(220 * fade * twinkle)))
+        self.paint_sky(painter)
         self.paint_ground(painter, w, h)
         for thing in self.world.drawing_order():
             if thing.kind in ("treasure", "message"):
@@ -111,6 +112,27 @@ class SaverWindow(QWidget):
             painter.drawPixmap(x, y, self.saver.frames.get(thing.anim.name, thing.anim.frame, self.world.scale,
                                                            thing.facing))
         painter.end()
+
+    def paint_sky(self, painter):
+        """The sun by day or the moon by night (in its phase), along its arc across all the monitors."""
+        world = self.world
+        found = sky.placement(world.now(), world.settings) if world.settings.get("sky", True) else None
+        if found is None:
+            return
+        body, across, up, frame, mirrored = found
+        zoom = world.scale + 1
+        meta = sprites.meta(body)
+        pw, ph = meta["frame_width"] * zoom, meta["frame_height"] * zoom
+        x = pw + across * max(1.0, world.width - 2 * pw) + self.dx
+        horizon, top = self.ground_y * 0.85, self.ground_y * 0.1
+        y = horizon - up * (horizon - top)
+        if body == "sun":
+            frame = int(self.saver.elapsed / 0.9) % 2
+        if self.world.falling:
+            painter.setOpacity(0.35)  # behind the clouds
+        painter.drawPixmap(int(x - pw / 2), int(y - ph / 2),
+                           self.saver.frames.get(body, frame, zoom, -1 if mirrored and body == "moon" else 1))
+        painter.setOpacity(1.0)
 
     def paint_ground(self, painter, w, h):
         """The earth below the ground line and the grass growing along it, coloured for the season."""

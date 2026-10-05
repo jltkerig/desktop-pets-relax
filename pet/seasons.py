@@ -21,6 +21,19 @@ ITEMS = {
     "daffodils": {"label": "Daffodils", "seasons": ("spring",)},
     "tulips": {"label": "Tulips", "seasons": ("spring",)},
     "violets": {"label": "Violets", "seasons": ("spring",)},
+    "birch": {"label": "Birch tree", "seasons": ("winter", "spring", "summer", "autumn")},
+    "woodstack": {"label": "Woodstack", "seasons": ("winter",)},
+    "apple_barrel": {"label": "Apple barrel", "seasons": ("autumn",)},
+    "well": {"label": "Stone well", "seasons": ("spring",)},
+    "radishes": {"label": "Radishes", "seasons": ("spring",)},
+    "lettuce": {"label": "Lettuce", "seasons": ("spring",)},
+    "slide": {"label": "Slide", "seasons": ("summer",)},
+    "pool": {"label": "Kiddie pool", "seasons": ("summer",)},
+    "watermelons": {"label": "Watermelon patch", "seasons": ("summer",)},
+    "tomatoes": {"label": "Tomato plants", "seasons": ("summer",)},
+    "dahlias": {"label": "Dahlias", "seasons": ("summer", "autumn")},
+    "dandelions": {"label": "Dandelions", "seasons": ("spring", "summer")},
+    "cattails": {"label": "Cattails", "seasons": ("summer",)},
 }
 
 # Visitors that drop by on their own, per season. Crows are about all year round.

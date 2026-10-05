@@ -3,6 +3,29 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.9.0
+
+- **Daffodils** look like daffodils: a round ring of petals with a few pointed tips, and an orange trumpet.
+- **Corn cobs can be picked up** with the mouse and dropped somewhere else (they fall and bounce).
+- **A birch tree**, out all year: white bark with black marks, drooping twigs; bare (or snowy) in winter,
+  catkins in spring, bright green in summer, golden in autumn. Click it: golden leaves in autumn, green ones in
+  spring and summer, a twig or clumps of snow in winter. Birds perch in it.
+- **Winter:** a **woodstack** of split logs (the foxes climb it; snowy on snowy days).
+- **Spring:** a **stone well** (click it and the bucket goes down and comes back up with a splash; birds sit on
+  its roof), rows of **radishes** and **lettuce** that grow over time (click when ripe and they pop out of the
+  ground), and **dandelion** seed clocks (click them and the seeds blow away on the breeze; new ones grow back).
+- **Summer:** a **slide** (the foxes climb the ladder and slide down), a **kiddie pool** (the foxes splash about
+  in it; click it for ripples), a **watermelon patch** that grows like the pumpkins (click a ripe one and it
+  splits open), **tomato plants** that grow like the corn (ripe tomatoes drop off when clicked), **cattails**
+  (click the ripe brown heads and they burst into fluff that drifts off on the wind), yellow **dandelions**,
+  **pansies** round the foot of the oak and the birch, and a **dahlia** bed (summer and autumn).
+- **Autumn:** an **apple barrel**: click it and an apple rolls out for the foxes to bat about. The crows like it
+  too, and sometimes knock apples out themselves.
+- Apples, tomatoes, radishes and lettuces lying about behave like corn cobs: the foxes bat them, crows peck them,
+  you can pick them up, and they fade after a while.
+- Tray menu: **Plant new watermelons** and **Replant the garden** when they're out.
+- Everything has its own spot the first time it comes out, spread so they don't sit on top of each other.
+
 ## 1.8.1
 
 - Daffodils have four pointed petals poking out round their orange trumpets (in the flower bed and under the

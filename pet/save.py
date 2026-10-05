@@ -30,7 +30,16 @@ DEFAULTS = {
               "barrels": {"out": True, "x": None}, "haystack": {"out": True, "x": None},
               "sled": {"out": True, "x": None}, "stump": {"out": True, "x": None},
               "xmas_tree": {"out": True, "x": None}, "daffodils": {"out": True, "x": None},
-              "tulips": {"out": True, "x": None}, "violets": {"out": True, "x": None}},
+              "tulips": {"out": True, "x": None}, "violets": {"out": True, "x": None},
+              "birch": {"out": True, "x": None}, "woodstack": {"out": True, "x": None},
+              "apple_barrel": {"out": True, "x": None}, "well": {"out": True, "x": None},
+              "radishes": {"out": True, "x": None, "planted": None},
+              "lettuce": {"out": True, "x": None, "planted": None},
+              "slide": {"out": True, "x": None}, "pool": {"out": True, "x": None},
+              "watermelons": {"out": True, "x": None, "patch": []},
+              "tomatoes": {"out": True, "x": None, "planted": None},
+              "dahlias": {"out": True, "x": None}, "dandelions": {"out": True, "x": None},
+              "cattails": {"out": True, "x": None, "planted": None}},
     "mischief": {"discord": True, "treasure": True},  # Discord message stealing, taskbar treasure digging
     "season": "auto",
     "snow": "auto",  # snow on the winter oak: "auto" (some days), or true / false as chosen from the tray menu

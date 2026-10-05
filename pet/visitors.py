@@ -507,7 +507,8 @@ class HeadPerch(Perch):
 # where a crow can sit on each kind of item, in sprite pixels from its anchor
 SCARECROW_ARMS = [(-14, 51), (14, 51)]               # the two outstretched arms (and his head: HeadPerch)
 DEN_PERCHES = [(-2, 32), (-20, 27), (18, 26)]        # the tops of the mound's lumps
-PROP_PERCHES = {"sled": [(-8, 10), (8, 10)], "xmas_tree": [(0, 43)]}  # along the sled; on the star
+PROP_PERCHES = {"sled": [(-8, 10), (8, 10)], "xmas_tree": [(0, 43)],  # along the sled; on the star
+                "well": [(0, 59)], "apple_barrel": [(-4, 27), (5, 26)]}  # the roof's peak; on the apples
 PUMPKIN_HEIGHT = {"s": 0.75, "m": 1.0, "l": 1.3}
 PUMPKIN_SHAPE_HEIGHT = {"round": 1.0, "tall": 1.32, "squat": 0.74}
 
@@ -523,7 +524,7 @@ def crow_perches(world):
     for thing in world.things:
         if thing.gone or thing.alpha < 1:
             continue
-        if thing.kind == "tree":
+        if thing.kind in ("tree", "birch"):
             spots += [Perch(thing, (x - thing.x) / s, (thing.y - y) / s) for x, y in thing.perch_points()]
         elif thing.kind == "prop" and thing.variant == "scarecrow":
             spots += [HeadPerch(thing)] + [Perch(thing, dx, dy) for dx, dy in SCARECROW_ARMS]
@@ -541,7 +542,7 @@ def crow_perches(world):
     return [p for p in spots if p.ok() and 20 < p.pos(world)[0] < world.width - 20]
 
 
-FAVOURITES = {"scarecrow": 6, "oak": 3}  # how much more a crow likes sitting there than anywhere else
+FAVOURITES = {"scarecrow": 6, "oak": 3, "birch": 2}  # how much more a crow likes sitting there than elsewhere
 
 
 def favourite(perches, rng):
@@ -782,9 +783,9 @@ class Crow(Visitor):
         w, rng, s = self.world, self.world.rng, self.world.scale
         if thing.gone:
             return False
-        if getattr(thing, "is_cob", False):  # corn! peck the kernels off
+        if getattr(thing, "is_cob", False):  # corn (or an apple, a tomato...)! peck bits off
             for _ in range(2):
-                w.add(Kernel(w, thing.x + rng.uniform(-3, 3) * s, thing.y - 4 * s))
+                w.add(Kernel(w, thing.x + rng.uniform(-3, 3) * s, thing.y - 4 * s, getattr(thing, "bit", "kernel")))
             thing.kernels += 1
             if rng.random() < 0.2:
                 thing.vx = self.facing * rng.uniform(20, 40) * s
@@ -1220,7 +1221,7 @@ def flower_heads(world):
     """Every flower head in the flower beds that are out (screen coordinates)."""
     spots = []
     for thing in world.of("prop"):
-        if thing.variant in ("daffodils", "tulips", "violets"):
+        if thing.variant in ("daffodils", "tulips", "violets", "dahlias", "dandelions"):
             spots += thing.flower_heads()
     return spots
 
@@ -1331,7 +1332,7 @@ class SongBird(Visitor):
     def _choose_perch(self):
         w, rng = self.world, self.world.rng
         spots = crow_perches(w)
-        trees = [p for p in spots if getattr(p.holder, "kind", None) == "tree"]
+        trees = [p for p in spots if getattr(p.holder, "kind", None) in ("tree", "birch")]
         if self.species == "robin" and rng.random() < 0.55 or not spots:  # robins like the ground
             return Perch(x=rng.uniform(0.1, 0.9) * w.width)
         return rng.choice(trees) if trees and rng.random() < 0.6 else rng.choice(spots)

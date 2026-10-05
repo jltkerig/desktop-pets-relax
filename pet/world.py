@@ -3,9 +3,10 @@ import datetime
 import math
 import random
 
-from pet import daylight, seasons
+from pet import daylight, seasons, sprites
 from pet.fox import TROT, WALK, ZOOM, Fox, Step
-from pet.items import Acorn, Climbable, Corn, CornCob, Den, Leaf, Message, Prop, Pumpkin, Treasure, Tree
+from pet.items import (Acorn, Birch, Climbable, Corn, CornCob, Crop, Den, Leaf, Melon, Message, Prop, Pumpkin,
+                       Treasure, Tree)
 from pet.visitors import (Beetle, Cicada, Flutterby, Goose, Jay, Squirrel, Woolly, crow_party, migrating_v,
                           songbirds, turkey_flock)
 
@@ -83,7 +84,7 @@ class World:
             thing.x = max(20.0, min(width - 20.0, thing.x))
         self.taskbar_spots = []
 
-    ITEM_KINDS = ("tree", "prop", "corn", "den", "climb", "pumpkin")
+    ITEM_KINDS = ("tree", "prop", "corn", "den", "climb", "pumpkin", "birch", "melon", "crop")
 
     def add(self, thing):
         self.things.append(thing)
@@ -143,6 +144,19 @@ class World:
         else:
             for thing in self.of("corn"):
                 thing.gone = True
+        if "watermelons" in wanted_items:
+            if not self.of("melon"):
+                self.grow_melons()
+        else:
+            for thing in self.of("melon"):
+                thing.gone = True
+        for name in self.CROP_SPOTS:  # tomatoes, radishes, lettuce, cattails
+            have = [t for t in self.of("crop") if t.variant == name]
+            if name in wanted_items and not have:
+                self.plant_crop(name)
+            elif name not in wanted_items:
+                for thing in have:
+                    thing.gone = True
         if "den" in wanted_items:
             if not self.of("den"):
                 x = self.settings["items"]["den"].get("x")
@@ -154,7 +168,8 @@ class World:
                 for fox in thing.sleepers:
                     fox.leave_den()
                 thing.gone = True
-        climbables = {"barrels": 0.88, "haystack": 0.40, "stump": 0.16}  # where each goes the first time
+        climbables = {"barrels": 0.88, "haystack": 0.42, "stump": 0.04,  # where each goes the first time
+                      "woodstack": 0.38, "slide": 0.355}
         for thing in self.of("climb"):
             if thing.variant not in wanted_items:
                 thing.gone = True
@@ -164,13 +179,15 @@ class World:
                 if not (isinstance(x, (int, float)) and 0 < x < self.width):
                     x = self.width * share
                 self.add(Climbable(self, x, name, self.settings["items"][name].get("layout")))
-        props = {"scarecrow", "hoe", "sled", "xmas_tree", "daffodils", "tulips", "violets"}
-        first_spot = {"sled": 0.62, "xmas_tree": 0.3,  # winter and spring things, where they go the first time
-                      "daffodils": 0.07, "tulips": 0.66, "violets": 0.78}
+        props = {"scarecrow", "hoe", "sled", "xmas_tree", "daffodils", "tulips", "violets", "apple_barrel", "well",
+                 "pool", "dahlias", "dandelions"}
+        first_spot = {"sled": 0.62, "xmas_tree": 0.3,  # where the seasonal things go the first time
+                      "daffodils": 0.25, "tulips": 0.66, "violets": 0.78, "apple_barrel": 0.62, "well": 0.375,
+                      "pool": 0.65, "dahlias": 0.8, "dandelions": 0.31}
         for thing in self.of("prop"):
             if thing.variant not in wanted_items:
                 thing.gone = True
-        for name in wanted_items & props:
+        for name in sorted(wanted_items & props):  # (sorted: the same order every run)
             if not any(t.variant == name for t in self.of("prop")):
                 x = self.settings["items"][name].get("x")
                 if not (isinstance(x, (int, float)) and 0 < x < self.width):
@@ -184,11 +201,18 @@ class World:
                         x = (max(xs) + 70 * self.scale) if xs else self.width * 0.32
                     x = max(40.0, min(self.width - 40.0, x))
                 self.add(Prop(self, x, name))
-        for name in wanted_items - {"pumpkins", "corn", "den"} - props - set(climbables):
-            if not any(t.variant == name for t in self.of("tree")):
-                x = self.settings["items"][name].get("x")
-                x = x if isinstance(x, (int, float)) and 0 < x < self.width else self.width * 0.72
-                self.add(Tree(self, x, name))
+        if "oak" in wanted_items and not self.of("tree"):
+            x = self.settings["items"]["oak"].get("x")
+            x = x if isinstance(x, (int, float)) and 0 < x < self.width else self.width * 0.72
+            self.add(Tree(self, x, "oak"))
+        if "birch" in wanted_items:
+            if not self.of("birch"):
+                x = self.settings["items"]["birch"].get("x")
+                x = x if isinstance(x, (int, float)) and 0 < x < self.width else self.width * 0.585
+                self.add(Birch(self, x))
+        else:
+            for thing in self.of("birch"):
+                thing.gone = True
         if "oak" not in wanted_items:  # autumn leftovers go when the tree does
             for thing in self.things:
                 if thing.kind in ("leaf", "acorn", "squirrel", "jay", "twig", "snow", "inchworm", "butterfly",
@@ -217,15 +241,39 @@ class World:
             x = self.width * 0.12  # off to the left, away from the oak
         return self.add(Corn(self, x, item["planted"]))
 
+    def plant_crop(self, name, replant=False):
+        """Put out a row of tomatoes, radishes, lettuce or cattails: the saved one, still growing, or fresh."""
+        item = self.settings["items"].setdefault(name, {"out": True, "x": None, "planted": None})
+        for thing in self.of("crop"):
+            if thing.variant == name:
+                thing.gone = True
+        if replant or not isinstance(item.get("planted"), (int, float)):
+            item["planted"] = self.now().timestamp()
+            self.dirty = True
+        x = item.get("x")
+        if not (isinstance(x, (int, float)) and 0 < x < self.width):
+            x = self.width * self.CROP_SPOTS[name]
+        return self.add(Crop(self, x, item["planted"], name))
+
+    CROP_SPOTS = {"tomatoes": 0.11, "cattails": 0.965, "radishes": 0.11, "lettuce": 0.19}  # where they go at first
+
     def grow_pumpkins(self, replant=False):
         """Put out the pumpkin patch: the saved pumpkins, or three new sprouts."""
-        item = self.settings["items"].setdefault("pumpkins", {"out": True, "x": None, "patch": []})
-        for thing in self.of("pumpkin"):
+        self.grow_patch("pumpkins", Pumpkin, 0.25, replant)
+
+    def grow_melons(self, replant=False):
+        """Put out the watermelon patch: the saved melons, or three new sprouts."""
+        self.grow_patch("watermelons", Melon, 0.215, replant)
+
+    def grow_patch(self, name, cls, share, replant=False):
+        """Put out a patch of pumpkins or watermelons (cls): the saved ones, still growing, or three sprouts."""
+        item = self.settings["items"].setdefault(name, {"out": True, "x": None, "patch": []})
+        for thing in self.of(cls.kind):
             thing.gone = True
         patch = [p for p in item.get("patch", []) if isinstance(p, dict)
                  and isinstance(p.get("x"), (int, float)) and isinstance(p.get("planted"), (int, float))]
         sizes = ["s", "m", "l"]
-        shapes = ["round", "tall", "squat"]
+        shapes = list(cls.SHAPES)
         for record in patch:  # pumpkins saved before sizes and shapes existed get them now
             if record.get("size") not in sizes:
                 record["size"] = self.rng.choice(sizes)
@@ -235,19 +283,19 @@ class World:
                 record["jack"] = self.rng.random() < 0.2
                 self.dirty = True
         if replant or not patch:
-            centre = item.get("x") if isinstance(item.get("x"), (int, float)) else self.width * 0.25
+            centre = item.get("x") if isinstance(item.get("x"), (int, float)) else self.width * share
             now = self.now().timestamp()
             patch = [{"x": round(max(40, min(self.width - 40, centre + (i - 1) * 46 * self.scale))),
                       "planted": now - self.rng.uniform(0, 90), "pace": round(self.rng.uniform(0.85, 1.2), 2),
                       "size": size, "shape": self.rng.choice(shapes), "jack": self.rng.random() < 0.2,
-                      "giant": self.rng.random() < Pumpkin.GIANT_CHANCE}
+                      "giant": self.rng.random() < cls.GIANT_CHANCE}
                      for i, size in enumerate(self.rng.sample(sizes, 3))]  # one of each, in any order
             self.dirty = True
         item["patch"] = patch
         for record in patch:
             x = max(20.0, min(self.width - 20.0, float(record["x"])))
-            self.add(Pumpkin(self, x, record["planted"], float(record.get("pace", 1.0)), record, record["size"],
-                             record["shape"], record.get("jack", False), record.get("giant", False)))
+            self.add(cls(self, x, record["planted"], float(record.get("pace", 1.0)), record, record["size"],
+                         record["shape"], record.get("jack", False), record.get("giant", False)))
 
     # -- every frame -------------------------------------------------------------------------------------
 
@@ -729,19 +777,56 @@ class World:
             treasure.carried_by = None
             fox.carrying = None
 
+    def pool_near(self, fox, reach):
+        near = [p for p in self.of("prop") if p.variant == "pool" and abs(p.x - fox.x) < reach * self.scale / 2]
+        return near[0] if near else None
+
+    def splash(self, pool, drops=10):
+        """Water splashing up out of the kiddie pool: drops flying, ripples spreading."""
+        from pet.items import Droplet
+        s = self.scale
+        pool.react()
+        for _ in range(drops):
+            self.add(Droplet(self, pool.x + self.rng.uniform(-18, 18) * s, pool.y - 8 * s))
+
+    def paddle(self, fox, pool):
+        """A hot fox in the kiddie pool: a hop in, a happy splash about, a roll, a hop out and a shake."""
+        s, rng = self.scale, self.rng
+        side = -1 if fox.x < pool.x else 1
+        edge = pool.x + side * 40 * s
+        water = self.ground - 3 * s  # standing in the water, a little lower than the rim
+        out = max(60.0, min(self.width - 60.0, pool.x - side * rng.uniform(50, 80) * s))
+        fox.do(Step("trot", to_x=edge, speed=TROT), Step("crouch", 0.4, face=pool.x),
+               Step("hop", to_x=pool.x + side * 6 * s, to_y=water, leap=14, then=lambda: self.splash(pool, 12)),
+               Step("happy", 1.2, then=lambda: self.splash(pool, 8)), Step("bat", then=lambda: self.splash(pool, 6)),
+               Step("happy", 1.0), Step("crouch", 0.3, face=out),
+               Step("hop", to_x=out, to_y=self.ground, leap=14, then=lambda: self.splash(pool, 5)),
+               Step("scratch"), Step("happy", 0.8))
+
     def climbable_near(self, fox, reach):
         near = [t for t in self.of("climb") if t.available and abs(t.x - fox.x) < reach * self.scale / 2]
         return self.rng.choice(near) if near else None
 
     def climb(self, fox, thing):
-        """Hop up the pile one level at a time, enjoy the view from the top, then leap off."""
+        """Hop up the pile one level at a time, enjoy the view from the top, then leap off. (The slide: up the
+        ladder, and whee, down the chute.)"""
         s, rng = self.scale, self.rng
-        side = -1 if fox.x < thing.x else 1  # climb up the side it's on
+        slide = thing.variant == "slide"
+        side = -1 if fox.x < thing.x or slide else 1  # climb up the side it's on (the slide's ladder is on the left)
         path = [(thing.x + side * abs(dx) * s if dx else thing.x, self.ground - h * s) for dx, h in thing.levels]
         start = path[0][0] + side * 30 * s
         steps = [Step("trot", to_x=start, speed=TROT), Step("crouch", 0.4, face=thing.x)]
         for x, y in path:
             steps.append(Step("hop", to_x=x, to_y=y, leap=12))
+        if slide:
+            m = sprites.meta("slide")
+            ax, ay = m["anchor"]
+            chute = [(thing.x + (px - ax) * s, thing.y - (ay - py) * s) for px, py in m["chute"]]
+            steps += [Step("happy", 0.8), Step("crouch", 0.3, face=chute[-1][0])]
+            for x, y in chute:  # sliding down, sitting tight, faster and faster
+                steps.append(Step("crouch", to_x=x, to_y=y, leap=0.01))
+            fox.do(*steps, Step("land"), Step("happy", 1.2), Step("roll", 1.0), Step("happy", 0.8))
+            return
         top_x = path[-1][0]
         steps += [Step("look"), Step("happy", 1.4), Step("tilt"), Step("idle", rng.uniform(2, 5))]
         if rng.random() < 0.5:

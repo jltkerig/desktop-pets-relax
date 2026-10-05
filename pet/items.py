@@ -104,6 +104,62 @@ class Tree(Thing):
         return self.x - 60 * s, self.x + 60 * s
 
 
+class Birch(Thing):
+    """A slender white birch, out all year: bare (or snowy) in winter, catkins in spring, bright green in summer,
+    golden in autumn. Click it and it shakes: leaves flutter down (golden ones in autumn), or in winter a twig
+    falls, or clumps of snow. Birds perch in it. You can drag it."""
+    kind = "birch"
+    draggable = True
+    z = 5
+
+    def __init__(self, world, x):
+        super().__init__(world, x, world.ground, "birch_summer")
+        self.variant = "birch"
+        self.shaking = 0.0
+        self.anim.name = self.look
+        self.anim.time = 1.3  # out of step with the oak
+
+    @property
+    def look(self):
+        if self.world.snowed_over:
+            return "birch_snow"
+        return f"birch_{self.world.season}"
+
+    def update(self, dt):
+        if self.anim.name != self.look:
+            self.anim.name = self.look
+        self.shaking = max(0.0, self.shaking - dt)
+        super().update(dt * (7 if self.shaking else 1 + self.world.wind * 7))  # a birch tosses in the wind
+
+    def crown_point(self):
+        """A random spot among the branches."""
+        s, rng = self.world.scale, self.world.rng
+        return self.x + rng.uniform(-34, 34) * s, self.y - rng.uniform(80, 160) * s
+
+    def click(self):
+        w, rng = self.world, self.world.rng
+        self.shaking = 0.7
+        season = w.season
+        if season == "autumn":
+            for _ in range(rng.randint(4, 7)):
+                w.add(Leaf(w, *self.crown_point(), rng.choice(("yellow", "yellow", "orange"))))
+        elif season in ("summer", "spring"):
+            for _ in range(rng.randint(1, 3)):
+                w.add(Leaf(w, *self.crown_point(), "green"))
+        elif w.snowed_over:
+            for _ in range(rng.randint(3, 5)):
+                w.add(SnowClump(w, *self.crown_point()))
+        else:
+            w.add(Twig(w, *self.crown_point()))
+
+    def perch_points(self):
+        """Branch spots where a bird can sit (from the sprite's JSON), in screen coordinates."""
+        s = self.world.scale
+        m = sprites.meta(self.anim.name)
+        ax, ay = m["anchor"]
+        return [(self.x + (px - ax) * s, self.y - (ay - py) * s) for px, py in m.get("perches", [])]
+
+
 class Leaf(Thing):
     kind = "leaf"
     z = 30
@@ -288,15 +344,18 @@ class Pumpkin(Thing):
     STAGES = 5
     GIANT_CHANCE = 0.15      # now and then one just keeps on growing...
     GIANT, BURST = 5, 6      # ...into a giant, and then too big: it splits open
+    CROP = "pumpkin"         # its sprites: pumpkin_<stage>_<size>_<shape>, pumpkin_wilt_<size>_<shape>
+    SHAPES = ("round", "tall", "squat")
+    WILT = "wilt"            # what a ripe one does when clicked
 
     def __init__(self, world, x, planted, pace=1.0, record=None, size="m", shape="round", jack=False,
                  giant=False):
         self.size = size if size in ("s", "m", "l") else "m"
-        self.shape = shape if shape in ("round", "tall", "squat") else "round"
+        self.shape = shape if shape in self.SHAPES else self.SHAPES[0]
         self.jack = bool(jack)  # this one turns out to be a jack-o'-lantern when ripe
         self.giant = bool(giant)
         self.bursting = False
-        super().__init__(world, x, world.ground, f"pumpkin_0_{self.size}_{self.shape}")
+        super().__init__(world, x, world.ground, f"{self.CROP}_0_{self.size}_{self.shape}")
         self.planted = planted
         self.pace = pace
         self.record = record  # its entry in the saved patch, kept up to date when it is moved
@@ -322,7 +381,7 @@ class Pumpkin(Thing):
     def click(self):
         if self.stage == self.STAGES - 1 and not self.wilting and not self.bursting:
             self.wilting = True
-            self.anim.play(f"pumpkin_wilt_{self.size}_{self.shape}")
+            self.anim.play(f"{self.CROP}_{self.WILT}_{self.size}_{self.shape}")
         else:
             self.anim.time += 0.7  # a little rustle (a giant is far too heavy to do more)
 
@@ -353,8 +412,8 @@ class Pumpkin(Thing):
         self.wilting = False
         self.planted = w.now().timestamp()
         self.size = w.rng.choice(("s", "m", "l"))
-        self.shape = w.rng.choice(("round", "tall", "squat"))
-        self.jack = w.rng.random() < 0.2
+        self.shape = w.rng.choice(self.SHAPES)
+        self.jack = w.rng.random() < 0.2 and self.CROP == "pumpkin"
         self.giant = w.rng.random() < self.GIANT_CHANCE
         self.bursting = False
         if self.record is not None:
@@ -374,10 +433,109 @@ class Pumpkin(Thing):
         if stage == self.GIANT:
             name = f"pumpkin_giant_{self.shape}" + ("_jack" if self.jack else "")
         else:
-            name = f"pumpkin_{stage}_{self.size}_{self.shape}" + ("_jack" if self.jack and stage == 4 else "")
+            name = f"{self.CROP}_{stage}_{self.size}_{self.shape}" + ("_jack" if self.jack and stage == 4 else "")
         if self.anim.name != name:
             self.anim.name = name
         super().update(dt)
+
+
+class Melon(Pumpkin):
+    """A watermelon that grows over time like the pumpkins do: a sprout, a vine with a yellow flower, then a
+    striped melon getting bigger until it's ripe. Click a ripe one and it splits open, red and juicy, and a new
+    one is sown."""
+    kind = "melon"
+    CROP = "melon"
+    SHAPES = ("round", "long")
+    WILT = "split"
+    GIANT_CHANCE = 0.0
+
+    def __init__(self, world, x, planted, pace=1.0, record=None, size="m", shape="round", jack=False, giant=False):
+        super().__init__(world, x, planted, pace, record, size, shape)  # never a jack-o'-lantern, never a giant
+
+    def click(self):
+        was = self.wilting
+        super().click()
+        if self.wilting and not was:  # juicy bits flying
+            w, s = self.world, self.world.scale
+            for _ in range(8):
+                w.add(Kernel(w, self.x + w.rng.uniform(-8, 8) * s, self.y - 10 * s, "apple_bit"))
+
+    def carve(self):
+        return False  # the hoe's for pumpkins
+
+
+class Crop(Thing):
+    """A row of something that grows over time like the corn: tomato plants, radishes, lettuce or cattails. Its
+    stage comes from when it was planted (saved), so it keeps growing between runs. Click it when it's ripe to
+    harvest it: tomatoes drop off, a radish or a lettuce pops out of the ground, cattails burst into fluff that
+    blows away on the wind. Then it's sown again."""
+    kind = "crop"
+    draggable = True
+    z = 5
+    STAGES = 5
+    SECONDS = {"tomatoes": 10 * 60, "radishes": 6 * 60, "lettuce": 7 * 60, "cattails": 10 * 60}
+    RIPE = {"tomatoes": 4, "radishes": 4, "lettuce": 4, "cattails": 3}
+    # where the harvest comes from: (x from the middle, height) in sprite pixels, as drawn
+    YIELD = {"tomatoes": [(-26, 19), (-23, 15), (-9, 19), (-6, 15), (8, 19), (11, 15), (25, 19), (28, 15)],
+             "radishes": [(-23, 1), (-14, 1), (-5, 1), (4, 1), (13, 1), (22, 1)],
+             "lettuce": [(-20, 4), (-6, 4), (8, 4), (22, 4)],
+             "cattails": [(-19, 45), (-10, 52), (-1, 47), (8, 55), (17, 49)]}
+    PRODUCE = {"tomatoes": ("tomato", "apple_bit"), "radishes": ("radish", "leaf_bit"),
+               "lettuce": ("lettuce_head", "leaf_bit")}
+
+    def __init__(self, world, x, planted, name):
+        super().__init__(world, x, world.ground, f"{name}_0")
+        self.variant = name
+        self.planted = planted
+        self.bursting = False
+        self.anim.time = world.rng.uniform(0, 2)
+
+    @property
+    def stage(self):
+        age = self.world.now().timestamp() - self.planted
+        return max(0, min(self.STAGES - 1, int(age / self.SECONDS[self.variant])))
+
+    @property
+    def ripe(self):
+        return self.stage >= self.RIPE[self.variant]
+
+    def click(self):
+        if self.ripe and not self.bursting:
+            self.harvest()
+        else:
+            self.anim.time += 0.9  # a rustle
+
+    def harvest(self):
+        w, s, rng = self.world, self.world.scale, self.world.rng
+        spots = [(self.x + dx * s, self.y - h * s) for dx, h in self.YIELD[self.variant]]
+        if self.variant == "cattails":  # the heads burst, and their fluff blows away on the wind
+            for x, y in spots:
+                for _ in range(rng.randint(8, 12)):
+                    w.add(Fluff(w, x + rng.uniform(-2, 2) * s, y + rng.uniform(-4, 4) * s, "cattail_fluff"))
+            self.bursting = True
+            self.anim.play("cattails_burst")
+            return
+        sprite, bit = self.PRODUCE[self.variant]
+        for x, y in spots:
+            if self.variant == "tomatoes" and rng.random() < 0.3:
+                continue  # not every tomato is quite ripe
+            thing = w.add(Produce(w, x, y, sprite, bit))
+            if self.variant != "tomatoes":  # pulled up: it pops out of the ground
+                thing.vy = -rng.uniform(140, 200) * s
+                thing.y -= 2 * s
+                thing.vx = rng.uniform(-40, 40) * s
+        w.plant_crop(self.variant, replant=True)
+
+    def update(self, dt):
+        if self.bursting:
+            super().update(dt)
+            if self.anim.done:
+                self.world.plant_crop(self.variant, replant=True)
+            return
+        name = f"{self.variant}_{self.stage}"
+        if self.anim.name != name:
+            self.anim.name = name
+        super().update(dt * (1 + self.world.wind * 4))
 
 
 class Treasure(Thing):
@@ -441,10 +599,14 @@ class Prop(Thing):
         super().__init__(world, x, world.ground, variant)
         self.variant = variant
         self.hat_on = True  # the scarecrow's hat (the crows like to borrow it)
+        self.bare_for = 0.0  # dandelions: seconds until new seed clocks have grown
+        self.reacting = False  # playing its reaction to a click
+        self.anim.name = self.look
 
     CLICKS = {"scarecrow": "surprised", "hoe": "wobble", "sled": "wobble", "xmas_tree": "sparkle",
-              "daffodils": "bob", "tulips": "bob", "violets": "bob"}
-    FLOWERS = ("daffodils", "tulips", "violets")
+              "daffodils": "bob", "tulips": "bob", "violets": "bob", "apple_barrel": "wobble", "well": "bucket",
+              "pool": "ripple", "dahlias": "bob"}
+    FLOWERS = ("daffodils", "tulips", "violets", "dahlias", "dandelions")
     SNOWY = ("sled", "xmas_tree")  # these get a coat of snow on snowy winter days
 
     @property
@@ -456,23 +618,51 @@ class Prop(Thing):
         """The sprite it shows when nothing's happening."""
         if self.variant == "scarecrow" and not self.hat_on:
             return "scarecrow_nohat"
+        if self.variant == "dandelions":  # seed clocks in spring (or bare stems once blown), flowers in summer
+            if self.world.season == "spring":
+                return "dandelions_spring_bare" if self.bare_for > 0 else "dandelions_spring"
+            return "dandelions_summer"
         return self.variant + self.snow
 
     def react(self):
         """Its reaction to a click: the scarecrow looks surprised, the hoe and sled wobble, the Christmas tree's
-        lights all blaze."""
+        lights all blaze, flowers bob, the well's bucket goes down, the pool ripples."""
+        if self.variant == "dandelions":
+            if self.look == "dandelions_summer":
+                self.anim.play("dandelions_summer_bob")
+                self.reacting = True
+            return
         reaction = self.CLICKS.get(self.variant)
         if reaction:
             hatless = "_nohat" if self.variant == "scarecrow" and not self.hat_on else ""
             self.anim.play(f"{self.variant}{self.snow}_{reaction}{hatless}")
+            self.reacting = True
+
+    def blow_seeds(self):
+        """The dandelion clocks' seeds blow away on the breeze; the stems stand bare until new clocks grow."""
+        w = self.world
+        for x, y in self.flower_heads():
+            for _ in range(w.rng.randint(5, 8)):
+                w.add(Fluff(w, x + w.rng.uniform(-2, 2) * w.scale, y + w.rng.uniform(-2, 2) * w.scale))
+        self.bare_for = w.rng.uniform(60, 120)
+        self.anim.play(self.look)
 
     def click(self):
         self.react()
-        w = self.world
-        if self.variant in self.FLOWERS and w.rng.random() < 0.4 and len(w.of("butterfly")) < 4:
+        w, s = self.world, self.world.scale
+        if self.look == "dandelions_spring":
+            self.blow_seeds()
+        elif self.variant == "pool":
+            w.splash(self, 8)
+        elif self.variant in self.FLOWERS and self.flower_heads() and w.rng.random() < 0.4 and \
+                len(w.of("butterfly")) < 4:
             from pet.visitors import Flutterby  # a butterfly that was resting in the flowers flies up
             x, y = w.rng.choice(self.flower_heads())
             w.add(Flutterby(w, x=x, y=y))
+        elif self.variant == "apple_barrel" and sum(1 for a in w.of("acorn") if getattr(a, "produce", "") == "apple") < 6:
+            side = w.rng.choice((-1, 1))  # an apple tumbles off the heap and rolls away
+            fruit = w.add(Produce(w, self.x + side * 8 * s, self.y - 30 * s, "apple"))
+            fruit.vx = side * w.rng.uniform(50, 90) * s
 
     def flower_heads(self):
         """Where the flowers in a flower bed are (screen coordinates), for butterflies to land on."""
@@ -491,9 +681,10 @@ class Prop(Thing):
 
     def update(self, dt):
         super().update(dt * (1 + self.world.wind * 4))
-        resting = self.anim.name in (self.variant, self.variant + "_nohat", self.variant + "_snow")
-        if self.anim.name != self.look and (self.anim.done or resting):
-            self.anim.play(self.look)  # back to normal
+        self.bare_for = max(0.0, self.bare_for - dt)
+        if self.anim.name != self.look and (self.anim.done or not self.reacting):
+            self.anim.play(self.look)  # back to normal (or the weather or season changed its look)
+            self.reacting = False
 
 
 class Note(Thing):
@@ -663,8 +854,11 @@ class Climbable(Thing):
         "haystack_row": [(-32, 15), (0, 15)],
         "haystack_steps": [(-32, 15), (0, 31), (32, 47)],
         "stump": [(0, 15)],  # the flat, sawn top
+        "woodstack": [(-21, 8), (-16, 16), (0, 24)],  # up the shoulders of the rows of logs
+        "slide": [(-18, 12), (-18, 24), (-16, 36)],  # up the ladder to the platform (then down the chute)
     }
     HAY = ("haystack", "haystack_row", "haystack_steps")
+    SNOWY = ("stump", "woodstack")  # these wear snow on snowy winter days
 
     def __init__(self, world, x, variant, layout=None):
         self.variant = variant
@@ -699,13 +893,14 @@ class Climbable(Thing):
             self.levels = self.LEVELS[self.layout]
             w.settings["items"].setdefault("haystack", {"out": True, "x": None})["layout"] = self.layout
             w.dirty = True
-        elif self.variant == "stump" and w.snowed_over:  # a knock: the snow on top tumbles off
+        elif self.variant in self.SNOWY and w.snowed_over:  # a knock: the snow on top tumbles off
+            top = self.levels[-1][1]
             for _ in range(3):
-                w.add(SnowClump(w, self.x + w.rng.uniform(-8, 8) * w.scale, self.y - 16 * w.scale))
+                w.add(SnowClump(w, self.x + w.rng.uniform(-8, 8) * w.scale, self.y - (top + 1) * w.scale))
 
     def update(self, dt):
-        if self.variant == "stump":
-            self.anim.name = "stump_snow" if self.world.snowed_over else "stump"
+        if self.variant in self.SNOWY:
+            self.anim.name = self.variant + ("_snow" if self.world.snowed_over else "")
         super().update(dt)
         self.timer += dt
         if self.state == "falling" and self.anim.done:
@@ -724,18 +919,35 @@ class Climbable(Thing):
 
 
 class CornCob(Acorn):
-    """An ear of corn from the harvest. The foxes bat it about like an acorn; it fades after a while."""
+    """An ear of corn from the harvest. The foxes bat it about like an acorn; it fades after a while. You can
+    pick it up with the mouse and drop it somewhere else (it falls and bounces where you let go)."""
     is_cob = True
 
     def __init__(self, world, x, y):
         super().__init__(world, x, y)
         self.carried = False  # in a squirrel's arms
+        self.held = False     # picked up with the mouse
         self.anim = sprites.Anim("corncob")
         self.kernels = 0      # pecked off by crows
         self.age = 0.0
 
+    @property
+    def draggable(self):
+        return not self.taken and not self.carried  # not out of a squirrel's arms
+
+    def pick_up(self):
+        self.held = True
+        self.taken = True  # squirrels and crows leave it alone while it's in your hand
+
+    def drop(self):
+        """Let go: it falls from there, bounces, and is fresh again (it won't fade for a while)."""
+        self.held, self.taken = False, False
+        self.on_ground, self.bounced = False, False
+        self.vx = self.vy = 0.0
+        self.age = 0.0
+
     def update(self, dt):
-        if self.carried:
+        if self.carried or self.held:
             return
         super().update(dt)
         self.age += dt
@@ -771,14 +983,64 @@ class StrawBit(Thing):
 
 
 class Kernel(StrawBit):
-    """A kernel of corn pecked off a cob by a crow."""
+    """A kernel of corn pecked off a cob by a crow (or a bit of apple, tomato or lettuce: sprite)."""
     kind = "crumb"
+
+    def __init__(self, world, x, y, sprite="kernel"):
+        super().__init__(world, x, y)
+        self.anim = sprites.Anim(sprite)
+        self.vx *= 0.4
+        self.vy *= 0.5
+
+
+class Droplet(StrawBit):
+    """A drop of water splashed out of the kiddie pool (or the well)."""
+    kind = "drop"
 
     def __init__(self, world, x, y):
         super().__init__(world, x, y)
-        self.anim = sprites.Anim("kernel")
-        self.vx *= 0.4
-        self.vy *= 0.5
+        self.anim = sprites.Anim("droplet")
+
+
+class Fluff(Thing):
+    """A seed on its tuft of fluff (a dandelion's or a cattail's), drifting off on the wind: it floats up and
+    away, bobbing, carried by the breeze (and much faster in a gale), then it's gone."""
+    kind = "fluff"
+    z = 33
+
+    def __init__(self, world, x, y, sprite="fluff"):
+        super().__init__(world, x, y, sprite)
+        rng = world.rng
+        self.anim.time = rng.uniform(0, 1)
+        self.vx = rng.uniform(-14, 14)
+        self.vy = rng.uniform(-22, -8)
+        self.phase = rng.uniform(0, 6.3)
+        self.life = rng.uniform(8, 16)
+        self.age = 0.0
+
+    def update(self, dt):
+        super().update(dt)
+        w, s = self.world, self.world.scale
+        self.age += dt
+        self.phase += dt * 2
+        drift = 18 + w.wind * 160  # a light breeze always, more when it's blustery
+        self.x += (self.vx + drift * w.wind_dir + math.sin(self.phase) * 10) * s * dt
+        self.y += (self.vy + math.cos(self.phase * 1.3) * 8) * s * dt
+        self.vy = min(4.0, self.vy + 2 * dt)  # rising at first, then drifting level, sinking a little
+        self.alpha = max(0.0, min(1.0, (self.life - self.age) / 2))
+        if self.age > self.life or self.x < -20 or self.x > w.width + 20 or self.y < -20:
+            self.gone = True
+
+
+class Produce(CornCob):
+    """Something from the garden lying on the ground, like a corn cob: an apple, a tomato, a radish or a lettuce.
+    The foxes bat it about, crows peck at it, you can pick it up and drop it, and after a while it fades."""
+
+    def __init__(self, world, x, y, sprite, bit="apple_bit"):
+        super().__init__(world, x, y)
+        self.anim = sprites.Anim(sprite)
+        self.produce = sprite
+        self.bit = bit  # what flies off when a crow pecks it
 
 
 class PumpkinBit(StrawBit):

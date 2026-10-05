@@ -842,7 +842,7 @@ class Crows(unittest.TestCase):
                     break
             played = played or {"inspect", "play"} <= states
             self.assertFalse(world.of("crow"))
-            self.assertTrue(all(a.alpha == 1 and not a.taken for a in world.of("acorn")))  # nothing left in a beak
+            self.assertTrue(all(a.alpha == 1 and not a.taken for a in world.nuts()))  # no acorn left in a beak
         self.assertTrue(played)
 
     def test_a_click_sends_the_whole_party_off(self):
@@ -874,19 +874,18 @@ def crows_with_scarecrow(seed=1):
 class CrowsAndTheScarecrow(unittest.TestCase):
     def test_a_crow_pinches_the_hat_wears_it_and_puts_it_back(self):
         world, clock, scarecrow, party = crows_with_scarecrow()
-        thief = party.members[0]
-        thief._go_for_hat(scarecrow)
+        party.members[0]._go_for_hat(scarecrow)
         wore = hatless = False
         for _ in range(90 * 10):
-            run(world, clock, 0.1, fps=10)
-            wore = wore or (thief.hat and thief.anim.name.startswith("crow_hat_"))
+            run(world, clock, 0.1, fps=10)  # (another crow may beat it to the hat: any crow will do)
+            wore = wore or any(c.hat and c.anim.name.startswith("crow_hat_") for c in party.members)
             hatless = hatless or (not scarecrow.hat_on and scarecrow.anim.name.endswith("_nohat"))
             if wore and scarecrow.hat_on:
                 break
         self.assertTrue(wore)
         self.assertTrue(hatless)
         self.assertTrue(scarecrow.hat_on)
-        self.assertFalse(thief.hat)
+        self.assertFalse(any(c.hat for c in party.members))
 
     def test_crows_put_the_hat_back_before_they_leave(self):
         world, clock, scarecrow, party = crows_with_scarecrow(seed=2)
@@ -920,14 +919,15 @@ class CrowsAndTheScarecrow(unittest.TestCase):
         self.assertFalse(world.of("hat"))
 
     def test_crows_land_on_the_scarecrow_more_than_anywhere(self):
+        import collections
         from pet.visitors import CrowParty
-        on = total = 0
-        for seed in range(30):
+        landed = collections.Counter()  # the first crow's spot, by what it's on (the ground is many spots)
+        for seed in range(200):
             world, _ = make_world(seed=seed, orange=False, grey=False)
-            first = CrowParty(world, 2).spots[0]
-            total += 1
-            on += getattr(first.holder, "variant", None) == "scarecrow"
-        self.assertGreater(on / total, 0.25)
+            holder = CrowParty(world, 2).spots[0].holder
+            if holder is not None:
+                landed[getattr(holder, "variant", holder.kind)] += 1
+        self.assertEqual(landed.most_common(1)[0][0], "scarecrow", landed)
 
 
 class CrowsTalking(unittest.TestCase):
@@ -975,7 +975,8 @@ class CrowsAndCorn(unittest.TestCase):
         party = world.invite_visitor("crows").party
         party.long, party.stay = True, 10 ** 6
         run(world, clock, 90, fps=10)
-        self.assertGreater(cob.kernels, 0)
+        # the cob, or any apple they've knocked out of the apple barrel to peck at instead
+        self.assertGreater(sum(getattr(a, "kernels", 0) for a in world.of("acorn")), 0)
 
     def test_corn_cobs_dont_stop_acorns_falling(self):
         from pet.items import CornCob
@@ -1294,8 +1295,7 @@ class Spring(unittest.TestCase):
                 run(world, clock, 0.1, fps=10)
                 if fly.state == "rest":
                     landed = True
-                    heads = [h for t in world.of("prop") if t.variant in ("daffodils", "tulips", "violets")
-                             for h in t.flower_heads()]
+                    heads = [h for t in world.of("prop") if t.variant in t.FLOWERS for h in t.flower_heads()]
                     self.assertTrue(any(abs(fly.x - x) < 1 and abs(fly.y - y) < 1 for x, y in heads))
                     self.assertTrue(fly.anim.name.endswith("_rest"))
                 if fly.gone:
@@ -1347,6 +1347,242 @@ class Spring(unittest.TestCase):
         bird.click()
         run(world, clock, 20)
         self.assertTrue(bird.gone)
+
+
+def season_world(season, seed=3, **foxes):
+    world, clock = make_world(season, seed=seed, **{"orange": False, "grey": False, **foxes})
+    world.settings["snow"] = False
+    run(world, clock, 0.1)
+    return world, clock
+
+
+def item(world, variant):
+    return next(t for t in world.things if getattr(t, "variant", None) == variant)
+
+
+class CornCobInHand(unittest.TestCase):
+    def test_a_cob_can_be_picked_up_and_dropped_somewhere_else(self):
+        from pet.items import CornCob
+        world, clock = season_world("autumn")
+        cob = world.add(CornCob(world, 500, world.ground))
+        cob.on_ground = True
+        self.assertTrue(cob.draggable)
+        cob.pick_up()
+        cob.x, cob.y = 1200.0, world.ground - 300  # carried across, up in the air
+        run(world, clock, 1)
+        self.assertEqual((cob.x, cob.y), (1200.0, world.ground - 300))  # it stays in your hand
+        cob.drop()
+        run(world, clock, 3)
+        self.assertTrue(cob.on_ground)
+        self.assertEqual(cob.y, world.ground)
+        self.assertFalse(cob.taken)
+
+    def test_a_cob_in_a_squirrels_arms_cant_be_grabbed(self):
+        from pet.items import CornCob
+        world, _ = season_world("autumn")
+        cob = world.add(CornCob(world, 500, world.ground))
+        cob.taken = True
+        self.assertFalse(cob.draggable)
+
+
+class BirchTree(unittest.TestCase):
+    def test_the_birch_is_out_all_year_dressed_for_the_season(self):
+        for season in seasons.SEASONS:
+            world, _ = season_world(season)
+            self.assertEqual(world.of("birch")[0].anim.name, f"birch_{season}")
+        world, clock = season_world("winter")
+        world.settings["snow"] = True
+        run(world, clock, 0.1)
+        self.assertEqual(world.of("birch")[0].anim.name, "birch_snow")
+
+    def test_clicking_the_birch(self):
+        world, _ = season_world("autumn")
+        world.of("birch")[0].click()
+        self.assertTrue(world.of("leaf"))
+        self.assertTrue(all(l.anim.name in ("leaf_yellow", "leaf_orange") for l in world.of("leaf")))
+        world, _ = season_world("winter")
+        world.of("birch")[0].click()
+        self.assertTrue(world.of("twig"))
+
+    def test_birds_perch_in_the_birch(self):
+        from pet.visitors import crow_perches
+        world, _ = season_world("summer")
+        self.assertTrue(any(getattr(p.holder, "kind", None) == "birch" for p in crow_perches(world)))
+
+
+class NewItems(unittest.TestCase):
+    def test_a_fox_climbs_the_woodstack_in_winter(self):
+        world, clock = season_world("winter", orange=True)
+        stack = item(world, "woodstack")
+        world.settings["snow"] = True
+        run(world, clock, 0.1)
+        self.assertEqual(stack.anim.name, "woodstack_snow")
+        fox = world.of("fox")[0]
+        world.climb(fox, stack)
+        highest = world.ground
+        for _ in range(200):
+            run(world, clock, 0.1, fps=10)
+            highest = min(highest, fox.y)
+        self.assertLessEqual(highest, world.ground - 23 * world.scale)
+
+    def test_clicking_the_apple_barrel_rolls_out_an_apple_but_not_endlessly(self):
+        world, clock = season_world("autumn")
+        barrel = item(world, "apple_barrel")
+        barrel.click()
+        apples = [a for a in world.of("acorn") if getattr(a, "produce", "") == "apple"]
+        self.assertEqual(len(apples), 1)
+        run(world, clock, 3)
+        self.assertTrue(apples[0].on_ground)
+        for _ in range(20):
+            barrel.click()
+        self.assertLessEqual(len([a for a in world.of("acorn") if getattr(a, "produce", "") == "apple"]), 6)
+
+    def test_the_wells_bucket_goes_down_and_comes_back(self):
+        world, clock = season_world("spring")
+        well = item(world, "well")
+        well.click()
+        self.assertEqual(well.anim.name, "well_bucket")
+        run(world, clock, 3)
+        self.assertEqual(well.anim.name, "well")
+
+    def test_a_fox_slides_down_the_slide(self):
+        world, clock = season_world("summer", orange=True)
+        slide = item(world, "slide")
+        fox = world.of("fox")[0]
+        world.climb(fox, slide)
+        highest, slid = world.ground, False
+        for _ in range(300):
+            run(world, clock, 0.1, fps=10)
+            highest = min(highest, fox.y)
+            slid = slid or (fox.step is not None and fox.step.anim == "crouch" and fox.x > slide.x + 10 * world.scale
+                            and fox.y < world.ground - 5 * world.scale)
+        self.assertLessEqual(highest, world.ground - 35 * world.scale)  # up on the platform
+        self.assertTrue(slid)                                          # and down the chute
+        self.assertEqual(fox.y, world.ground)
+        self.assertGreater(fox.x, slide.x)                             # it ends up at the bottom, on the right
+
+    def test_a_fox_splashes_in_the_kiddie_pool(self):
+        world, clock = season_world("summer", orange=True)
+        pool = item(world, "pool")
+        fox = world.of("fox")[0]
+        world.paddle(fox, pool)
+        splashed = False
+        for _ in range(200):
+            run(world, clock, 0.1, fps=10)
+            splashed = splashed or bool(world.of("drop"))
+        self.assertTrue(splashed)
+        self.assertEqual(fox.y, world.ground)
+        pool.click()
+        self.assertEqual(pool.anim.name, "pool_ripple")
+
+    def test_all_the_new_items_are_in_the_toy_box_and_saved(self):
+        defaults = save.load(Path(os.environ["PIXELFOX_USER_DIR"]) / "missing.json")["items"]
+        for name in ("birch", "woodstack", "apple_barrel", "well", "slide", "pool", "watermelons", "tomatoes",
+                     "radishes", "lettuce", "dahlias", "dandelions", "cattails"):
+            self.assertIn(name, seasons.ITEMS)
+            self.assertIn(name, defaults)
+
+
+class Garden(unittest.TestCase):
+    def grow(self, world, clock, minutes):
+        clock[0] += datetime.timedelta(minutes=minutes)
+        run(world, clock, 0.1)
+
+    def test_watermelons_grow_like_pumpkins_and_split_open_when_ripe(self):
+        world, clock = season_world("summer")
+        melons = world.of("melon")
+        self.assertEqual(len(melons), 3)
+        melon = melons[0]
+        self.assertEqual(melon.stage, 0)
+        self.grow(world, clock, 60)
+        self.assertEqual(melon.stage, 4)
+        self.assertTrue(melon.anim.name.startswith("melon_4_"))
+        melon.click()
+        self.assertTrue(melon.anim.name.startswith("melon_split_"))
+        run(world, clock, 2)
+        self.assertEqual(melon.stage, 0)  # a new one sown
+        self.assertEqual(melon.record["planted"], melon.planted)
+        self.assertFalse(melon.carve())   # the hoe's for pumpkins
+
+    def test_ripe_tomatoes_drop_off_the_plants(self):
+        world, clock = season_world("summer")
+        self.grow(world, clock, 50)
+        plants = item(world, "tomatoes")
+        self.assertEqual(plants.anim.name, "tomatoes_4")
+        plants.click()
+        run(world, clock, 3)
+        tomatoes = [a for a in world.of("acorn") if getattr(a, "produce", "") == "tomato"]
+        self.assertGreaterEqual(len(tomatoes), 3)
+        self.assertTrue(all(t.on_ground for t in tomatoes))
+        self.assertEqual(item(world, "tomatoes").stage, 0)
+
+    def test_radishes_and_lettuce_pop_out_of_the_ground(self):
+        world, clock = season_world("spring")
+        self.grow(world, clock, 40)
+        for name, produce in (("radishes", "radish"), ("lettuce", "lettuce_head")):
+            row = item(world, name)
+            self.assertTrue(row.ripe, name)
+            row.click()
+            popped = [a for a in world.of("acorn") if getattr(a, "produce", "") == produce]
+            self.assertTrue(popped, name)
+            self.assertTrue(all(p.vy < 0 for p in popped))  # flying up out of the ground
+        run(world, clock, 4)
+        self.assertTrue(all(a.on_ground for a in world.of("acorn")))
+
+    def test_unripe_crops_just_rustle(self):
+        world, _ = season_world("spring")
+        item(world, "radishes").click()
+        self.assertFalse(world.of("acorn"))
+
+    def test_cattails_burst_into_fluff_that_blows_away(self):
+        world, clock = season_world("summer")
+        self.grow(world, clock, 35)
+        tails = item(world, "cattails")
+        self.assertTrue(tails.ripe)
+        tails.click()
+        fluff = world.of("fluff")
+        self.assertGreaterEqual(len(fluff), 30)
+        start = sum(f.x for f in fluff) / len(fluff)
+        run(world, clock, 4)
+        self.assertGreater(abs(sum(f.x for f in world.of("fluff")) / len(world.of("fluff")) - start), 20)  # drifting
+        self.assertEqual(item(world, "cattails").stage, 0)
+        run(world, clock, 20)
+        self.assertFalse(world.of("fluff"))
+
+
+class MoreFlowers(unittest.TestCase):
+    def test_dahlias_in_summer_and_autumn(self):
+        for season in ("summer", "autumn"):
+            world, _ = season_world(season)
+            self.assertGreaterEqual(len(item(world, "dahlias").flower_heads()), 5)
+
+    def test_spring_dandelion_clocks_blow_away_and_grow_back(self):
+        world, clock = season_world("spring")
+        dandelions = item(world, "dandelions")
+        self.assertEqual(dandelions.anim.name, "dandelions_spring")
+        dandelions.click()
+        self.assertGreaterEqual(len(world.of("fluff")), 20)
+        run(world, clock, 1)
+        self.assertEqual(dandelions.anim.name, "dandelions_spring_bare")
+        dandelions.click()  # nothing left to blow
+        run(world, clock, 130, fps=10)
+        self.assertEqual(dandelions.anim.name, "dandelions_spring")
+
+    def test_summer_dandelions_are_yellow_flowers(self):
+        world, clock = season_world("summer")
+        dandelions = item(world, "dandelions")
+        self.assertEqual(dandelions.anim.name, "dandelions_summer")
+        dandelions.click()
+        self.assertFalse(world.of("fluff"))
+        self.assertEqual(dandelions.anim.name, "dandelions_summer_bob")
+
+    def test_pansies_grow_under_the_summer_trees(self):
+        from PIL import Image
+        for look, ground in (("oak_summer", 229), ("birch_summer", 193)):
+            img = Image.open(sprites.SPRITE_DIR / f"{look}.png").convert("RGB")
+            purple = [(x, y) for x in range(img.width) for y in range(ground - 6, ground + 1)
+                      if img.getpixel((x, y)) in ((0x52, 0x26, 0xa0), (0x70, 0x40, 0xc4), (0x9a, 0x6e, 0xe0))]
+            self.assertTrue(purple, look)
 
 
 def qt_available():

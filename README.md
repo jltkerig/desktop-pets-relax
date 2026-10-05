@@ -62,9 +62,15 @@ Right-click the icon for the menu:
 - **Pet:** move the cursor back and forth over a fox. It only ever reacts happily.
 - **Click:** a happy hop. A napping fox wakes up and stretches.
 - **Drag a fox:** you pick it up, and it lands when you let go.
-- **Spring:** daffodils, tulips and violets that butterflies land on, and songbirds that sing.
-- **Winter:** a sled to rock, a tree stump the foxes climb, and a little Christmas tree whose lights blaze when
-  clicked.
+- **Spring:** daffodils, tulips and violets that butterflies land on, songbirds that sing, a stone well with a
+  bucket, dandelion clocks to blow, and radishes and lettuce to pull up when they're ripe.
+- **Summer:** a slide and a kiddie pool for the foxes, watermelons and tomatoes to harvest, cattails that burst
+  into fluff, dandelions, pansies under the trees and a dahlia bed.
+- **Autumn:** an apple barrel to roll apples out of (and the pumpkins, the corn, the scarecrow and his hat).
+- **Winter:** a sled to rock, a woodstack and a tree stump the foxes climb, and a little Christmas tree whose
+  lights blaze when clicked.
+- **All year:** the oak and a white birch, both changing with the seasons. Corn cobs and fruit can be picked up
+  and dropped somewhere else.
 - **Click the oak:** something different falls out each season: a branch, snow, a caterpillar, a butterfly,
   autumn leaves (and now and then a spider on its thread).
 - **Drag the oak:** you can move it anywhere along the bottom of the screen, and it remembers the spot.

@@ -300,6 +300,13 @@ class Fox(Thing):
         self.world.climb(self, thing)
         return []  # climb() already filled in the plan
 
+    def _paddle(self):
+        pool = self.world.pool_near(self, 900)
+        if pool is None:
+            return [Step("idle", 2.0)]
+        self.world.paddle(self, pool)
+        return []  # paddle() already filled in the plan
+
     def _zoomies(self):
         """A burst of energy: a wiggle, a sprint to the far end of the screen, a dash partway back, a happy roll."""
         w = self.world
@@ -414,6 +421,7 @@ class Fox(Thing):
             (self.playful * 0.8 if w.climbable_near(self, 900) else 0.0, lambda: self._climb()),
             (1.0, lambda: [Step("groom", rng.uniform(2.0, 4.0)), Step("idle", 1.5)]),
             (self.playful * 0.6, lambda: self._tail_chase()),
+            (self.playful * 0.9 if w.pool_near(self, 900) else 0.0, lambda: self._paddle()),
         ]
         total = sum(weight for weight, _ in options)
         pick = rng.uniform(0, total)

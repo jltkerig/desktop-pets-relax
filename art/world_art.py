@@ -204,6 +204,7 @@ def oak(sway=0.0, seed=7, season="autumn"):
             if (c.mat[y][x] or "").startswith("leaf") and (c.mat[y + 6][x] or "").startswith("leaf"):
                 c.ellipse(x + sway * 0.3, y + 1.6, 1.4, 1.8, "acorn_green")
                 c.ellipse(x + sway * 0.3, y, 1.7, 1.0, "cap")
+        _pansies(c, OAK_GROUND, OAK_X, 92)  # pansies growing round the foot of the tree
     return c.to_image()
 
 
@@ -222,20 +223,26 @@ COMMON.update({
 })
 
 def _daffodil_head(c, x, y, size=1.0):
-    """A daffodil flower at (x, y): four pointed petals poking out like a star (placed pixel by pixel, so the
-    points stay sharp at this size) round an orange trumpet."""
+    """A daffodil flower at (x, y), seen from the side and facing right: a round ring of yellow petals with a
+    few pointed tips poking out of its edge, and an orange trumpet sticking out of the front with a flared rim.
+    Placed pixel by pixel, so it stays crisp at this size."""
     cx, cy = int(round(x)), int(round(y))
-    reach = 3 if size >= 1 else 2
-    for dx, dy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):  # the four points
-        for k in range(1, reach + 1):
-            light = 3 if dy < 0 else 2
-            _px(c, cx + dx * k, cy + dy * k, "daffodil", light if k < reach else 1)
-            if k == 1:  # thicker near the middle
-                _px(c, cx + dx, cy, "daffodil", 2)
-                _px(c, cx, cy + dy, "daffodil", 2)
-    _px(c, cx, cy, "daffodil_cup", 2)        # the trumpet, poking out in the middle
-    _px(c, cx + 1, cy, "daffodil_cup", 3)
-    _px(c, cx, cy + 1, "daffodil_cup", 1)
+    big = size >= 1
+    r2 = 5.5 if big else 2.5  # the petal ring, centred a little behind the trumpet
+    reach = 2 if big else 1
+    for dy in range(-reach, reach + 1):
+        for dx in range(-reach, reach + 1):
+            if dx * dx + dy * dy <= r2:
+                _px(c, cx - 1 + dx, cy + dy, "daffodil", 3 if dy < 0 else 2 if dy == 0 else 1)
+    # pointed petal tips poking out past the ring: up, down, and back (two at the back on the big ones)
+    _px(c, cx - 1, cy - reach - 1, "daffodil", 3)
+    _px(c, cx - 1, cy + reach + 1, "daffodil", 1)
+    for ty in ((-1, 1) if big else (0,)):
+        _px(c, cx - 2 - reach, cy + ty, "daffodil", 2)
+    _px(c, cx, cy, "daffodil_cup", 1)  # the trumpet, sticking out of the front...
+    _px(c, cx + 1, cy, "daffodil_cup", 2)
+    for dy in ((-1, 0, 1) if big else (0, 1)):  # ...with a frilly, flared rim
+        _px(c, cx + 2, cy + dy, "daffodil_cup", 3 if dy <= 0 else 2)
 
 
 def _twig(c, x1, y1, x2, y2, mat="bark", level=1):
@@ -1937,6 +1944,627 @@ def note(double=False):
     return c.to_image()
 
 
+# -- the birch: white bark, branches that droop at the tips, a light and airy crown -------------------------
+
+COMMON.update({
+    "birch_bark": ("#9a968c", "#c8c4ba", "#e6e2d8", "#f8f6f0", "#5a5650"),
+    "birch_twig": ("#3a2420", "#56362e", "#724a3e", "#8e6252", "#1e100c"),
+    "catkin": ("#8a6a24", "#b08c34", "#ccaa4a", "#e2c66e", "#4a3610"),
+})
+BIRCH_W, BIRCH_H, BIRCH_X, BIRCH_GROUND = 110, 196, 52, 193
+
+
+def birch_shape(seed=5):
+    """The birch's branching (the same in every frame and season), without any sway: limbs as (x1, y1, x2, y2,
+    width), drooping twigs as (x1, y1, x2, y2), the twig tips, and spots high up where a bird can sit."""
+    rng = random.Random(seed)
+    limbs, twigs, tips, perches = [], [], [], []
+    top_y = 18
+    for k in range(14):  # limbs from the upper trunk, alternating sides (not quite evenly), reaching out and up
+        y = 130 - k * 8 + rng.uniform(-2, 2)
+        side = 1 if k % 2 else -1
+        x = BIRCH_X + (BIRCH_GROUND - y) * 0.03
+        reach = rng.uniform(32, 52) * (1 - k / 16) ** 0.6 * (0.75 if k < 2 else 1)
+        angle = math.radians(rng.uniform(20, 44) + k * 2)
+        ex, ey = x + side * math.cos(angle) * reach, y - math.sin(angle) * reach
+        limbs.append((x, y, ex, ey, 2 if k < 6 else 1))
+        if k > 3 and ey < 70:
+            perches.append((ex, ey))
+        for j in range(rng.randint(3, 5)):  # fine twigs hanging down from along the limb
+            f = rng.uniform(0.35, 1.0)
+            tx, ty = x + (ex - x) * f, y + (ey - y) * f
+            length = rng.uniform(7, 15)
+            droop = math.radians(rng.uniform(-80, -45))
+            dx, dy = side * math.cos(droop) * length * 0.5, -math.sin(droop) * length
+            twigs.append((tx, ty, tx + dx, ty + dy))
+            tips.append((tx + dx, ty + dy))
+            tips.append((tx + dx * 0.5, ty + dy * 0.5))
+    perches = sorted(perches, key=lambda p: p[1])[:4]
+    return limbs, twigs, tips, perches, top_y
+
+
+BIRCH_LIMBS, BIRCH_TWIGS, BIRCH_TIPS, BIRCH_PERCHES, BIRCH_TOP = birch_shape()
+
+
+def birch(season="summer", sway=0.0, snow=False):
+    """110 x 196: a slender birch with white bark and black markings. season: winter (bare, purplish twigs),
+    spring (catkins and a few pale new leaves), summer (light, bright green), autumn (golden yellow). snow:
+    snow along the branches and round the foot."""
+    c = Canvas(BIRCH_W, BIRCH_H)
+    rng = random.Random(9)
+
+    def lean(y):
+        return sway * max(0.0, (130 - y) / 130) * 1.8
+
+    # the trunk: white, tapering, leaning very slightly, with black marks and a rough dark foot
+    for y in range(BIRCH_TOP, BIRCH_GROUND + 1):
+        half = 1.5 + (y - BIRCH_TOP) / (BIRCH_GROUND - BIRCH_TOP) * 4.5
+        if BIRCH_GROUND - y < 6:
+            half += (6 - (BIRCH_GROUND - y)) * 0.5
+        cx = BIRCH_X + (BIRCH_GROUND - y) * 0.03 + lean(y)
+        left, right = int(round(cx - half)), int(round(cx + half))
+        for x in range(left, right + 1):
+            band = (x - left) / max(1, right - left)
+            _px(c, x, y, "birch_bark", 3 if band < 0.3 else 2 if band < 0.65 else 1 if band < 0.9 else 0)
+    for _ in range(46):  # the black markings: short horizontal dashes
+        y = rng.randrange(BIRCH_TOP + 6, BIRCH_GROUND - 6)
+        cx = BIRCH_X + (BIRCH_GROUND - y) * 0.03 + lean(y)
+        w = rng.choice((1, 2, 2, 3))
+        x0 = int(round(cx + rng.uniform(-3, 2)))
+        for x in range(x0, x0 + w):
+            if c.mat[y][x] == "birch_bark":
+                _px(c, x, y, "bug_black", rng.choice((0, 1)))
+    for y in range(BIRCH_GROUND - 7, BIRCH_GROUND + 1):  # the dark, cracked foot of an old birch
+        for x in range(BIRCH_W):
+            if c.mat[y][x] == "birch_bark" and rng.random() < 0.55:
+                _px(c, x, y, "birch_twig", rng.choice((0, 1)))
+    for x1, y1, x2, y2, w in BIRCH_LIMBS:
+        if w >= 2:
+            _branch(c, x1 + lean(y1), y1, x2 + lean(y2), y2, 2)
+        else:
+            _twig(c, x1 + lean(y1), y1, x2 + lean(y2), y2, "birch_twig", 1)
+    for x1, y1, x2, y2 in BIRCH_TWIGS:
+        _twig(c, x1 + lean(y1), y1, x2 + lean(y2) * 1.3, y2, "birch_twig", 1)
+    leaves = {"summer": ("leaf_summer_light", "leaf_green", "leaf_summer_light"),
+              "autumn": ("leaf_yellow", "leaf_yellow", "leaf_orange")}.get(season)
+    lrng = random.Random(21)
+    for x, y in BIRCH_TIPS:
+        lx = x + lean(y) * 1.3
+        if leaves:  # small leaves in loose clusters along the hanging twigs
+            for _ in range(5):
+                c.ellipse(lx + lrng.uniform(-2.5, 2.5), y + lrng.uniform(-3, 2), lrng.uniform(1.0, 1.8), 1.0,
+                          lrng.choice(leaves), angle=lrng.uniform(-40, 40))
+        elif season == "spring":
+            if lrng.random() < 0.5:  # a catkin dangling
+                _twig(c, lx, y, lx + 0.4, y + 4, "catkin", 2)
+                c.pixel(lx + 0.4, y + 4, "catkin", 3)
+            elif lrng.random() < 0.6:
+                c.ellipse(lx, y, 1.2, 0.9, "leaf_spring")
+    if season == "summer":
+        _pansies(c, BIRCH_GROUND, BIRCH_X, 46, seed=8)  # pansies round its foot
+    if snow:
+        for y in range(1, BIRCH_GROUND - 8):
+            for x in range(BIRCH_W):
+                if c.mat[y][x] in ("birch_twig", "bark") and c.mat[y - 1][x] is None and lrng.random() < 0.6:
+                    _px(c, x, y - 1, "snow", 3)
+        for x in range(BIRCH_W):
+            d = abs(x - BIRCH_X) / 40
+            if d < 1:
+                for k in range(int((1 - d * d) * 5) + 1):
+                    _px(c, x, BIRCH_GROUND - k, "snow", 3 if k == int((1 - d * d) * 5) else 2)
+    return c.to_image()
+
+
+# -- a woodstack, an apple barrel, a stone well --------------------------------------------------------------
+
+COMMON.update({
+    "log_end": ("#a07a44", "#c49a5c", "#dcb878", "#eed29e", "#5a4022"),
+    "apple": ("#7a0e10", "#b41a1a", "#dc3228", "#f06a54", "#420606"),
+    "apple_green": ("#4e7a14", "#6ea020", "#90c034", "#b8dc62", "#283e08"),
+    "well_stone": ("#5a5a5e", "#7e7e84", "#a2a2a8", "#c6c6cc", "#2e2e32"),
+    "shingle": ("#4a2a1a", "#6a3c24", "#8a5232", "#a86e48", "#24140a"),
+    "water": ("#1e4a8a", "#2e6ab8", "#4a8cdc", "#86b8f0", "#0e2448"),
+})
+WOODSTACK_ROWS = [(5, 31), (4, 23), (3, 15)]  # logs in each row and the row's centre height, from the bottom
+
+
+def woodstack(snow=False):
+    """60 x 36: split firewood stacked in rows, log ends out: pale wood with rings and a rim of bark."""
+    c = Canvas(60, 36)
+    rng = random.Random(4)
+    r = 4.4
+    for count, cy in WOODSTACK_ROWS:
+        for k in range(count):
+            cx = 30 + (k - (count - 1) / 2) * 9.6 + rng.uniform(-0.6, 0.6)
+            c.ellipse(cx, cy, r, r * 0.95, "bark", bias=-0.1)                  # the bark rim
+            c.ellipse(cx - 0.3, cy - 0.3, r - 1.3, (r - 1.3) * 0.95, "log_end", bias=0.25)
+            for ring in (2.0, 0.9):                                           # growth rings
+                for a in range(0, 360, 30):
+                    c.pixel(cx - 0.3 + math.cos(math.radians(a)) * ring, cy - 0.3 + math.sin(math.radians(a)) * ring,
+                            "log_end", 1)
+            if rng.random() < 0.5:  # a split down the middle of some
+                _twig(c, cx - 0.3, cy - 2.4, cx + 0.5, cy + 2.0, "log_end", 0)
+    if snow:  # snow lying on the top of each row's logs
+        for x in range(c.w):
+            top = next((y for y in range(c.h) if c.mat[y][x] is not None), None)
+            if top is not None:
+                for k in range(2 + (x % 3 == 0)):
+                    if top - 1 + k < c.h:
+                        _px(c, x, top - 1 + k, "snow", 3 if k == 0 else 2)
+        for count, cy in WOODSTACK_ROWS[1:]:  # and in the gaps on the shoulders of the rows below
+            half = count * 4.8 + 2
+            for x in range(int(30 - half - 5), int(30 - half + 1)):
+                _px(c, x, int(cy + 4), "snow", 3)
+            for x in range(int(30 + half - 1), int(30 + half + 5)):
+                _px(c, x, int(cy + 4), "snow", 3)
+    return c.to_image()
+
+
+def apple(spin=0):
+    """8 x 8: a red apple with a stem and a leaf, turning over as it rolls."""
+    c = Canvas(8, 8)
+    a = spin * math.pi / 2
+    c.ellipse(4, 4.4, 2.9, 2.7, "apple")
+    c.pixel(4 - math.sin(a) * 1.2, 2.4 + (1 - math.cos(a)) * 1.6, "apple", 3)  # its shine, turning round
+    sx, sy = 4 + math.sin(a) * 2.2, 4.4 - math.cos(a) * 2.6
+    c.pixel(sx, sy, "bark", 1)                          # the stem
+    c.pixel(sx + math.cos(a), sy + math.sin(a), "leaf_summer_light", 2)
+    return c.to_image()
+
+
+def apple_barrel(full=1.0):
+    """30 x 34: an oak barrel heaped with apples, mostly red, a few green. full: how high the heap is (it
+    goes down as apples roll out, and fills up again)."""
+    c = Canvas(30, 34)
+    _barrel(c, 4, 33)
+    rng = random.Random(6)
+    n = int(8 + full * 12)
+    for k in range(n):  # apples heaped in a mound over the rim, the top ones last
+        layer = k / n
+        x = 15 + rng.uniform(-10, 10) * (1 - layer * 0.65)
+        y = 12.5 - full * layer * 6 + rng.uniform(-0.6, 0.6)
+        mat = "apple_green" if rng.random() < 0.2 else "apple"
+        c.ellipse(x, y, 2.4, 2.2, mat)
+        c.pixel(x - 0.8, y - 0.9, mat, 3)
+        if rng.random() < 0.35:
+            c.pixel(x + 0.3, y - 2.2, "bark", 1)
+    return c.to_image()
+
+
+def well(bucket=0.0, splash=0.0):
+    """46 x 64: a round stone well with two wooden posts, a little shingled roof, a crank and a bucket on a rope.
+    bucket: 0 hanging up under the roof .. 1 down in the well (hidden). splash: water splashing up at the rim."""
+    c = Canvas(46, 64)
+    ground = 62
+    rng = random.Random(8)
+    # the posts and the cross-beam with its crank
+    c.capsule(9, ground - 10, 9, 14, 1.4, 1.4, "post")
+    c.capsule(37, ground - 10, 37, 14, 1.4, 1.4, "post")
+    c.capsule(9, 18, 37, 18, 1.0, 1.0, "post", bias=0.1)
+    c.capsule(37, 18, 42, 18, 0.7, 0.7, "hoop")
+    c.capsule(42, 18, 42, 22, 0.6, 0.6, "hoop")
+    # the roof: two slopes of shingles
+    for y in range(4, 15):
+        half = (y - 4) * 2.0 + 2
+        for x in range(int(23 - half), int(23 + half) + 1):
+            level = 2 if x < 23 else 1
+            if (y + (x // 4) * 2) % 4 == 0:
+                level -= 1  # the rows of shingles
+            _px(c, x, y, "shingle", max(0, level))
+    # the rope and the bucket
+    by = 22 + bucket * 30
+    if bucket < 0.95:
+        _twig(c, 23, 18, 23, by - 2, "twine", 2)
+        for y in range(int(by - 2), int(by + 4)):
+            half = 3.0 - (y - by) * 0.15
+            for x in range(int(23 - half), int(23 + half) + 1):
+                _px(c, x, y, "oak_wood", 2 if x < 23 else 1)
+        _twig(c, 20, int(by - 2), 26, int(by - 2), "hoop", 2)
+        if bucket < 0.05 and splash == 0:  # back up, full of water
+            _twig(c, 21, int(by - 1), 25, int(by - 1), "water", 3)
+    # the stone ring of the well, in front of the bucket
+    top = ground - 18
+    for y in range(top, ground + 1):
+        for x in range(4, 43):
+            _px(c, x, y, "well_stone", 1)
+    for row, y in enumerate(range(top, ground + 1, 4)):  # courses of stones, staggered like brickwork
+        for x0 in range(4 - (row % 2) * 4, 43, 8):
+            _rock(c, rng, x0 + 4, y + 2, 3.8, 1.9, "well_stone")
+    for x in range(3, 44):  # the cap stones round the rim
+        _px(c, x, top - 1, "well_stone", 3 if x % 5 else 2)
+        _px(c, x, top, "well_stone", 2)
+    if splash:  # water splashing up out of the well
+        for k in range(9):
+            a = math.radians(200 + k * 17)
+            d = 4 + splash * 8
+            c.pixel(23 + math.cos(a) * d * 1.2, top - 2 + math.sin(a) * d, "water", 3 if k % 2 else 2)
+    return c.to_image()
+
+
+# -- summer fun: a slide and a kiddie pool --------------------------------------------------------------------
+
+COMMON.update({
+    "slide_chute": ("#b88a0c", "#e4b81c", "#f8d838", "#fcf088", "#5e4606"),
+    "slide_frame": ("#8a1414", "#b41e1e", "#d83a32", "#ee6a58", "#460808"),
+    "pool_ring": ("#1e5aa8", "#2e7ad0", "#4c9cec", "#8cc4f8", "#0e2c58"),
+    "pool_water": ("#4aa0d8", "#70bce8", "#9ad4f4", "#c8ecfc", "#1e5a84"),
+})
+
+
+def slide(sway=0.0):
+    """64 x 48: a little garden slide: a red ladder up to a platform, and a bright yellow chute curving down to
+    the ground on the right."""
+    c = Canvas(64, 48)
+    ground = 46
+    for x in (12, 18):  # the ladder's rails
+        c.capsule(x, ground, x, 10, 0.8, 0.8, "slide_frame")
+    for y in range(ground - 4, 12, -6):  # rungs
+        _twig(c, 12, y, 18, y, "slide_frame", 2)
+    c.capsule(12, 10, 25, 10, 1.0, 1.0, "slide_frame")      # the platform
+    c.capsule(12, 10, 12, 4, 0.6, 0.6, "slide_frame")       # its little rails
+    c.capsule(25, 10, 25, 5, 0.6, 0.6, "slide_frame")
+    c.capsule(12, 4, 25, 4, 0.5, 0.5, "slide_frame")
+    c.capsule(40, ground, 40, 28, 0.8, 0.8, "slide_frame")  # a leg under the chute
+    pts = bezier((25, 11), (44, 16), (60, 44), 14)          # the chute: a curved, shiny yellow slope
+    for (x1, y1), (x2, y2) in zip(pts, pts[1:]):
+        c.capsule(x1, y1, x2, y2, 1.8, 1.8, "slide_chute", bias=0.2)
+    for (x1, y1), (x2, y2) in zip(pts, pts[1:]):           # its raised red edge
+        c.capsule(x1, y1 - 1.8, x2, y2 - 1.8, 0.5, 0.5, "slide_frame")
+    c.capsule(58, 44, 63, 45, 1.4, 1.2, "slide_chute")      # the lip at the bottom
+    return c.to_image()
+
+
+# the slide's chute, from the top (frame x, y) to the bottom: where a fox goes when it slides down
+SLIDE_CHUTE = [(25, 9), (34, 11), (42, 15), (49, 22), (55, 31), (60, 42)]
+
+
+def pool(t=0.0, ripple=0.0):
+    """64 x 18: a round inflatable kiddie pool: a puffy blue ring, water glinting inside. ripple: rings spreading
+    across the water (when clicked)."""
+    c = Canvas(64, 18)
+    c.ellipse(32, 12, 30, 5.6, "pool_ring", bias=0.1)            # the outer ring, puffy
+    c.ellipse(32, 10, 29, 4.0, "pool_ring", bias=0.35)          # its top
+    c.ellipse(32, 9.6, 25, 2.8, "pool_water", bias=0.2)         # the water inside
+    rng = random.Random(3)
+    for k in range(7):  # glints moving across the water
+        x = 12 + (k * 7 + t * 9) % 40
+        c.pixel(x, 9 + rng.choice((-1, 0, 1)), "pool_water", 3)
+    if ripple:
+        for r in (ripple * 18, ripple * 9):
+            if r > 2:
+                for a in range(0, 360, 10):
+                    x, y = 32 + math.cos(math.radians(a)) * r, 9.6 + math.sin(math.radians(a)) * r * 0.13
+                    if ((x - 32) / 25) ** 2 + ((y - 9.6) / 2.8) ** 2 < 1:
+                        c.pixel(x, y, "pool_water", 3)
+    for x in range(6, 58, 9):  # the valve and seam marks on the ring
+        c.pixel(x, 13, "pool_ring", 3)
+    return c.to_image()
+
+
+def droplet(k=0):
+    """3 x 3: a drop of water flying off a splash."""
+    c = Canvas(3, 3)
+    c.pixel(1, 1, "water", 3 if k else 2)
+    c.pixel(1, 2, "water", 1)
+    return c.to_image(outline=False)
+
+
+# -- more flowers: dahlias, dandelions, pansies; cattails ----------------------------------------------------
+
+COMMON.update({
+    "dahlia_magenta": ("#7a1450", "#a82070", "#d03c94", "#ec78bc", "#3e0828"),
+    "dahlia_orange": ("#a8400c", "#d86018", "#f0842c", "#f8b060", "#541e04"),
+    "dahlia_red": ("#7a0e1c", "#a81a2a", "#cc3440", "#e86870", "#40060c"),
+    "dahlia_leaf": ("#1a3e14", "#28561e", "#38702a", "#56904a", "#0c200a"),
+    "fluff": ("#c8c8bc", "#e4e4da", "#f4f4ee", "#ffffff", "#8a8a80"),
+    "cattail": ("#4a2a12", "#663c1a", "#844e24", "#a26a38", "#24140a"),
+    "pansy_purple": ("#3a1a6a", "#5226a0", "#7040c4", "#9a6ee0", "#1c0a38"),
+    "pansy_yellow": ("#b8980c", "#e4c418", "#f8e030", "#fcf080", "#5e4c04"),
+})
+DAHLIA_HEADS = [(8, 9), (16, 4), (24, 8), (31, 3), (37, 9)]
+DAHLIA_COLOURS = ("dahlia_magenta", "dahlia_orange", "dahlia_red", "daffodil", "dahlia_magenta")
+
+
+def dahlias(sway=0.0):
+    """44 x 26: a clump of dahlias: big round pom-pom flowers of many layered petals, in magenta, orange, red
+    and yellow, over dark leaves."""
+    c = Canvas(44, 26)
+    ground = 24
+    rng = random.Random(12)
+    for x in range(5, 41, 4):  # dark, toothed leaves low down
+        c.ellipse(x + rng.uniform(-1, 1), ground - rng.uniform(3, 7), 2.6, 1.8, "dahlia_leaf", angle=rng.uniform(-30, 30))
+    for k, (x, y) in enumerate(DAHLIA_HEADS):
+        hx = x + sway * (1 - y / ground) * 1.4
+        _twig(c, x, ground, hx, y + 3, "stalk", 1)
+        mat = DAHLIA_COLOURS[k]
+        c.ellipse(hx, y, 3.4, 3.0, mat, bias=-0.1)  # outer petals...
+        for a in range(0, 360, 45):                 # ...pointed petal tips round the edge...
+            c.pixel(hx + math.cos(math.radians(a)) * 3.8, y + math.sin(math.radians(a)) * 3.4, mat, 1)
+        c.ellipse(hx, y - 0.3, 2.2, 1.9, mat, bias=0.3)  # ...rings of petals getting lighter toward the middle
+        c.ellipse(hx, y - 0.5, 1.0, 0.9, mat, bias=0.6)
+    for x in range(2, 42):
+        c.pixel(x, ground + 1, "dirt", 1 if x % 3 else 2)
+    return c.to_image()
+
+
+DANDELION_HEADS = [(6, 6), (13, 3), (20, 7), (27, 4), (34, 6)]
+
+
+def dandelions(season="summer", sway=0.0, bare=False):
+    """40 x 16: dandelions: jagged leaves in rosettes on the ground, and on tall stems either bright yellow
+    flowers (summer) or white seed-heads, the clocks (spring). bare: the seeds have blown away (stems only)."""
+    c = Canvas(40, 16)
+    ground = 14
+    for x in (6, 17, 29):  # rosettes of toothed leaves
+        for side in (-1, 1):
+            for k in range(3):
+                tx = x + side * (3 + k * 1.6)
+                c.pixel(tx, ground - 1 - (k % 2), "stalk", 2 if k % 2 else 1)
+            _twig(c, x, ground, x + side * 6, ground - 1, "stalk", 1)
+    for x, y in DANDELION_HEADS:
+        hx = x + sway * (1 - y / ground) * 1.2
+        _twig(c, x, ground, hx, y + 1, "stalk", 2)
+        if season == "summer":
+            c.ellipse(hx, y, 2.0, 1.7, "daffodil", bias=0.1)  # a shaggy yellow flower
+            for a in range(0, 360, 60):
+                c.pixel(hx + math.cos(math.radians(a)) * 2.4, y + math.sin(math.radians(a)) * 2.0, "daffodil", 3)
+            c.pixel(hx, y, "daffodil_cup", 2)
+        elif not bare:  # a seed clock: a fluffy white ball
+            c.ellipse(hx, y, 2.4, 2.2, "fluff", bias=0.2)
+            for a in range(0, 360, 40):
+                c.pixel(hx + math.cos(math.radians(a)) * 2.8, y + math.sin(math.radians(a)) * 2.6, "fluff", 2)
+        else:
+            c.pixel(hx, y, "stalk", 3)  # just the bare tip of the stem
+    return c.to_image(outline=not (season == "spring" and not bare))
+
+
+def fluff(k=0, mat="fluff"):
+    """5 x 5: a seed on its tuft of fluff, drifting on the wind (a dandelion's or a cattail's)."""
+    c = Canvas(5, 5)
+    for a in range(0, 360, 60):
+        x, y = 2 + math.cos(math.radians(a + k * 30)) * 1.6, 1.6 + math.sin(math.radians(a + k * 30)) * 1.2
+        c.pixel(x, y, mat, 3)
+    c.pixel(2, 3, "cattail" if mat == "fluff" else mat, 1)
+    return c.to_image(outline=False)
+
+
+CATTAILS = [(6, 0.86), (15, 1.0), (24, 0.9), (33, 1.06), (42, 0.94)]  # x, height share
+CATTAIL_HEIGHT = 52
+
+
+def cattails(stage, sway=0.0, burst=0.0):
+    """50 x 60: a stand of cattails. Stages: 0 shoots, 1 tall grassy leaves, 2 green heads, 3 brown velvety heads
+    (ripe), 4 the heads gone fluffy. burst: the fluff exploding off them (when clicked)."""
+    c = Canvas(50, 60)
+    ground = 58
+    full = (10, 30, 48, CATTAIL_HEIGHT, CATTAIL_HEIGHT)[stage]
+    for i, (x, share) in enumerate(CATTAILS):
+        h = full * share
+        lean = sway * (h / CATTAIL_HEIGHT) * (0.6 + 0.4 * (i % 2))
+        top = (x + lean, ground - h)
+        for side in (-1, 1):  # long, flat, grassy leaves
+            _twig(c, x, ground, x + side * 3 + lean * 0.7, ground - h * 0.75, "stalk", 2 if side < 0 else 1)
+        _twig(c, x, ground, top[0], top[1], "stalk", 1)
+        if stage >= 2:
+            hy = top[1] + 7
+            mat = "stalk" if stage == 2 else "cattail"
+            c.capsule(top[0], hy - 5, top[0] + lean * 0.05, hy + 3, 1.6, 1.6, mat, bias=0.1)  # the head
+            _twig(c, top[0], hy - 5, top[0], hy - 8, "stalk", 2)                              # its spike
+            if stage == 4 or burst:  # gone to fluff
+                for k in range(6 + int(burst * 6)):
+                    a = random.Random(i * 10 + k).uniform(0, 2 * math.pi)
+                    d = 2.2 + burst * random.Random(i * 10 + k + 5).uniform(2, 8)
+                    c.pixel(top[0] + math.cos(a) * d, hy - 1 + math.sin(a) * d * 1.5, "fluff", 3)
+    return c.to_image()
+
+
+def _pansies(c, ground, centre, spread, seed=3):
+    """Pansies growing low round the foot of a tree: purple and yellow faces among small leaves."""
+    rng = random.Random(seed)
+    for _ in range(14):
+        x = centre + rng.choice((-1, 1)) * rng.uniform(12, spread)
+        c.ellipse(x, ground - 1, 2.0, 1.2, "stalk")
+        face = rng.choice(("pansy_purple", "pansy_yellow", "pansy_purple"))
+        fx, fy = x + rng.uniform(-1, 1), ground - 3
+        c.ellipse(fx, fy, 1.6, 1.4, face)
+        c.pixel(fx - 0.6, fy - 1, "pansy_purple" if face == "pansy_yellow" else "violet", 3)  # upper petals
+        c.pixel(fx, fy, "bug_black", 0)  # the dark face in the middle
+        c.pixel(fx, fy + 0.6, "pansy_yellow", 3)
+
+
+# -- the vegetable garden: tomatoes, radishes, lettuce, watermelons --------------------------------------------
+
+COMMON.update({
+    "tomato": ("#8a1010", "#c41c16", "#e8382a", "#f6745e", "#480606"),
+    "tomato_green": ("#4e7a1a", "#6e9e26", "#8ebe3a", "#b4dc66", "#283e0a"),
+    "radish": ("#9a1a40", "#c82a5a", "#e6487a", "#f488aa", "#500a20"),
+    "lettuce": ("#5a9420", "#7cb82c", "#9ed444", "#c4ec7a", "#2e520c"),
+    "melon": ("#1a4a14", "#26641c", "#347e28", "#4c9a3c", "#0c260a"),
+    "melon_light": ("#5a8a2a", "#78aa3a", "#98c650", "#bcdc7a", "#2e4a12"),
+    "melon_flesh": ("#a8162c", "#d82a3c", "#f04a58", "#f88a90", "#560a14"),
+})
+TOMATO_PLANTS = [10, 27, 44, 61]  # x of each plant (on its stake)
+
+
+def tomatoes(stage, sway=0.0):
+    """72 x 44: a row of four tomato plants tied to stakes. Stages: 0 seedlings, 1 small plants, 2 bushy with
+    yellow flowers, 3 green tomatoes, 4 ripe red tomatoes."""
+    c = Canvas(72, 44)
+    ground = 42
+    rng = random.Random(14)
+    height = (6, 16, 28, 34, 34)[stage]
+    for x in TOMATO_PLANTS:
+        if stage >= 1:
+            _twig(c, x + 3, ground, x + 3, ground - 36, "post", 2)  # the stake
+        _twig(c, x, ground, x + sway * 0.5, ground - height, "stalk", 1)
+        for k in range(1 + stage * 2):  # leafy branches
+            y = ground - height * rng.uniform(0.25, 1.0)
+            side = rng.choice((-1, 1))
+            lx = x + side * rng.uniform(2, 6) + sway * (1 - y / ground)
+            c.ellipse(lx, y, 2.2, 1.5, "leaf_summer_dark" if k % 2 else "stalk", angle=side * 25)
+        if stage == 2:
+            for _ in range(3):
+                c.pixel(x + rng.uniform(-4, 4), ground - height * rng.uniform(0.4, 0.9), "daffodil", 3)
+        if stage >= 3:
+            mat = "tomato" if stage == 4 else "tomato_green"
+            for dx, dy in ((-3, 0.55), (3, 0.45), (0, 0.7)):  # a truss of tomatoes
+                tx, ty = x + dx + sway * 0.4, ground - height * dy
+                c.ellipse(tx, ty, 2.1, 1.9, mat)
+                c.pixel(tx - 0.7, ty - 0.8, mat, 3)
+                c.pixel(tx, ty - 2, "stalk", 2)
+    for x in range(2, 70):
+        c.pixel(x, ground + 1, "dirt", 1 if x % 3 else 2)
+    return c.to_image()
+
+
+ROW_PLANTS = {"radishes": [6, 15, 24, 33, 42, 51], "lettuce": [9, 23, 37, 51]}
+
+
+def radishes(stage, sway=0.0):
+    """58 x 18: a row of radishes. Stages: 0 sprouts, 1 small leaves, 2 bigger leaves, 3 red shoulders showing,
+    4 fat red radishes pushing up (ripe)."""
+    c = Canvas(58, 18)
+    ground = 15
+    for x in ROW_PLANTS["radishes"]:
+        size = (0.4, 0.7, 1.0, 1.1, 1.2)[stage]
+        for side in (-1, 0, 1):  # a little fan of leaves
+            tip = (x + side * 3.5 * size + sway * 0.4, ground - 7 * size - (1 if side == 0 else 0))
+            _twig(c, x, ground, *tip, "stalk", 2 if side else 1)
+            if stage >= 1:
+                c.ellipse(tip[0], tip[1], 1.6 * size, 1.1 * size, "lettuce", angle=side * 30)
+        if stage >= 3:
+            c.ellipse(x, ground + 0.4, 1.8 + (stage - 3), 1.4 + (stage - 3) * 0.5, "radish", bias=0.2)
+    for x in range(1, 57):
+        c.pixel(x, ground + 1, "dirt", 1 if x % 3 else 2)
+        c.pixel(x, ground + 2, "dirt", 0)
+    return c.to_image()
+
+
+def lettuce(stage, sway=0.0):
+    """58 x 18: a row of lettuces. Stages: 0 sprouts, 1 small rosettes, 2 bigger, 3 heads forming, 4 full,
+    frilly heads (ripe)."""
+    c = Canvas(58, 18)
+    ground = 15
+    for x in ROW_PLANTS["lettuce"]:
+        size = (0.3, 0.55, 0.8, 1.0, 1.2)[stage]
+        for k, (dx, dy, mat) in enumerate(((-3.5, 1.5, "stalk"), (3.5, 1.5, "stalk"), (-2, -0.5, "lettuce"),
+                                           (2, -0.5, "lettuce"), (0, -2.5, "lettuce"))):
+            c.ellipse(x + dx * size + sway * 0.2 * (k > 1), ground - 3 * size + dy * size, 3.0 * size, 2.6 * size,
+                      mat, bias=0.1 * k)
+        if stage >= 3:
+            for a in range(0, 360, 45):  # frilly edges
+                c.pixel(x + math.cos(math.radians(a)) * 4.5 * size, ground - 3 * size + math.sin(math.radians(a)) * 3 * size,
+                        "lettuce", 3)
+    for x in range(1, 57):
+        c.pixel(x, ground + 1, "dirt", 1 if x % 3 else 2)
+        c.pixel(x, ground + 2, "dirt", 0)
+    return c.to_image()
+
+
+def tomato(roll=0):
+    """8 x 8: a ripe tomato, rolling."""
+    c = Canvas(8, 8)
+    c.ellipse(4, 4.4, 2.8, 2.5, "tomato")
+    a = roll * math.pi / 2
+    c.pixel(4 - math.sin(a) * 1.2, 3 + (1 - math.cos(a)), "tomato", 3)
+    for dx in (-1, 0, 1):  # the green star of a calyx, turning
+        c.pixel(4 + math.sin(a) * 2 + dx * math.cos(a), 4.4 - math.cos(a) * 2.2 + dx * math.sin(a), "stalk", 2)
+    return c.to_image()
+
+
+def radish(roll=0):
+    """10 x 10: a pulled radish: a round red root with a white tip and a tuft of leaves."""
+    c = Canvas(10, 10)
+    a = roll * math.pi / 2
+    def at(dx, dy):
+        return 5 + dx * math.cos(a) - dy * math.sin(a), 5.5 + dx * math.sin(a) + dy * math.cos(a)
+    c.ellipse(*at(0, 1), 2.4, 2.4, "radish", bias=0.2)
+    c.pixel(*at(0, 3.6), "white", 2)
+    for dx in (-1.6, 0, 1.6):
+        c.capsule(*at(0, -1), *at(dx, -4.2), 0.6, 0.8, "lettuce")
+    return c.to_image()
+
+
+def lettuce_head(roll=0):
+    """10 x 10: a whole head of lettuce, frilly and green."""
+    c = Canvas(10, 10)
+    c.ellipse(5, 6, 4.0, 3.4, "lettuce", bias=0.1)
+    c.ellipse(5, 5.2, 2.6, 2.2, "lettuce", bias=0.4)
+    for k in range(8):
+        ang = math.radians(k * 45 + roll * 22)
+        c.pixel(5 + math.cos(ang) * 4.2, 6 + math.sin(ang) * 3.4, "stalk", 2)
+    return c.to_image()
+
+
+MELON_SHAPES = {"round": (1.0, 1.0), "long": (1.45, 0.82)}
+
+
+def _melon_body(c, cx, base, size, shape, flesh=0.0):
+    """A watermelon lying on the ground: dark green with pale stripes."""
+    wide, high = MELON_SHAPES[shape]
+    w, h = 9.0 * size * wide, 6.2 * size * high
+    cy = base - h
+    c.ellipse(cx, cy, w, h, "melon", bias=0.05)
+    for k in range(-3, 4):  # pale stripes running along it
+        sx = cx + k * w / 4
+        for y in range(int(cy - h), int(cy + h) + 1):
+            dx = math.sin((y - cy) / h * 1.4) * 1.2
+            x = sx + dx * (1 - abs(k) / 4)
+            if ((x - cx) / w) ** 2 + ((y - cy) / h) ** 2 < 0.92:
+                c.pixel(x, y, "melon_light", 2)
+    return cy - h
+
+
+def melon(stage, sway=0.0, grow=1.0, shape="round"):
+    """44 x 36. Stages: 0 sprout, 1 vine with a yellow flower, 2 small striped melon, 3 bigger, 4 big and ripe.
+    grow scales it (small, medium or large)."""
+    c = Canvas(44, 36)
+    ground = 30
+    reach = (4, 13, 15, 16, 17)[stage]
+    c.capsule(20 - reach, ground, 20 + reach * 0.8, ground - 0.5, 0.8, 0.7, "vine")
+    for dx in ((-reach + 2, reach * 0.7) if stage else (-2.5, 2.5)):  # lobed leaves
+        lx, ly = 20 + dx, ground - 3 + sway * 0.4
+        c.ellipse(lx, ly, 3.0, 2.2, "vine", angle=-20 if dx < 0 else 20)
+        c.pixel(lx, ly - 1, "vine", 3)
+    if stage == 0:
+        c.capsule(20, ground, 20 + sway * 0.5, ground - 5, 0.8, 0.7, "vine")
+        return c.to_image()
+    if stage == 1:
+        for a in range(5):
+            ang = a / 5 * 2 * math.pi
+            c.ellipse(23 + math.cos(ang) * 1.6, ground - 7 + math.sin(ang) * 1.6, 1.2, 1.2, "daffodil")
+        return c.to_image()
+    size = {2: 0.5, 3: 0.8, 4: 1.1}[stage] * grow
+    top = _melon_body(c, 20, ground + 0.5, size, shape)
+    c.capsule(20, top + 1, 21, top - 1.5, 0.6, 0.5, "stem")
+    return c.to_image()
+
+
+def melon_split(grow, shape, t):
+    """A ripe watermelon clicked: it cracks and falls open in two halves, red flesh and black seeds, then the
+    halves sink away."""
+    c = Canvas(44, 36)
+    ground = 30
+    c.capsule(3, ground, 34, ground - 0.5, 0.8, 0.7, "vine")
+    size = 1.1 * grow
+    wide, high = MELON_SHAPES[shape]
+    w, h = 9.0 * size * wide, 6.2 * size * high
+    if t < 0.3:
+        _melon_body(c, 20, ground + 0.5, size, shape)
+        for y in range(int(ground - 2 * h * t / 0.3), int(ground)):  # a crack down the middle
+            c.pixel(20, y, "melon_flesh", 2)
+        return c.to_image()
+    open_ = min(1.0, (t - 0.3) / 0.4)
+    sink = max(0.0, (t - 0.7) / 0.3)
+    for side in (-1, 1):  # two halves, rocked open, flesh up
+        hx = 20 + side * (3 + open_ * 4)
+        c.ellipse(hx, ground - h * 0.5 * (1 - sink * 0.6), w * 0.5, h * 0.55 * (1 - sink * 0.6), "melon")
+        c.ellipse(hx, ground - h * 0.85 * (1 - sink * 0.6), w * 0.45, h * 0.3 * (1 - sink * 0.6), "melon_flesh", bias=0.3)
+        for k in range(4):
+            c.pixel(hx - w * 0.25 + k * w * 0.16, ground - h * 0.85 * (1 - sink * 0.6), "bug_black", 0)
+    return c.to_image()
+
+
 def tray_icon():
     """32 x 32 fox face for the tray."""
     import fox_art
@@ -2019,6 +2647,48 @@ SPRITES = {
     "buzz_bubble": ([word_bubble("BZZZZZ!")], 1000, False, (4, 13)),
     "spider": ([spider(t) for t in (0.0, 0.25, 0.5, 0.75)], 140, True, (6, 2)),
     "silk": ([silk()], 1000, False, (0, 0)),
+    **{f"birch_{season}": ([birch(season, s) for s in (0, 1, 1, 0, -1, -1)], 650, True, (BIRCH_X, BIRCH_GROUND),
+                           {"perches": BIRCH_PERCHES})
+       for season in ("winter", "spring", "summer", "autumn")},
+    "birch_snow": ([birch("winter", s, snow=True) for s in (0, 1, 1, 0, -1, -1)], 650, True, (BIRCH_X, BIRCH_GROUND),
+                   {"perches": BIRCH_PERCHES}),
+    "woodstack": ([woodstack()], 1000, False, (30, 35)),
+    "woodstack_snow": ([woodstack(snow=True)], 1000, False, (30, 35)),
+    "apple": ([apple(k) for k in range(4)], 110, True, (4, 7)),
+    "apple_bit": ([chip("apple", s, 0.9) for s in range(4)], 90, True, (3, 3)),
+    "apple_barrel": ([apple_barrel()], 1000, False, (15, 33)),
+    "apple_barrel_wobble": ([apple_barrel(f) for f in (1.0, 0.9, 1.0, 0.95, 1.0)], 80, False, (15, 33)),
+    "well": ([well()], 1000, False, (23, 62)),
+    "well_bucket": ([well(b) for b in (0.0, 0.25, 0.5, 0.75, 1.0)] + [well(1.0, s) for s in (0.3, 0.7, 1.0)] +
+                    [well(b) for b in (0.9, 0.7, 0.45, 0.2, 0.0)], 110, False, (23, 62)),
+    "slide": ([slide()], 1000, False, (32, 46), {"chute": SLIDE_CHUTE}),
+    "pool": ([pool(t) for t in (0, 0.33, 0.66)], 300, True, (32, 16)),
+    "pool_ripple": ([pool(0, r) for r in (0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1.0)], 90, False, (32, 16)),
+    "droplet": ([droplet(k) for k in range(2)], 100, True, (1, 1)),
+    "dahlias": ([dahlias(sw) for sw in (0, 1, 0, -1)], 560, True, (22, 24), {"perches": DAHLIA_HEADS}),
+    "dahlias_bob": ([dahlias(sw) for sw in (2, -2, 1.5, -1.2, 0.6, 0)], 90, False, (22, 24), {"perches": DAHLIA_HEADS}),
+    **{f"dandelions_{season}": ([dandelions(season, sw) for sw in (0, 1, 0, -1)], 520, True, (20, 14),
+                                {"perches": DANDELION_HEADS})
+       for season in ("spring", "summer")},
+    "dandelions_spring_bare": ([dandelions("spring", sw, bare=True) for sw in (0, 1, 0, -1)], 520, True, (20, 14)),
+    "dandelions_summer_bob": ([dandelions("summer", sw) for sw in (2, -2, 1.5, -1, 0.5, 0)], 90, False, (20, 14),
+                              {"perches": DANDELION_HEADS}),
+    "fluff": ([fluff(k) for k in range(4)], 160, True, (2, 2)),
+    "cattail_fluff": ([fluff(k, "log_end") for k in range(4)], 160, True, (2, 2)),
+    **{f"cattails_{s}": ([cattails(s, sw) for sw in (0, 1, 2, 1, 0, -1, -2, -1)], 300, True, (25, 58)) for s in range(5)},
+    "cattails_burst": ([cattails(3, 0, b) for b in (0.2, 0.5, 0.8, 1.0)] + [cattails(0, 0)], 110, False, (25, 58)),
+    **{f"tomatoes_{s}": ([tomatoes(s, sw) for sw in (0, 1, 0, -1)], 500, True, (36, 42)) for s in range(5)},
+    **{f"radishes_{s}": ([radishes(s, sw) for sw in (0, 1, 0, -1)], 520, True, (29, 15)) for s in range(5)},
+    **{f"lettuce_{s}": ([lettuce(s, sw) for sw in (0, 1, 0, -1)], 560, True, (29, 15)) for s in range(5)},
+    "tomato": ([tomato(k) for k in range(4)], 110, True, (4, 7)),
+    "radish": ([radish(k) for k in range(4)], 110, True, (5, 8)),
+    "lettuce_head": ([lettuce_head(k) for k in range(4)], 140, True, (5, 9)),
+    "leaf_bit": ([chip("lettuce", s, 1.0) for s in range(4)], 90, True, (3, 3)),
+    **{f"melon_{s}_{k}_{shape}": ([melon(s, sw, g, shape) for sw in (0, 1, 0, -1)], 700, True, (20, 30))
+       for s in range(5) for k, g in PUMPKIN_SIZES.items() for shape in MELON_SHAPES},
+    **{f"melon_split_{k}_{shape}": ([melon_split(g, shape, t) for t in (0.1, 0.25, 0.4, 0.6, 0.75, 0.9, 1.0)], 140,
+                                    False, (20, 30))
+       for k, g in PUMPKIN_SIZES.items() for shape in MELON_SHAPES},
     **{f"butterfly_{kind}": ([butterfly(t, kind) for t in (0.0, 0.25, 0.5, 0.75)], 70, True, (7, 7))
        for kind in ("white", "sulphur", "azure")},
     **{f"butterfly_{kind}_rest": ([butterfly(kind=kind, span=sp) for sp in (1.0, 0.8, 0.45, 0.3, 0.45, 0.8)], 260,

@@ -17,6 +17,8 @@ FRAME_MS = 33
 TASKBAR_SCRIPT = Path(__file__).resolve().parent / "taskbar_buttons.ps1"
 TASKBAR_REFRESH_MS = 3 * 60 * 1000
 DRAG_START = 6  # pixels the mouse must move before a press becomes a drag
+PLACED_ITEMS = ("tree", "birch", "prop", "corn", "crop", "den", "climb")  # dragged along, and the spot remembered
+DRAGGED_ALONG = PLACED_ITEMS + ("pumpkin", "melon")                     # slid along the ground when dragged
 
 
 class Frames:
@@ -305,6 +307,8 @@ class Stage:
             self._handle_screen_requests()
         if self.dragging is not None and self.dragging.kind == "fox" and cursor[0] > -9999:
             self.dragging.x, self.dragging.y = cursor[0], cursor[1] + 22 * self.world.scale
+        elif self.dragging is not None and getattr(self.dragging, "held", False) and cursor[0] > -9999:
+            self.dragging.x, self.dragging.y = cursor  # a corn cob in your hand
         if self.world.dirty:
             self.world.dirty = False
             save.store(self.settings)
@@ -326,9 +330,9 @@ class Stage:
             thing, (sx, sy), _ = self.press
             if abs(x - sx) + abs(y - sy) > DRAG_START:
                 self.dragging = thing
-                if thing.kind == "fox":
+                if thing.kind == "fox" or getattr(thing, "is_cob", False):
                     thing.pick_up()
-        if self.dragging is not None and self.dragging.kind in ("tree", "pumpkin", "prop", "corn", "den", "climb"):
+        if self.dragging is not None and self.dragging.kind in DRAGGED_ALONG:
             thing, (sx, _), start_x = self.press
             thing.x = max(40.0, min(self.world.width - 40.0, start_x + x - sx))
         elif self.dragging is None and not buttons:
@@ -340,14 +344,14 @@ class Stage:
 
     def released(self):
         if self.dragging is not None:
-            if self.dragging.kind == "fox":
+            if self.dragging.kind == "fox" or getattr(self.dragging, "is_cob", False):
                 self.dragging.drop()
-            elif self.dragging.kind in ("tree", "prop", "corn", "den", "climb"):
+            elif self.dragging.kind in PLACED_ITEMS:
                 self.world.keep_off_seams(self.dragging)  # dropped across two monitors: onto one of them
                 self.settings["items"][self.dragging.variant]["x"] = round(self.dragging.x)
                 save.store(self.settings)
                 self.world.dropped(self.dragging)
-            elif self.dragging.kind == "pumpkin" and self.dragging.record is not None:
+            elif self.dragging.kind in ("pumpkin", "melon") and self.dragging.record is not None:
                 self.world.keep_off_seams(self.dragging)
                 self.dragging.record["x"] = round(self.dragging.x)
                 save.store(self.settings)
@@ -549,6 +553,10 @@ class ToyBox:
             m.addAction("Plant new pumpkins", self._replant)
         if self.world.of("corn"):
             m.addAction("Plant new corn", self._replant_corn)
+        if self.world.of("melon"):
+            m.addAction("Plant new watermelons", self._replant_melons)
+        if self.world.of("crop"):
+            m.addAction("Replant the garden", self._replant_crops)
         if self.world.taskbar_spots:
             m.addAction("Dig up a taskbar treasure", self._dig)
         m.addAction("Zoomies!", self._zoomies)
@@ -636,6 +644,15 @@ class ToyBox:
 
     def _replant_corn(self):
         self.world.plant_corn(replant=True)
+        save.store(self.settings)
+
+    def _replant_melons(self):
+        self.world.grow_melons(replant=True)
+        save.store(self.settings)
+
+    def _replant_crops(self):
+        for crop in list(self.world.of("crop")):
+            self.world.plant_crop(crop.variant, replant=True)
         save.store(self.settings)
 
     def _set_snow(self, on):

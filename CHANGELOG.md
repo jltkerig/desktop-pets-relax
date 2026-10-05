@@ -3,6 +3,14 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.14.0
+
+- **Tidied the code into small files by subject**, so it's quicker to find your way round and change things
+  (nothing you'd notice in the app works differently): the world (`pet/world/`), the things on the desktop
+  (`pet/items/`), the visitors (`pet/visitors/`), the windows and tray (`pet/view/`), the art
+  (`art/world_art/`, one file per theme) and the tests (one file per topic). `CLAUDE.md` has a map of where
+  everything is. Every sprite still comes out exactly the same.
+
 ## 1.13.0
 
 - **The sun by day and the moon by night**, behind all your windows: it rises on the left, arcs across the

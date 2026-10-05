@@ -108,18 +108,20 @@ Pixel Fox.exe      double-click to start (runs start.ps1; source in launcher/)
 Pixel Fox.scr      the screen saver (runs pixelfox.py --scr; pet/saver.py draws it)
 pixelfox.py        start here
 start.ps1          checks for updates (update.ps1), installs what's needed, starts it
-pet/world.py       everything on the desktop, what appears when, how things meet
+pet/world/         everything on the desktop and how it behaves (no Qt): core, garden, visits, foxplay,
+                   friends, mischief, outdoors
 pet/fox.py         a fox's moods (playful, bored, sleepy; no hunger) and how it picks what to do
-pet/items.py       the oak (all four seasons), falling leaves, branches, snow, acorns, pumpkins, the scarecrow's hat
-pet/visitors.py    the squirrel, blue jay, woolly bear, geese, frog, turkeys, crows, butterflies, the owl...
+pet/items/         things on the desktop: base bits, garden, trees, yard, toys, sky
+pet/visitors/      creatures that come and go: autumn, crows, bugs, spring, night
+pet/view/          the windows and tray: frames, windows, stage, toybox, discord_pics
 pet/seasons.py     which season it is and what belongs to it
-pet/view.py        the see-through window, the mouse, the tray menu
-pet/desktop_icons.py  the desktop's folder icons: where they are, and moving them (Windows)
 pet/sky.py         where the sun and moon are (and the moon's phase)
 pet/weather.py     is it raining or snowing where you are? (Open-Meteo, every half hour, in the background)
+pet/desktop_icons.py  the desktop's folder icons: where they are, and moving them (Windows)
 pet/save.py        user-data/world.json: what's out and where
-art/make_art.py    draws every sprite into art/sprites/ (python art/make_art.py --preview to see them all)
-tests/             python -m unittest discover -s tests
+art/world_art/     draws everything that isn't a fox, one file per theme; art/fox_art.py draws the foxes
+art/make_art.py    writes every sprite into art/sprites/ (python art/make_art.py --preview to see them all)
+tests/             python -m unittest discover -s tests (one file per topic; helpers.py is the shared set-up)
 CHANGELOG.md       what changed in each version (the version is in pet/__init__.py)
 ```
 

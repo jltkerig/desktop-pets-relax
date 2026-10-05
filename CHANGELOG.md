@@ -3,6 +3,16 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.11.4
+
+- **Fixed: a box left over Discord.** The patch that hides the gap where a message was "stolen" went up as soon
+  as a fox set off to steal it, so if the fox got distracted on the way, a plain box sat over the message for
+  over a minute with nothing taken. Now the patch only appears once the message is actually pulled out, and if
+  no fox has come for it within 20 seconds the theft is called off. The patch's colour is taken from Discord's
+  background all round the message (if there isn't a plain background there, nothing is stolen), Discord's
+  layout is found correctly with display scaling above 100%, and the theft is called off if another window has
+  moved in front of Discord. **Click the gap** and the message flies straight back.
+
 ## 1.11.3
 
 - **Butterflies fly side-on** too: a slim body held level and big wings clapping together over the back, then

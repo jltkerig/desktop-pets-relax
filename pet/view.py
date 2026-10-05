@@ -44,6 +44,27 @@ class Frames:
         return frames[min(frame, len(frames) - 1)]
 
 
+def background_colour(image):
+    """The plain colour all round the edge of a picture (Discord's background behind a message), or None if
+    the edges aren't mostly one colour (or the picture is empty)."""
+    if image.isNull() or image.width() < 8 or image.height() < 4:
+        return None
+    w, h = image.width(), image.height()
+    edge = [(x, y) for x in range(0, w, 3) for y in (0, 1, h - 2, h - 1)] + \
+           [(x, y) for y in range(0, h, 2) for x in (0, 1, 2, w - 3, w - 2, w - 1)]
+    counts = {}
+    for x, y in edge:
+        rgb = image.pixelColor(x, y).rgb() & 0xFFFFFF
+        counts[rgb] = counts.get(rgb, 0) + 1
+    rgb, n = max(counts.items(), key=lambda kv: kv[1])
+    if n < len(edge) * 0.6:
+        return None
+    if rgb == 0 and n == len(edge) and all(image.pixelColor(x, y).rgb() & 0xFFFFFF == 0
+                                           for x in range(0, w, 4) for y in range(0, h, 4)):
+        return None  # all black: the screen couldn't be copied
+    return QColor(rgb >> 16 & 255, rgb >> 8 & 255, rgb & 255)
+
+
 class Stage:
     """Runs the pets across every monitor: one see-through window per monitor, all showing slices of the
     same world. Notices monitors being plugged in, unplugged or rearranged, and rebuilds."""
@@ -121,12 +142,13 @@ class Stage:
             return
         hwnd, (left, top, right, bottom) = found
         ratio = QApplication.primaryScreen().devicePixelRatio()
-        # the chat column: past the server and channel lists, short of the member list and the typing box
-        x0, x1 = left + 340, min(right - 260, left + 340 + 520)
-        if x1 - x0 < 200:
+        # the chat column: past the server and channel lists, short of the member list and the typing box.
+        # (Discord's layout grows with the display scaling, and these are physical pixels, hence * ratio.)
+        x0, x1 = left + 340 * ratio, min(right - 260 * ratio, left + (340 + 520) * ratio)
+        if x1 - x0 < 200 * ratio:
             return
         for lift in (150, 210, 270, 330, 390):
-            band = QRect(int(x0), int(bottom - lift - 46), int(x1 - x0), 46)
+            band = QRect(int(x0), int(bottom - (lift + 46) * ratio), int(x1 - x0), int(46 * ratio))
             corners = (band.topLeft(), band.topRight(), band.bottomLeft(), band.bottomRight(), band.center())
             if not all(discord.shows_at(hwnd, p.x(), p.y()) for p in corners):
                 continue  # something covers this part of Discord
@@ -134,7 +156,9 @@ class Stage:
             image = QApplication.primaryScreen().grabWindow(0, logical.x(), logical.y(), logical.width(), logical.height()).toImage()
             if image.isNull():
                 continue
-            bg = image.pixelColor(2, image.height() // 2)
+            bg = background_colour(image)
+            if bg is None:
+                continue  # not a plain background here (a picture, an embed...): leave it alone
             busy = sum(1 for y in range(0, image.height(), 3) for x in range(0, image.width(), 3)
                        if abs(image.pixelColor(x, y).lightness() - bg.lightness()) > 40)
             if busy > 25:  # some text here: a message
@@ -162,9 +186,17 @@ class Stage:
         if not discord.still_there(hwnd, bounds):
             self.world.cancel_message(key)
             return
+        corners = (band.topLeft(), band.topRight(), band.bottomLeft(), band.bottomRight(), band.center())
+        ratio = QApplication.primaryScreen().devicePixelRatio()
+        if not all(discord.shows_at(hwnd, p.x() * ratio, p.y() * ratio) for p in corners):
+            self.world.cancel_message(key)  # something's in front of it now
+            return
         picture = QApplication.primaryScreen().grabWindow(0, band.x(), band.y(), band.width(), band.height())
         image = picture.toImage()
-        cover = image.pixelColor(2, image.height() // 2)  # Discord's background colour, to hide the gap
+        cover = background_colour(image)  # Discord's background colour, to hide the gap
+        if image.isNull() or cover is None:
+            self.world.cancel_message(key)  # couldn't see it properly: better not to steal anything
+            return
         width = min(picture.width(), 150 * self.world.scale)
         small = picture.scaledToWidth(int(width), Qt.SmoothTransformation)
         self.world.images[key] = small
@@ -480,7 +512,10 @@ class Desktop(QWidget):
         painter.fillRect(event.rect(), Qt.transparent)
         painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
         view = self.rect()
-        for band, colour, _, _ in self.stage.covers.values():  # gaps where messages were "stolen" from
+        out = {m.key for m in self.world.of("message") if m.state != "home"}
+        for key, (band, colour, _, _) in self.stage.covers.items():  # gaps where messages were "stolen" from
+            if key not in out:
+                continue  # not pulled out yet: nothing to hide
             local = QRect(self.mapFromGlobal(band.topLeft()), band.size())
             if local.intersects(view):
                 painter.fillRect(local, colour)
@@ -505,6 +540,11 @@ class Desktop(QWidget):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
+            where = self.mapToGlobal(event.position().toPoint())
+            for key, (band, _, _, _) in list(self.stage.covers.items()):
+                if band.contains(where):
+                    self.world.send_message_home(key)  # clicked the gap: the message flies back
+                    return
             self.stage.pressed(*self.to_world(event.position().x(), event.position().y()))
 
     def mouseMoveEvent(self, event):

@@ -1353,7 +1353,7 @@ class Message(Thing):
         self.carried_by = None
         self.ground_time = 0.0
         self.away = 0.0            # seconds since it was taken
-        self.limit = 70.0          # it always goes home by itself after this long (shorter for a quick theft)
+        self.limit = 60.0          # it always goes home by itself after this long (shorter for a quick theft)
         self.alpha = 0.0           # invisible until it's actually pulled out
 
     def rect(self):
@@ -1378,6 +1378,9 @@ class Message(Thing):
     def update(self, dt):
         w = self.world
         self.away += dt
+        if self.state == "home" and self.away > 20:
+            w.message_home(self)  # the fox never came for it (it got distracted): nothing was taken after all
+            return
         if self.away > self.limit and self.state != "returning":
             # whatever the fox got distracted by, the message goes back in the end
             if self.carried_by is not None and self.carried_by.carrying is self:

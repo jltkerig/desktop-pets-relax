@@ -813,6 +813,14 @@ class World:
             if fox.carrying is msg:
                 fox.carrying = None
 
+    def send_message_home(self, key):
+        """You clicked the gap: the message flies straight back."""
+        for msg in self.of("message"):
+            if msg.key == key and msg.state != "home":
+                if msg.carried_by is not None and getattr(msg.carried_by, "carrying", None) is msg:
+                    msg.carried_by.carrying = None
+                msg.state, msg.carried_by, msg.alpha = "returning", None, 1.0
+
     def cancel_message(self, key):
         """Something changed on screen (the window moved, say): the stolen picture just vanishes."""
         for msg in self.of("message"):

@@ -697,6 +697,47 @@ class DiscordMischief(unittest.TestCase):
         world.settings["mischief"]["discord"] = False
         self.assertFalse(world.steal_message(world.of("fox")[0]))
 
+    def test_a_distracted_fox_means_nothing_is_taken(self):
+        self.world.steal_message(self.fox)
+        self.world.screen_requests.clear()
+        self.fox.do(Step("idle", 60))  # something else caught its eye before it got there
+        run(self.world, self.clock, 25)
+        self.assertFalse(self.world.of("message"))
+        self.assertIn(("restore", "message1"), self.world.screen_requests)  # no gap left behind
+
+    def test_clicking_the_gap_sends_the_message_home(self):
+        self.world.steal_message(self.fox)
+        msg = self.world.of("message")[0]
+        for _ in range(30 * 30):
+            run(self.world, self.clock, 1 / 30)
+            if msg.state == "carried":
+                break
+        self.assertEqual(msg.state, "carried")
+        self.world.send_message_home("message1")
+        self.assertEqual(msg.state, "returning")
+        self.assertIsNone(self.fox.carrying)
+        run(self.world, self.clock, 8)
+        self.assertTrue(msg.gone)
+
+    def test_the_cover_colour_is_discords_background(self):
+        try:
+            from PySide6.QtGui import QColor, QImage
+            from pet.view import background_colour
+        except ImportError:
+            self.skipTest("needs PySide6")
+        image = QImage(200, 40, QImage.Format_RGB32)
+        image.fill(QColor(49, 51, 56))
+        for x in range(20, 120):  # some text in the middle
+            image.setPixelColor(x, 20, QColor(220, 220, 220))
+        self.assertEqual(background_colour(image).getRgb()[:3], (49, 51, 56))
+        image.fill(QColor(0, 0, 0))
+        self.assertIsNone(background_colour(image))  # an all-black copy: the screen couldn't be read
+        busy = QImage(200, 40, QImage.Format_RGB32)
+        for x in range(200):
+            for y in range(40):
+                busy.setPixelColor(x, y, QColor((x * 7) % 256, (y * 13) % 256, (x + y) % 256))
+        self.assertIsNone(background_colour(busy))  # a picture, not a plain background
+
     def test_if_the_window_changes_the_message_just_vanishes(self):
         self.world.steal_message(self.fox)
         self.world.cancel_message("message1")

@@ -3,6 +3,11 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.17.1
+
+- **Fixed: updates could get stuck for good** after git crashed once and left `.git\index.lock` behind (every
+  update after that failed). The updater now clears a leftover lock, when no git is running, before updating.
+
 ## 1.17.0
 
 - **The version is in the tray menu** (at the top, "Pixel Fox 1.17.0") and in the Toy Box window's title. It

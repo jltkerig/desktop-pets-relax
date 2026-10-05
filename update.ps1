@@ -46,6 +46,12 @@ function Update-PixelFox([string]$ProjectPath) {
         }
 
         if ((Test-Path (Join-Path $ProjectPath ".git")) -and (Get-Command git -ErrorAction SilentlyContinue)) {
+            # a git that crashed once leaves .git\index.lock behind, and every pull after fails: if no git is
+            # running now, that lock is left over, so clear it
+            $lock = Join-Path $ProjectPath ".git\index.lock"
+            if ((Test-Path $lock) -and -not (Get-Process git -ErrorAction SilentlyContinue)) {
+                Remove-Item $lock -Force -ErrorAction SilentlyContinue
+            }
             & git -C $ProjectPath pull --ff-only origin $PixelFoxBranch | Out-Host
             if ($LASTEXITCODE -ne 0) {
                 Write-Warning "Couldn't update with git (local changes?). Starting the version you have."

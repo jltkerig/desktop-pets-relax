@@ -1148,7 +1148,9 @@ class DenSnouts(unittest.TestCase):
         changed = [(x, y) for x in range(empty.width) for y in range(empty.height)
                    if empty.getpixel((x, y)) != full.getpixel((x, y))]
         self.assertTrue(changed)
-        self.assertTrue(all(y >= 40 for _, y in changed))  # low down in the doorway, chin on the ground
+        self.assertTrue(all(y >= 37 for _, y in changed))  # in the doorway, ears below the stone over it
+        self.assertTrue(any(y <= 40 for _, y in changed))  # ears standing up
+        self.assertTrue(any(y >= 52 for _, y in changed))  # chin on its paws on the ground
 
     def test_the_den_is_snowed_over_when_the_oak_is(self):
         world, clock = make_world("winter", orange=False, grey=False)

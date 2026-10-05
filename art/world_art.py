@@ -1015,12 +1015,12 @@ def den(occupants=(), snow=False):
                       (98, 50, 2.2), (14, 50, 2.0)):
         c.ellipse(cx, cy, r, r * 0.75, "earth", bias=0.25)
     # the doorway: a dark burrow, with packed earth worn smooth at the lip
-    c.ellipse(door_x, ground, 11, 14, "den_dark", clip=lambda x, y: y <= ground)
-    c.ellipse(door_x, ground - 3, 7, 9, "den_dark", bias=-0.4, clip=lambda x, y: y <= ground)
+    c.ellipse(door_x, ground, 13, 18, "den_dark", clip=lambda x, y: y <= ground)
+    c.ellipse(door_x, ground - 3, 9, 12, "den_dark", bias=-0.4, clip=lambda x, y: y <= ground)
     # stones: a flat lintel over the door, boulders either side, smaller rocks and pebbles round the base
-    _rock(c, rng, door_x, ground - 15, 13, 4.2, "stone", moss=True)
-    _rock(c, rng, door_x - 15, ground - 5, 6.5, 6, "stone")
-    _rock(c, rng, door_x + 15, ground - 4, 7, 5.5, "stone_dark", moss=True)
+    _rock(c, rng, door_x, ground - 20, 15, 4.2, "stone", moss=True)
+    _rock(c, rng, door_x - 17, ground - 5, 6.5, 6, "stone")
+    _rock(c, rng, door_x + 17, ground - 4, 7, 5.5, "stone_dark", moss=True)
     _rock(c, rng, 22, ground - 3, 6, 4, "stone_dark")
     _rock(c, rng, 92, ground - 3, 7, 4.5, "stone")
     _rock(c, rng, 38, ground - 22, 4.5, 3.2, "stone", moss=True)
@@ -1055,26 +1055,32 @@ def den(occupants=(), snow=False):
                 y = top - 1 + k
                 if 0 <= y < c.h:
                     c.mat[y][x], c.fixed[y][x] = "snow", (3 if k == 0 else 2 if k < depth - 1 else 1)
-    # sleeping foxes: their snouts and ears poking out of the doorway, chins on their paws, eyes shut
+    # sleeping foxes: heads resting on their paws in the doorway, ears up against the dark burrow, snouts out
     sleepers = occupants[:2]
     for i, palette in enumerate(sleepers):
-        side = (-1 if i == 0 else 1) if len(sleepers) > 1 else 1
-        hx, hy = door_x + side * (4 if len(sleepers) > 1 else 0) - side * 2, ground - 4
+        two = len(sleepers) > 1
+        side = (-1 if i == 0 else 1) if two else 1  # which way the snout points (out of the doorway)
+        hx, hy = door_x + (side * 5.0 if two else -2.0), ground - 6.0
         sub = Canvas(112, 56, palette)
-        sub.ellipse(hx + side * 4, ground - 0.8, 2.4, 1.1, "dark")                         # a front paw
-        for ex in (-2.6, 1.6):  # two tall, pointed ears, pale inside and dark at the tips
-            bx = hx + side * ex
-            sub.polygon([(bx - 1.8, hy - 1.5), (bx + 1.8, hy - 1.5), (bx + side * 0.8, hy - 8)], "fur", lum=0.55)
-            sub.pixel(bx + side * 0.3, hy - 3.5, "white", 1)
-            sub.pixel(bx + side * 0.8, hy - 7.5, "dark", 0)
-            sub.pixel(bx + side * 0.8, hy - 6.5, "dark", 1)
-        sub.ellipse(hx, hy, 4.2, 3.4, "fur")                                               # the top of the head
-        sub.capsule(hx + side * 1, hy + 0.5, hx + side * 6.5, hy + 1.8, 2.3, 1.2, "fur")   # the snout
-        sub.ellipse(hx + side * 3.5, hy + 2.6, 3.2, 1.1, "white", bias=-0.1)              # pale chin
-        for dx, dy in ((7, 1), (7, 2), (8, 1)):                                            # the nose tip
+        for px_ in (2.0, 5.5):  # front paws, side by side under the chin
+            sub.ellipse(hx + side * px_, ground - 1.0, 2.0, 1.2, "dark")
+        for ex in (-2.6, 2.2):  # two tall pointed ears standing up, pale inside, dark at the tips
+            bx = hx + ex
+            lean = 0.7 if ex > 0 else -0.7
+            sub.polygon([(bx - 2.0, hy - 2.0), (bx + 2.0, hy - 2.0), (bx + lean, hy - 10.0)], "fur", lum=0.55)
+            for k in (4, 5, 6):
+                sub.pixel(bx + lean * k / 10, hy - k, "white", 2 if k < 6 else 1)
+            sub.pixel(bx + lean, hy - 9.5, "dark", 0)
+            sub.pixel(bx + lean * 0.9, hy - 8.5, "dark", 1)
+        sub.ellipse(hx, hy, 4.6, 3.6, "fur")                                              # the head
+        sub.polygon([(hx + side * 1.5, hy - 1.2), (hx + side * 9.2, hy + 1.8), (hx + side * 9.2, hy + 3.4),
+                     (hx + side * 1.5, hy + 3.4)], "fur", lum=0.6)                         # the snout, tapering
+        sub.capsule(hx + side * 2.5, hy + 3.0, hx + side * 8.2, hy + 3.2, 0.9, 0.6, "white")  # pale under the muzzle
+        for dx, dy in ((9.4, 2.0), (9.4, 3.0), (10.2, 2.0), (10.2, 3.0)):                  # the black nose
             sub.pixel(hx + side * dx, hy + dy, "nose", 0)
-        for dx in (0.5, 1.5):  # a closed eye: a little dark line
-            sub.pixel(hx + side * dx, hy - 1, "dark", 0)
+        sub.pixel(hx + side * 9.4, hy + 2.0, "white", 2)  # a shine on the nose, so it shows against the dark
+        for dx, dy in ((0.6, -0.6), (1.6, -0.1), (2.6, -0.1), (3.4, -0.6)):  # a closed eye: a curved line
+            sub.pixel(hx + side * dx, hy + dy, "dark", 0)
         c.ramps = {**c.ramps, **{f"{palette}_{k}": v for k, v in sub.ramps.items()}}
         for y in range(56):
             for x in range(112):

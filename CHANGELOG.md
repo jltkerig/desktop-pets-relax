@@ -3,6 +3,13 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.11.6
+
+- **Foxes asleep in the den look like foxes:** bigger heads resting on their paws, tall pointed ears (pale
+  inside, dark tips) standing up against the dark burrow, closed eyes, and tapering snouts poking out with a
+  black nose (with a little shine so it shows against the dark). With two inside, they face opposite ways. The
+  doorway is a little taller and its stone a little higher to fit their ears.
+
 ## 1.11.5
 
 - **A stolen Discord message is just the words:** the fox carries only the text (name, time and message),

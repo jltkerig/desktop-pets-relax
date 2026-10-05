@@ -1279,6 +1279,7 @@ class Flutterby(Visitor):
             if self.fly_to(tx, ty + (0 if self.landing and abs(self.x - tx) < 20 * s else wobble * 0.3), dt,
                            speed=55) or (abs(self.x - tx) < 2 and abs(self.y - ty) < 4 * s):
                 if self.landing:
+                    self.x, self.y = tx, ty  # right on the flower
                     self.state, self.timer = "rest", 0.0
                     self.rest_for = rng.uniform(3, 8)
                     self.visits -= 1

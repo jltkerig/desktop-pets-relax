@@ -3,6 +3,11 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.14.1
+
+- Updating from a downloaded ZIP now removes the old single files left over from before 1.14.0 (copies made
+  with git already lose them when they update).
+
 ## 1.14.0
 
 - **Tidied the code into small files by subject**, so it's quicker to find your way round and change things

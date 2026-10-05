@@ -58,6 +58,11 @@ function Update-PixelFox([string]$ProjectPath) {
                 }
                 Get-ChildItem -Path $source.FullName -Force | Where-Object { $_.Name -ne "user-data" } |
                     Copy-Item -Destination $ProjectPath -Recurse -Force
+                # files from before 1.14.0, when these were split into folders: copying over leaves them behind
+                foreach ($old in "pet\world.py", "pet\items.py", "pet\visitors.py", "pet\view.py", "art\world_art.py",
+                                 "tests\test_pixelfox.py") {
+                    Remove-Item -Path (Join-Path $ProjectPath $old) -Force -ErrorAction SilentlyContinue
+                }
             } finally {
                 Remove-Item -Path $temp -Recurse -Force -ErrorAction SilentlyContinue
             }

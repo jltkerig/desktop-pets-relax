@@ -343,7 +343,7 @@ class Frog(Visitor):
 
 
 class TurkeyFlock:
-    """A flock of wild turkeys and their shared plan: dash to the next stopping place, stop there together to
+    """A flock of wild turkeys (mostly hens, and a tom or two) and their shared plan: dash to the next stopping place, stop there together to
     look around, peck and gobble, then dash on, and finally run off the far side of the screen."""
 
     def __init__(self, world, count):
@@ -358,6 +358,9 @@ class TurkeyFlock:
         self.state = "run"
         self.timer = 0.0
         self.stop_for = 0.0
+        # mostly hens, with a tom or two among them
+        toms = set(rng.sample(range(count), rng.randint(1, max(1, count // 3))))
+        self.hens = [i not in toms for i in range(count)]
         self.members = [Turkey(world, self, i) for i in range(count)]
 
     @property
@@ -401,6 +404,9 @@ class Turkey(Visitor):
         edge = -40.0 if flock.dir > 0 else world.width + 40.0
         super().__init__(world, edge - flock.dir * index * 34 * s, world.ground, "turkey_run")
         self.flock = flock
+        self.hen = flock.hens[index]
+        self.look = "turkey_hen" if self.hen else "turkey"
+        self.anim.play(f"{self.look}_run")
         self.facing = flock.dir
         self.offset = -flock.dir * (index * 30 + rng.uniform(-8, 8)) * s  # strung out behind the leader
         self.speed = rng.uniform(130, 170)
@@ -413,13 +419,18 @@ class Turkey(Visitor):
     def run(self):
         self.state = "run"
         self.answer_in = None
-        self.anim.play("turkey_run")
+        self.anim.play(f"{self.look}_run")
 
     def gobble(self, answering=False):
         w = self.world
-        self.anim.play("turkey_gobble")
-        self.act_left = 1.5
-        w.add(Bubble(w, self, "gobble_bubble", rise=40))
+        if self.hen:  # a hen doesn't gobble: she clucks
+            self.anim.play("turkey_hen_call")
+            self.act_left = 1.0
+            w.add(Bubble(w, self, "cluck_bubble", rise=36))
+        else:
+            self.anim.play("turkey_gobble")
+            self.act_left = 1.5
+            w.add(Bubble(w, self, "gobble_bubble", rise=40))
         if not answering:
             w.honk(self)  # the foxes notice, same as a goose's honk
             self.flock.answer(self)
@@ -436,7 +447,7 @@ class Turkey(Visitor):
                 else:
                     self.state, self.timer = "stopped", 0.0
                     self.act_left = rng.uniform(0.2, 0.8)
-                    self.anim.play("turkey_stand")
+                    self.anim.play(f"{self.look}_stand")
         elif self.state == "stopped":
             self.timer += dt
             if self.answer_in is not None:
@@ -450,15 +461,15 @@ class Turkey(Visitor):
                 return
             roll = rng.random()
             if roll < 0.45:  # look around: head up, glancing about, sometimes turning the other way
-                self.anim.play("turkey_look")
+                self.anim.play(f"{self.look}_look")
                 if rng.random() < 0.5:
                     self.facing = -self.facing
                 self.act_left = rng.uniform(1.3, 2.6)
             elif roll < 0.75:
-                self.anim.play("turkey_peck")
+                self.anim.play(f"{self.look}_peck")
                 self.act_left = rng.uniform(1.0, 2.5)
             elif roll < 0.87:
-                self.anim.play("turkey_stand")
+                self.anim.play(f"{self.look}_stand")
                 self.act_left = rng.uniform(0.8, 1.8)
             else:
                 self.gobble()

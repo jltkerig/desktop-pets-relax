@@ -1374,64 +1374,82 @@ COMMON.update({
     "turkey_head": ("#5a6e9a", "#7e96c4", "#a6bce0", "#cad8f0", "#2e3a56"),
     "wattle": ("#7a1414", "#b02020", "#d63a32", "#ee6a5a", "#3e0808"),
     "turkey_leg": ("#7a5e5a", "#a08480", "#c4a8a2", "#dccac4", "#3e2e2c"),
+    "turkey_hen": ("#3e2c1c", "#604630", "#866443", "#a8875e", "#1e140c"),
+    "turkey_hen_bar": ("#9a8460", "#bca47c", "#d6c09a", "#ecdcbc", "#5a4a30"),
+    "turkey_hen_head": ("#6a7280", "#8e98a8", "#b2bac6", "#d2d8e0", "#3a3e48"),
     "crow": ("#08080c", "#14141c", "#22222e", "#363a4e", "#020204"),
     "crow_sheen": ("#1a2238", "#283456", "#3a4a78", "#5468a0", "#0a0e1a"),
 })
 
 
-def turkey(pose="stand", t=0.0):
+def turkey(pose="stand", t=0.0, hen=False):
     """40 x 40 wild turkey facing right. pose: run, stand, look (head up, glancing back), gobble (tail
-    fanned, head thrust out, wattle shaking), peck (head down at the ground)."""
+    fanned, head thrust out, wattle shaking), peck (head down at the ground), call (a hen's cluck: head
+    forward, beak open). hen: a hen, smaller and plainer: lighter brown, a greyish feathered head, no red
+    wattle, no beard, and she doesn't fan her tail."""
     c = Canvas(40, 40)
     s = math.sin(t * 2 * math.pi)
     run = pose == "run"
     ground = 38
+    body, bar, head = ("turkey_hen", "turkey_hen_bar", "turkey_hen_head") if hen else \
+        ("turkey", "turkey_bar", "turkey_head")
+    small = 0.86 if hen else 1.0
     # legs: long strides when running, planted otherwise
     stride = s * 4 if run else 0.0
-    body_y = 22 - (abs(s) * 1.5 if run else 0.0)
+    body_y = (24 if hen else 22) - (abs(s) * 1.5 if run else 0.0)
     for lx, d in ((17, stride), (21, -stride)):
         c.capsule(lx, body_y + 5, lx + d, ground - 1, 0.7, 0.6, "turkey_leg")
         c.capsule(lx + d, ground, lx + d + 3, ground, 0.6, 0.5, "turkey_leg")
-    # the tail: a big barred fan when gobbling, otherwise folded down behind
-    if pose == "gobble":
+    # the tail: a big barred fan when a tom gobbles, otherwise folded down behind
+    if pose == "gobble" and not hen:
         fan = 0.7 + 0.3 * t
         for i in range(7):
             a = math.radians(-160 + i * 22 * fan)
             tip = (12 + math.cos(a) * 14, body_y - 2 + math.sin(a) * 14)
-            c.capsule(12, body_y, tip[0], tip[1], 1.6, 2.6, "turkey", 0.1)
-            c.ellipse(tip[0], tip[1], 2.2, 2.2, "turkey_bar", bias=0.1)
+            c.capsule(12, body_y, tip[0], tip[1], 1.6, 2.6, body, 0.1)
+            c.ellipse(tip[0], tip[1], 2.2, 2.2, bar, bias=0.1)
     else:
         droop = 3 if run else 6
-        c.capsule(12, body_y, 3, body_y + droop, 2.6, 2.0, "turkey", -0.2)
-        c.capsule(5, body_y + droop - 1, 2, body_y + droop + 1, 1.4, 1.2, "turkey_bar")
-    # body: round and bronze, with pale barring on the folded wing
+        c.capsule(12, body_y, 4 if hen else 3, body_y + droop, 2.6 * small, 2.0 * small, body, -0.2)
+        c.capsule(5, body_y + droop - 1, 2, body_y + droop + 1, 1.4, 1.2, bar)
+    # body: round, bronze for a tom and soft brown for a hen, with pale barring on the folded wing
     tilt = -18 if run else 0
-    c.ellipse(19, body_y, 10.0, 7.5, "turkey", angle=tilt)
-    c.ellipse(18, body_y - 1, 7.0, 4.5, "turkey", bias=-0.2, angle=tilt)
-    for bx in (13, 16, 19):
-        c.capsule(bx, body_y + 2, bx + 2, body_y + 3, 0.5, 0.5, "turkey_bar")
+    c.ellipse(19, body_y, 10.0 * small, 7.5 * small, body, angle=tilt)
+    c.ellipse(18, body_y - 1, 7.0 * small, 4.5 * small, body, bias=-0.2, angle=tilt)
+    for bx in ((13, 15, 17, 19, 21) if hen else (13, 16, 19)):
+        c.capsule(bx, body_y + 2, bx + (1.5 if hen else 2), body_y + 3, 0.5, 0.5, bar)
+    if hen:  # pale scalloping all over her back too
+        for bx, by in ((15, body_y - 3), (19, body_y - 4), (23, body_y - 2), (17, body_y)):
+            c.pixel(bx, by, bar, 2)
     # neck and head: where the head is depends on what it's doing
+    lift = 3 if hen else 0  # a hen stands a little lower
     if pose == "peck":
         hx, hy = 31 + s * 0.5, ground - 4 + abs(s) * 2
-    elif pose == "gobble":
+    elif pose in ("gobble", "call"):
         hx, hy = 32 + s * 0.8, body_y - 4
     elif pose == "look":
-        hx, hy = 27 - max(0.0, s) * 4, 7 + abs(s)  # head up high, turning back over its shoulder
+        hx, hy = 27 - max(0.0, s) * 4, 7 + abs(s) + lift  # head up high, turning back over its shoulder
     elif run:
         hx, hy = 33, body_y - 8
     else:
-        hx, hy = 28 + s * 0.5, 9
-    c.capsule(25, body_y - 3, hx - 1, hy + 2, 2.2, 1.2, "turkey_head", bias=-0.1)  # a bare, bluish neck
-    c.ellipse(hx, hy, 2.4, 2.2, "turkey_head")
-    wobble = s * 1.2 if pose == "gobble" else 0.0
-    c.capsule(hx + 0.5, hy + 1.5, hx + 0.5 + wobble, hy + 4.5, 1.0, 1.3, "wattle")  # the red wattle
-    c.capsule(hx + 1.5, hy - 1.2, hx + 3.2, hy + 1.8, 0.5, 0.5, "wattle")           # the snood over the beak
+        hx, hy = 28 + s * 0.5, 9 + lift
+    if hen:  # a feathered brown neck, only her face bare and greyish
+        c.capsule(24, body_y - 3, hx - 1, hy + 2, 2.8, 1.8, body, bias=-0.1)
+        c.ellipse(hx, hy, 2.2, 2.0, head)
+        c.capsule(hx - 1.5, hy - 1.4, hx + 0.6, hy - 1.7, 0.7, 0.5, body)  # a feathered brown cap
+    else:
+        c.capsule(25, body_y - 3, hx - 1, hy + 2, 2.2, 1.2, head, bias=-0.1)  # a bare, bluish neck
+        c.ellipse(hx, hy, 2.4, 2.2, head)
+    if not hen:
+        wobble = s * 1.2 if pose == "gobble" else 0.0
+        c.capsule(hx + 0.5, hy + 1.5, hx + 0.5 + wobble, hy + 4.5, 1.0, 1.3, "wattle")  # the red wattle
+        c.capsule(hx + 1.5, hy - 1.2, hx + 3.2, hy + 1.8, 0.5, 0.5, "wattle")           # the snood over the beak
     c.capsule(hx + 2, hy + 0.2, hx + 4, hy + 0.8, 0.6, 0.4, "beak")
-    if pose == "gobble" and t < 0.7:
+    if pose in ("gobble", "call") and t < 0.7:
         c.capsule(hx + 2, hy + 1.4, hx + 4, hy + 2.4, 0.5, 0.4, "beak")  # beak open
     c.pixel(hx + 0.5, hy - 0.8, "eye")
-    # the "beard" hanging from the chest
-    c.capsule(27, body_y - 1, 28, body_y + 4, 0.6, 0.4, "turkey", -0.3)
+    if not hen:  # the tom's "beard" hanging from his chest
+        c.capsule(27, body_y - 1, 28, body_y + 4, 0.6, 0.4, "turkey", -0.3)
     return c.to_image()
 
 
@@ -2756,6 +2774,12 @@ SPRITES = {
     "turkey_look": ([turkey("look", f) for f in (0.0, 0.25, 0.25, 0.0, 0.0)], 260, True, (20, 38)),
     "turkey_gobble": ([turkey("gobble", f) for f in (0.0, 0.25, 0.5, 0.75, 1.0, 1.0)], 110, False, (20, 38)),
     "turkey_peck": ([turkey("peck", i / 4) for i in range(4)], 120, True, (20, 38)),
+    "turkey_hen_run": ([turkey("run", i / 4, hen=True) for i in range(4)], 70, True, (20, 38)),
+    "turkey_hen_stand": ([turkey("stand", i / 4, hen=True) for i in range(2)], 600, True, (20, 38)),
+    "turkey_hen_look": ([turkey("look", f, hen=True) for f in (0.0, 0.25, 0.25, 0.0, 0.0)], 260, True, (20, 38)),
+    "turkey_hen_call": ([turkey("call", f, hen=True) for f in (0.0, 0.25, 0.5, 0.75, 1.0)], 110, False, (20, 38)),
+    "turkey_hen_peck": ([turkey("peck", i / 4, hen=True) for i in range(4)], 120, True, (20, 38)),
+    "cluck_bubble": ([word_bubble("CLUCK!")], 1000, False, (4, 13)),
     "gobble_bubble": ([word_bubble("GOBBLE!")], 1000, False, (4, 13)),
     "crow_fly": ([crow("fly", i / 4) for i in range(4)], 85, True, (12, 20)),
     "crow_carry": ([crow("fly", i / 4, acorn_in_beak=True) for i in range(4)], 85, True, (12, 20)),

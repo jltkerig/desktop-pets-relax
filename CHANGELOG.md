@@ -3,6 +3,12 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.11.1
+
+- **Turkey hens:** a flock is now mostly hens with a tom or two. Hens are smaller and plainer (soft brown with
+  pale barring, a feathered neck and a small greyish face, no red wattle or beard), don't fan their tails, and
+  cluck ("CLUCK!") instead of gobbling.
+
 ## 1.11.0
 
 - **Dug-up taskbar icons are bouncy balls:** pick one up with the mouse and throw it. It flies off as fast as

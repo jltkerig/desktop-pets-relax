@@ -808,6 +808,28 @@ class Turkeys(unittest.TestCase):
         self.assertTrue(gobbled)
         self.assertFalse(world.of("turkey"))
 
+    def test_a_flock_is_mostly_hens_with_a_tom_or_two(self):
+        for seed in range(12):
+            world, clock = make_world(orange=False, grey=False, seed=seed)
+            world.invite_visitor("turkeys")
+            turkeys = world.of("turkey")
+            hens = [t for t in turkeys if t.hen]
+            self.assertGreaterEqual(len(turkeys) - len(hens), 1)  # at least one tom
+            self.assertGreaterEqual(len(hens), len(turkeys) - len(turkeys) // 3)
+            self.assertTrue(all(t.anim.name.startswith("turkey_hen_") for t in hens))
+
+    def test_hens_cluck_and_toms_gobble(self):
+        world, clock = make_world(orange=False, grey=False)
+        world.invite_visitor("turkeys")
+        hen = next(t for t in world.of("turkey") if t.hen)
+        tom = next(t for t in world.of("turkey") if not t.hen)
+        hen.gobble(answering=True)
+        tom.gobble(answering=True)
+        bubbles = {b.goose: b.anim.name for b in world.of("bubble")}
+        self.assertEqual(bubbles[hen], "cluck_bubble")
+        self.assertEqual(bubbles[tom], "gobble_bubble")
+        self.assertEqual(hen.anim.name, "turkey_hen_call")
+
     def test_turkeys_are_an_autumn_visitor(self):
         self.assertIn("turkeys", seasons.VISITORS["autumn"])
         self.assertNotIn("turkeys", seasons.VISITORS["winter"])

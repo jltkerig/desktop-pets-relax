@@ -541,9 +541,12 @@ def crow_perches(world):
     return [p for p in spots if p.ok() and 20 < p.pos(world)[0] < world.width - 20]
 
 
+FAVOURITES = {"scarecrow": 6, "oak": 3}  # how much more a crow likes sitting there than anywhere else
+
+
 def favourite(perches, rng):
-    """Pick a perch, much preferring the scarecrow (crows love him)."""
-    weighted = [p for p in perches for _ in range(4 if getattr(p.holder, "variant", None) == "scarecrow" else 1)]
+    """Pick a perch, much preferring the scarecrow (crows love him), and the oak's branches after him."""
+    weighted = [p for p in perches for _ in range(FAVOURITES.get(getattr(p.holder, "variant", None), 1))]
     return rng.choice(weighted) if weighted else None
 
 

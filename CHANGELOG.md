@@ -3,6 +3,12 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.7.1
+
+- The tree stump is out all year round now, not just in winter (snowy on snowy winter days).
+- Crows still favour the scarecrow, with the oak's branches a close second (with more places to land, they'd
+  started to overlook both).
+
 ## 1.7.0
 
 - **More for the winterscape**, in the Toy Box for winter (each can be put out or away, and dragged about):

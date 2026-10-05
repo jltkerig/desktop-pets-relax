@@ -1213,13 +1213,15 @@ class WinterThings(unittest.TestCase):
     def thing(self, world, variant):
         return next(t for t in world.things if getattr(t, "variant", None) == variant)
 
-    def test_the_sled_stump_and_christmas_tree_come_out_in_winter_only(self):
+    def test_the_sled_and_christmas_tree_come_out_in_winter_only_the_stump_all_year(self):
         world, _ = self.winter()
         for name in ("sled", "stump", "xmas_tree"):
             self.assertTrue(any(getattr(t, "variant", None) == name for t in world.things), name)
-        world, _ = make_world("summer", orange=False, grey=False)
-        for name in ("sled", "stump", "xmas_tree"):
-            self.assertFalse(any(getattr(t, "variant", None) == name for t in world.things), name)
+        for season in ("spring", "summer", "autumn"):
+            world, _ = make_world(season, orange=False, grey=False)
+            names = {getattr(t, "variant", None) for t in world.things}
+            self.assertIn("stump", names, season)
+            self.assertFalse(names & {"sled", "xmas_tree"}, season)
 
     def test_they_get_a_coat_of_snow_on_snowy_days(self):
         world, clock = self.winter(snow=True)

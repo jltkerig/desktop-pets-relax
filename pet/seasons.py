@@ -16,7 +16,7 @@ ITEMS = {
     "barrels": {"label": "Oak barrels", "seasons": ("winter", "spring", "summer", "autumn")},
     "haystack": {"label": "Haystack", "seasons": ("summer", "autumn")},
     "sled": {"label": "Sled", "seasons": ("winter",)},
-    "stump": {"label": "Tree stump", "seasons": ("winter",)},
+    "stump": {"label": "Tree stump", "seasons": ("winter", "spring", "summer", "autumn")},
     "xmas_tree": {"label": "Christmas tree", "seasons": ("winter",)},
 }
 

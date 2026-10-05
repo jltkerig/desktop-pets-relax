@@ -3,6 +3,18 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.12.0
+
+- **Decorate with pumpkins (autumn):** **Add a pumpkin** and **Add a jack-o'-lantern** in the tray menu drop a
+  single ripe pumpkin in. Pick one up and put it anywhere: let go over the haystack (any bale), the barrels, the
+  stump or the woodstack and it sits on top (and moves with it if you drag that); anywhere else, like under a
+  tree, it lands on the ground. Lift a ripe pumpkin up out of the patch and it's picked to decorate with (a
+  new sprout comes up in its place; sliding it sideways still just moves it along). They're saved, the hoe
+  carves them, jack-o'-lanterns glow at night, and **Clear away the decorating pumpkins** puts them all away.
+- **Corn cobs (and apples, tomatoes, lettuces) can be thrown:** fling one and it flies off as fast as you threw
+  it and bounces; a fox races over and bats it about. They're easier to grab (a little margin round them), and
+  you can snatch one even when a squirrel is heading for it (the squirrel gives up), or a fox is about to eat it.
+
 ## 1.11.6
 
 - **Foxes asleep in the den look like foxes:** bigger heads resting on their paws, tall pointed ears (pale

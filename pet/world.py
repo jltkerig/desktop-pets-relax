@@ -6,7 +6,7 @@ import random
 from pet import daylight, seasons, sprites
 from pet.fox import TROT, WALK, ZOOM, Fox, Step
 from pet.items import (Acorn, Birch, Climbable, Corn, CornCob, Crop, Den, Firefly, Glow, Kernel, Leaf, Melon,
-                       Message, Prop, Pumpkin, Treasure, Tree)
+                       Message, Prop, Pumpkin, Treasure, Tree, DecoPumpkin)
 from pet.visitors import (Beetle, Cicada, Flutterby, Goose, Jay, Owl, Squirrel, Woolly, crow_party, migrating_v,
                           songbirds, turkey_flock)
 
@@ -209,6 +209,7 @@ class World:
                         x = (max(xs) + 70 * self.scale) if xs else self.width * 0.32
                     x = max(40.0, min(self.width - 40.0, x))
                 self.add(Prop(self, x, name))
+        self.put_out_decos()
         if "oak" in wanted_items and not self.of("tree"):
             x = self.settings["items"]["oak"].get("x")
             x = x if isinstance(x, (int, float)) and 0 < x < self.width else self.width * 0.72
@@ -235,6 +236,97 @@ class World:
                 for fox in have:
                     fox.gone = True
         self.things = [t for t in self.things if not t.gone]
+
+    # -- pumpkins put out to decorate ----------------------------------------------------------------------
+
+    def decos_in_season(self):
+        return "pumpkins" in seasons.items_for(self.season)
+
+    def put_out_decos(self):
+        """The decorating pumpkins you've put out, in their places (only in pumpkin season)."""
+        if not self.decos_in_season():
+            for d in self.of("deco"):
+                d.gone = True
+            return
+        if self.of("deco"):
+            return
+        s = self.scale
+        for record in self.settings.get("decorations", []):
+            holder = next((c for c in self.of("climb") if c.variant == record.get("on")), None)
+            level = record.get("level")
+            x = float(record.get("x", self.width / 2))
+            deco = self.add(DecoPumpkin(self, x, self.ground, record.get("size"), record.get("shape"),
+                                        record.get("jack")))
+            if holder is not None and isinstance(level, int) and 0 <= level < len(holder.levels):
+                deco.holder, deco.level, deco.dx = holder, level, float(record.get("dx", 0.0))
+                deco.x = holder.x + deco.dx * s
+                deco.y = deco.floor()
+            deco.x = max(10.0, min(self.width - 10.0, deco.x))
+
+    def add_deco(self, jack=False, x=None):
+        """A single ripe pumpkin (or a jack-o'-lantern) to decorate with: it drops in onto the ground."""
+        if not self.decos_in_season():
+            return None
+        x = x if x is not None else self.width * self.rng.uniform(0.3, 0.7)
+        deco = self.add(DecoPumpkin(self, x, self.ground - 120 * self.scale, self.rng.choice(("s", "m", "l")),
+                                    self.rng.choice(Pumpkin.SHAPES), jack))
+        self.save_decos()
+        return deco
+
+    def surface_under(self, x, y):
+        """The first thing to sit on below (x, y), if it's let go there: (climbable, level) or None."""
+        s = self.scale
+        best = None
+        for c in self.of("climb"):
+            if not c.available or c.variant == "slide":
+                continue
+            for i, (dx, h) in enumerate(c.levels):
+                top = c.y - h * s
+                if abs(x - (c.x + dx * s)) <= 14 * s and top >= y - 8 * s and (best is None or top < best[2]):
+                    best = (c, i, top)
+        return best[:2] if best else None
+
+    def place_deco(self, deco):
+        """You let go of a decorating pumpkin: onto whatever's below it, or down to the ground."""
+        s = self.scale
+        found = self.surface_under(deco.x, deco.y)
+        if found is not None:
+            holder, level = found
+            spot = holder.x + holder.levels[level][0] * s
+            deco.x = max(spot - 10 * s, min(spot + 10 * s, deco.x))  # stay on top, not hanging off the edge
+            deco.holder, deco.level, deco.dx = holder, level, (deco.x - holder.x) / s
+        else:
+            deco.holder = deco.level = None
+        deco.x = max(10.0, min(self.width - 10.0, deco.x))
+        self.save_decos()
+
+    def pick_pumpkin(self, pumpkin):
+        """A ripe pumpkin lifted out of the patch: it's picked (to decorate with), and a new sprout comes up."""
+        if pumpkin.kind != "pumpkin" or pumpkin.stage != Pumpkin.STAGES - 1 or pumpkin.wilting or pumpkin.bursting \
+                or not self.decos_in_season():
+            return None
+        deco = self.add(DecoPumpkin(self, pumpkin.x, pumpkin.y, pumpkin.size, pumpkin.shape, pumpkin.jack))
+        pumpkin._replant()
+        self.save_decos()
+        return deco
+
+    def save_decos(self):
+        records = []
+        for d in self.of("deco"):
+            if d.gone:
+                continue
+            r = {"x": round(d.x), "size": d.size, "shape": d.shape, "jack": d.jack}
+            if d.holder is not None:
+                r.update(on=d.holder.variant, level=d.level, dx=round(d.dx, 1))
+            records.append(r)
+        self.settings["decorations"] = records
+        self.dirty = True
+
+    def clear_decos(self):
+        for d in self.of("deco"):
+            d.gone = True
+        self.settings["decorations"] = []
+        self.dirty = True
 
     def plant_corn(self, replant=False):
         """Put out the corn field: the saved one, still growing, or a freshly planted row."""
@@ -566,7 +658,8 @@ class World:
     def dropped(self, thing):
         """Something you dragged was let go. The hoe, let go on a ripe pumpkin, carves it a face."""
         if thing.kind == "prop" and thing.variant == "hoe":
-            near = [p for p in self.of("pumpkin") if abs(p.x - thing.x) < 30 * self.scale]
+            near = [p for p in self.of("pumpkin") + self.of("deco") if abs(p.x - thing.x) < 30 * self.scale
+                    and (p.kind == "pumpkin" or p.y >= self.ground - 2)]  # (not one up on a haystack)
             pumpkin = min(near, key=lambda p: abs(p.x - thing.x)) if near else None
             if pumpkin is not None:
                 thing.react()  # a thunk, carved or not
@@ -897,6 +990,25 @@ class World:
                Step("walk", to_x=away, speed=WALK * 1.6, then=drop), Step("happy", 1.0), Step("playbow", 1.0))
         return True
 
+    def cob_thrown(self, cob):
+        """You threw a corn cob (or an apple...): the nearest fox that's free races after it and bats it about."""
+        free = [f for f in self.of("fox") if not f.asleep and not f.held and not f.vy and f.carrying is None
+                and f.alpha > 0 and not f.up_high and f.dragging_folder is None]
+        if not free:
+            return None
+        fox = min(free, key=lambda f: abs(f.x - cob.x))
+        fox.busy_with = None
+
+        def bat():
+            if not cob.gone and not cob.held and abs(cob.x - fox.x) < 50 * self.scale:
+                cob.on_ground, cob.bounced = False, True
+                cob.vx, cob.vy = fox.facing * self.rng.uniform(70, 130) * self.scale, -90 * self.scale
+
+        fox.do(Step("tilt", 0.25, face=cob.x), Step("run", follow=cob, speed=ZOOM * 0.75),
+               Step("pounce", 0.5, face=cob.x), Step("bat", face=cob.x, then=bat), Step("happy", 1.0),
+               Step("playbow", 1.0))
+        return fox
+
     def ball_thrown(self, ball):
         """You threw a dug-up icon: the nearest fox that's awake and free races after it to fetch it."""
         free = [f for f in self.of("fox") if not f.asleep and not f.held and not f.vy and f.carrying is None
@@ -999,8 +1111,8 @@ class World:
         radish = food.produce == "radish"
 
         def eat():
-            if food.gone:
-                return
+            if food.gone or getattr(food, "held", False) or abs(food.x - fox.x) > 40 * s:
+                return  # you took it away (or threw it): never mind
             for _ in range(4):
                 self.add(Kernel(self, food.x + self.rng.uniform(-3, 3) * s, food.y - 3 * s, food.bit))
             food.gone = True
@@ -1018,7 +1130,7 @@ class World:
         """What glows at night: jack-o'-lanterns and the Christmas tree. (thing, glow sprite, how high its middle is:
         None for halfway up)"""
         lit = []
-        for p in self.of("pumpkin"):
+        for p in self.of("pumpkin") + self.of("deco"):
             if p.anim.name.endswith("_jack"):
                 lit.append((p, "glow_warm_big" if p.huge else "glow_warm", None))
         for p in self.of("prop"):

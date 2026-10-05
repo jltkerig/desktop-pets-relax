@@ -439,6 +439,79 @@ class Pumpkin(Thing):
         super().update(dt)
 
 
+class DecoPumpkin(Thing):
+    """A single ripe pumpkin (or jack-o'-lantern) put out to decorate: pick it up and put it anywhere. Let go
+    over a haystack, the barrels, the stump or the woodstack and it sits on top (and moves with it); anywhere
+    else it drops to the ground. Kept in settings["decorations"]."""
+    kind = "deco"
+    draggable = True
+    is_deco = True
+    z = 9  # in front of what it sits on
+
+    def __init__(self, world, x, y, size="m", shape="round", jack=False):
+        self.size = size if size in ("s", "m", "l") else "m"
+        self.shape = shape if shape in Pumpkin.SHAPES else "round"
+        self.jack = bool(jack)
+        super().__init__(world, x, y, self.sprite())
+        self.held = False
+        self.holder, self.dx, self.level = None, 0.0, None  # sitting on: a climbable, sideways offset, which level
+        self.vy = 0.0
+        self.huge = False  # (for the night glow: never giant)
+
+    def sprite(self):
+        return f"pumpkin_4_{self.size}_{self.shape}" + ("_jack" if self.jack else "")
+
+    def pick_up(self):
+        self.held = True
+        self.holder = self.level = None
+        self.vy = 0.0
+
+    def drop(self):
+        self.held = False
+        self.world.place_deco(self)
+
+    def click(self):
+        if self.vy == 0 and not self.held:
+            self.vy = -110 * self.world.scale  # a little hop
+
+    def carve(self):
+        """The hoe carves it a face. True if it could."""
+        if self.jack:
+            return False
+        self.jack = True
+        self.anim.name = self.sprite()
+        s = self.world.scale
+        for _ in range(10):
+            self.world.add(PumpkinBit(self.world, self.x + self.world.rng.uniform(-10, 10) * s, self.y - 12 * s))
+        self.world.save_decos()
+        return True
+
+    def floor(self):
+        """The y it rests at: the top of what it's on, or the ground."""
+        h = self.holder
+        if h is not None and (h.gone or not h.available):
+            self.holder = self.level = None  # the haystack was put away, or the barrels fell: down it comes
+            h = None
+        if h is None:
+            return self.world.ground
+        return h.y - h.levels[self.level][1] * self.world.scale
+
+    def update(self, dt):
+        super().update(dt)
+        if self.held:
+            return
+        s = self.world.scale
+        if self.holder is not None:
+            self.x = self.holder.x + self.dx * s
+        floor = self.floor()
+        if self.y < floor or self.vy < 0:
+            self.vy += 1200 * s * dt
+            self.y += self.vy * dt
+        if self.y >= floor:
+            self.y = floor
+            self.vy = -self.vy * 0.25 if self.vy > 120 * s else 0.0  # a small bump, then it settles
+
+
 class Melon(Pumpkin):
     """A watermelon that grows over time like the pumpkins do: a sprout, a vine with a yellow flower, then a
     striped melon getting bigger until it's ripe. Click a ripe one and it splits open, red and juicy, and a new
@@ -991,7 +1064,8 @@ class Climbable(Thing):
 
 class CornCob(Acorn):
     """An ear of corn from the harvest. The foxes bat it about like an acorn; it fades after a while. You can
-    pick it up with the mouse and drop it somewhere else (it falls and bounces where you let go)."""
+    pick it up with the mouse and drop it somewhere else (it falls and bounces where you let go), or throw it
+    for the foxes to chase."""
     is_cob = True
 
     def __init__(self, world, x, y):
@@ -1004,7 +1078,15 @@ class CornCob(Acorn):
 
     @property
     def draggable(self):
-        return not self.taken and not self.carried  # not out of a squirrel's arms
+        return not self.carried  # anything but out of a squirrel's arms (you can snatch it from under its nose)
+
+    def contains(self, px, py):
+        """A little bigger than the picture, so it's easy to grab."""
+        if self.alpha <= 0:
+            return False
+        left, top, w, h = self.rect()
+        pad = 5 * self.world.scale
+        return left - pad <= px < left + w + pad and top - pad <= py < top + h + pad
 
     def pick_up(self):
         self.held = True
@@ -1012,10 +1094,18 @@ class CornCob(Acorn):
 
     def drop(self):
         """Let go: it falls from there, bounces, and is fresh again (it won't fade for a while)."""
+        self.throw(0.0, 0.0)
+
+    def throw(self, vx, vy):
+        """Let go, flying at (vx, vy) screen pixels per second; a fox runs after it if it's thrown hard."""
+        s = self.world.scale
+        top = 2400 * s / 2
         self.held, self.taken = False, False
         self.on_ground, self.bounced = False, False
-        self.vx = self.vy = 0.0
+        self.vx, self.vy = max(-top, min(top, vx)), max(-top, min(top, vy))
         self.age = 0.0
+        if abs(vx) + abs(vy) > 250 * s:
+            self.world.cob_thrown(self)
 
     def update(self, dt):
         if self.carried or self.held:

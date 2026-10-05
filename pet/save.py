@@ -42,6 +42,7 @@ DEFAULTS = {
               "cattails": {"out": True, "x": None, "planted": None}},
     # Discord message stealing, taskbar treasure digging, moving folder icons about on the desktop
     "mischief": {"discord": True, "treasure": True, "folders": True},
+    "decorations": [],   # pumpkins put out to decorate: {x, size, shape, jack, and on/level/dx if on something}
     "folder_homes": {},  # where each desktop folder icon was before a fox first moved it: name -> [x, y]
     "season": "auto",
     "snow": "auto",  # snow on the winter oak: "auto" (some days), or true / false as chosen from the tray menu
@@ -66,6 +67,9 @@ def load(path=None):
                 for name, value in saved[key].items():
                     if name in data[key] and isinstance(value, type(data[key][name])):
                         data[key][name] = value
+    decos = saved.get("decorations") if isinstance(saved, dict) else None
+    if isinstance(decos, list):
+        data["decorations"] = [d for d in decos if isinstance(d, dict) and isinstance(d.get("x"), (int, float))][:60]
     homes = saved.get("folder_homes") if isinstance(saved, dict) else None
     if isinstance(homes, dict):
         data["folder_homes"] = {name: [int(p[0]), int(p[1])] for name, p in homes.items()

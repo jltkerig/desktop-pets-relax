@@ -1483,8 +1483,141 @@ class CornCobInHand(unittest.TestCase):
         from pet.items import CornCob
         world, _ = season_world("autumn")
         cob = world.add(CornCob(world, 500, world.ground))
-        cob.taken = True
+        cob.taken = True  # a squirrel is on its way to it: you can still snatch it
+        self.assertTrue(cob.draggable)
+        cob.carried = True  # in its arms: no
         self.assertFalse(cob.draggable)
+
+    def test_snatching_a_cob_from_a_squirrel_sends_it_off(self):
+        from pet.items import CornCob
+        from pet.visitors import Squirrel
+        world, clock = season_world("autumn")
+        cob = world.add(CornCob(world, 900, world.ground))
+        cob.on_ground = True
+        squirrel = world.add(Squirrel(world, cob))
+        cob.pick_up()
+        run(world, clock, 0.2)
+        self.assertEqual(squirrel.state, "leave")
+
+    def test_a_thrown_cob_flies_and_a_fox_chases_it(self):
+        from pet.items import CornCob
+        world, clock = season_world("autumn", orange=True)
+        fox = world.of("fox")[0]
+        cob = world.add(CornCob(world, 500, world.ground - 100))
+        cob.pick_up()
+        cob.throw(600, -300)
+        self.assertFalse(cob.held)
+        self.assertEqual(fox.step.anim if fox.step else fox.plan[0].anim, "tilt")
+        batted = False
+        for _ in range(30 * 12):
+            run(world, clock, 1 / 30)
+            batted = batted or (fox.step is not None and fox.step.anim == "bat")
+        self.assertGreater(cob.x, 560)
+        self.assertTrue(batted)
+
+    def test_a_gentle_drop_doesnt_send_a_fox(self):
+        from pet.items import CornCob
+        world, clock = season_world("autumn", orange=True)
+        fox = world.of("fox")[0]
+        fox.plan.clear()
+        fox.step = None
+        cob = world.add(CornCob(world, 500, world.ground - 50))
+        cob.pick_up()
+        cob.drop()
+        self.assertFalse(fox.plan)
+
+
+class DecoratingPumpkins(unittest.TestCase):
+    def world(self):
+        world, clock = season_world("autumn")
+        return world, clock
+
+    def test_add_a_pumpkin_and_it_drops_onto_the_ground(self):
+        world, clock = self.world()
+        deco = world.add_deco()
+        run(world, clock, 2)
+        self.assertEqual(deco.y, world.ground)
+        self.assertTrue(deco.anim.name.startswith("pumpkin_4_"))
+        self.assertEqual(len(world.settings["decorations"]), 1)
+
+    def test_put_one_on_the_haystack_and_it_moves_with_it(self):
+        world, clock = self.world()
+        hay = next(c for c in world.of("climb") if c.variant == "haystack")
+        deco = world.add_deco()
+        deco.pick_up()
+        dx, h = hay.levels[-1]
+        deco.x, deco.y = hay.x + dx * world.scale, hay.y - (h + 30) * world.scale  # let go above the top
+        deco.drop()
+        run(world, clock, 2)
+        self.assertIs(deco.holder, hay)
+        self.assertEqual(deco.y, hay.y - h * world.scale)
+        self.assertEqual(world.settings["decorations"][0]["on"], "haystack")
+        hay.x += 100
+        run(world, clock, 0.1)
+        self.assertAlmostEqual(deco.x, hay.x + dx * world.scale, delta=10 * world.scale)
+
+    def test_let_go_under_a_tree_it_sits_on_the_ground(self):
+        world, clock = self.world()
+        tree = world.tree()
+        deco = world.add_deco()
+        deco.pick_up()
+        deco.x, deco.y = tree.x, world.ground - 200
+        deco.drop()
+        run(world, clock, 2)
+        self.assertIsNone(deco.holder)
+        self.assertEqual((deco.x, deco.y), (tree.x, world.ground))
+
+    def test_decorations_come_back_next_time_and_only_in_autumn(self):
+        world, clock = self.world()
+        hay = next(c for c in world.of("climb") if c.variant == "haystack")
+        deco = world.add_deco(jack=True)
+        deco.pick_up()
+        deco.x, deco.y = hay.x + hay.levels[0][0] * world.scale, world.ground - 200
+        deco.drop()
+        saved = json.loads(json.dumps(world.settings))
+        again = World(1920, 1040, saved, rng=random.Random(1), clock=world.clock)
+        decos = again.of("deco")
+        self.assertEqual(len(decos), 1)
+        self.assertTrue(decos[0].jack)
+        self.assertEqual(decos[0].holder.variant, "haystack")
+        saved["season"] = "winter"
+        self.assertFalse(World(1920, 1040, saved, rng=random.Random(1), clock=world.clock).of("deco"))
+
+    def test_lifting_a_ripe_pumpkin_out_of_the_patch_picks_it(self):
+        world, clock = self.world()
+        pumpkin = world.of("pumpkin")[0]
+        pumpkin.planted = world.now().timestamp() - pumpkin.STAGE_SECONDS * pumpkin.pace * 4.5
+        pumpkin.giant = False
+        self.assertEqual(pumpkin.stage, 4)
+        looks = (pumpkin.size, pumpkin.shape, pumpkin.jack)
+        deco = world.pick_pumpkin(pumpkin)
+        self.assertIsNotNone(deco)
+        self.assertEqual((deco.size, deco.shape, deco.jack), looks)  # the same pumpkin, picked
+        self.assertEqual(pumpkin.stage, 0)  # a new sprout where it was
+        sprout = world.of("pumpkin")[1]
+        self.assertIsNone(world.pick_pumpkin(sprout) if sprout.stage < 4 else None)
+
+    def test_the_hoe_carves_a_decorating_pumpkin_and_it_glows_at_night(self):
+        world, clock = self.world()
+        deco = world.add_deco(x=300)
+        run(world, clock, 2)
+        hoe = next(p for p in world.of("prop") if p.variant == "hoe")
+        hoe.x = deco.x
+        world.dropped(hoe)
+        self.assertTrue(deco.jack)
+        self.assertTrue(deco.anim.name.endswith("_jack"))
+        clock[0] = clock[0].replace(hour=23)
+        run(world, clock, 1)
+        self.assertTrue(any(g.holder is deco for g in world.of("glow")))
+
+    def test_clear_them_away(self):
+        world, clock = self.world()
+        world.add_deco()
+        world.add_deco()
+        world.clear_decos()
+        run(world, clock, 0.1)
+        self.assertFalse(world.of("deco"))
+        self.assertEqual(world.settings["decorations"], [])
 
 
 class BirchTree(unittest.TestCase):

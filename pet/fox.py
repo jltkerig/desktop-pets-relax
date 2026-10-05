@@ -248,6 +248,8 @@ class Fox(Thing):
                     finished = True  # caught up with a friend who has stopped: done following
                 elif target.kind == "message":
                     finished = True  # reached the message
+                elif getattr(target, "is_cob", False) and target.on_ground:
+                    finished = True  # caught up with a thrown cob, lying still enough to pounce on
                 elif target.kind == "folder":
                     finished = True  # at the fallen folder
                 elif getattr(target, "is_ball", False) and target.low():

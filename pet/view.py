@@ -489,7 +489,12 @@ class Stage:
             thing, (sx, sy), _ = self.press
             if abs(x - sx) + abs(y - sy) > DRAG_START:
                 self.dragging = thing
-                if thing.kind == "fox" or getattr(thing, "is_cob", False) or getattr(thing, "is_ball", False):
+                if thing.kind == "pumpkin" and self.world.decos_in_season() and \
+                        abs(y - sy) > abs(x - sx) and self.world.pick_pumpkin(thing) is not None:
+                    thing = self.dragging = self.world.of("deco")[-1]  # lifted out of the patch: picked
+                    self.press = (thing, (x, y), thing.x)
+                if thing.kind == "fox" or getattr(thing, "is_cob", False) or getattr(thing, "is_ball", False) or \
+                        getattr(thing, "is_deco", False):
                     thing.pick_up()
                     self.trail = []
         if self.dragging is not None and self.dragging.kind in DRAGGED_ALONG:
@@ -512,9 +517,9 @@ class Stage:
 
     def released(self):
         if self.dragging is not None:
-            if getattr(self.dragging, "is_ball", False):
+            if getattr(self.dragging, "is_ball", False) or getattr(self.dragging, "is_cob", False):
                 self.dragging.throw(*self.throw_speed())  # how fast your hand was moving as you let go
-            elif self.dragging.kind == "fox" or getattr(self.dragging, "is_cob", False):
+            elif self.dragging.kind == "fox" or getattr(self.dragging, "is_deco", False):
                 self.dragging.drop()
             elif self.dragging.kind in PLACED_ITEMS:
                 self.world.keep_off_seams(self.dragging)  # dropped across two monitors: onto one of them
@@ -742,6 +747,11 @@ class ToyBox:
             snow.toggled.connect(self._set_snow)
         if self.world.of("pumpkin"):
             m.addAction("Plant new pumpkins", self._replant)
+        if self.world.decos_in_season():
+            m.addAction("Add a pumpkin (to decorate with)", lambda: self.world.add_deco())
+            m.addAction("Add a jack-o'-lantern", lambda: self.world.add_deco(jack=True))
+            if self.world.of("deco"):
+                m.addAction("Clear away the decorating pumpkins", self.world.clear_decos)
         if self.world.of("corn"):
             m.addAction("Plant new corn", self._replant_corn)
         if self.world.of("melon"):

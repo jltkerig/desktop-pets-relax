@@ -62,8 +62,8 @@ class Squirrel(Visitor):
         self.timer += dt
         rng, w = self.world.rng, self.world
         if self.state == "to_acorn":
-            if self.acorn.gone:
-                self.state = "leave"
+            if self.acorn.gone or getattr(self.acorn, "held", False):
+                self.state = "leave"  # gone, or you snatched it first
             elif self.move_to(self.acorn.x, self.SPEED, dt):
                 self.state, self.timer = "nibble", 0.0
                 self.anim.play("squirrel_sit")

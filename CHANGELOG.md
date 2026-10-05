@@ -3,6 +3,11 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.11.3
+
+- **Butterflies fly side-on** too: a slim body held level and big wings clapping together over the back, then
+  sweeping down. (Resting on a flower they're still seen from above, wings slowly opening and closing.)
+
 ## 1.11.2
 
 - The **cicada flies sideways**, seen from the side with its body level and its clear wings beating above its

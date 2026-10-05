@@ -1616,7 +1616,7 @@ BUTTERFLIES = {"monarch": "monarch", "white": "wing_white", "sulphur": "wing_sul
 
 
 def butterfly(t=0.0, kind="monarch", span=None):
-    """14 x 12: a butterfly seen from the front, wings beating (wide open .. edge on). kind: monarch (orange
+    """14 x 12: a butterfly seen from above (resting on a flower), wings opening and closing (wide open .. edge on). kind: monarch (orange
     and black), white (a cabbage white), sulphur (lemon yellow) or azure (sky blue). span: how open the wings
     are (otherwise from t)."""
     c = Canvas(14, 12)
@@ -1643,6 +1643,40 @@ def butterfly(t=0.0, kind="monarch", span=None):
     c.capsule(7, 3.5, 7, 9, 0.6, 0.5, "bug_black")  # body
     for side in (-1, 1):
         c.capsule(7, 3.5, 7 + side * 1.8, 0.8, 0.2, 0.2, "bug_black")  # antennae
+    return c.to_image()
+
+
+def butterfly_flying(t=0.0, kind="monarch"):
+    """18 x 16: a butterfly in flight, seen from the side and facing right: a slim body held level, and big
+    wings clapping together up over its back, then sweeping down below it (their patterned faces show then)."""
+    c = Canvas(18, 16)
+    mat = BUTTERFLIES[kind]
+    up = 0.5 + 0.5 * math.cos(t * 2 * math.pi)  # 1: wings straight up together .. 0: swept down
+    a = math.radians(-92 + 120 * (1 - up))      # the wings' angle from level (negative: up)
+    rx, ry = 9.0, 8.0                           # where they join the body
+
+    def wing(length, back, lum, pattern):
+        dx, dy = math.cos(a), math.sin(a)
+        tip = (rx + dx * length * 0.5 + 1.0 - back, ry + dy * length)
+        hind = (rx - 3.6 - back, ry + dy * length * 0.5 + (1.6 if dy < 0 else -0.4))
+        c.polygon([(rx + 1.4, ry), (tip[0] + 1.2, tip[1] + 0.4 * dy), tip, (tip[0] - 2.6, tip[1] - 0.2 * dy),
+                   hind, (rx - 2.2, ry)], mat, lum=lum)
+        if pattern and up < 0.8:  # the near wing's markings show as it opens out
+            mx, my = (rx + tip[0]) / 2 - 0.5, (ry + tip[1]) / 2
+            if kind == "monarch":
+                c.pixel(tip[0], tip[1], "bug_black", 0)
+                c.pixel(mx, my, "bug_black", 0)
+                c.pixel(tip[0] - 1.6, tip[1] - 0.3 * dy, "white", 3)
+            elif kind == "white":
+                c.pixel(tip[0], tip[1], "bug_black", 0)
+            else:
+                c.pixel(mx, my, "star" if kind == "azure" else "ladybug", 2)
+
+    wing(6.6, 1.4, 0.45, False)                       # the far wing, a little behind
+    c.capsule(5.0, ry + 0.6, 11.4, ry - 0.2, 0.5, 0.6, "bug_black")  # the slim body, level
+    c.pixel(12.4, ry - 1.4, "bug_black", 0)          # antennae, short and forward
+    c.pixel(13.4, ry - 2.4, "bug_black", 0)
+    wing(7.6, 0.0, 0.7, True)                         # the near wing, in front
     return c.to_image()
 
 
@@ -2830,7 +2864,7 @@ SPRITES = {
     "snow_puff": ([snow_puff(t) for t in (0.0, 0.3, 0.6, 1.0)], 110, False, (8, 7)),
     "inchworm": ([inchworm("crawl", t) for t in (0.0, 0.25, 0.5, 0.75)], 160, True, (7, 7)),
     "inchworm_fall": ([inchworm("fall")], 1000, False, (7, 6)),
-    "butterfly": ([butterfly(t) for t in (0.0, 0.25, 0.5, 0.75)], 70, True, (7, 7)),
+    "butterfly": ([butterfly_flying(t) for t in (0.0, 0.25, 0.5, 0.75)], 70, True, (9, 8)),
     "junebug_crawl": ([beetle("junebug", "crawl", t) for t in (0.0, 0.25, 0.5, 0.75)], 120, True, (5, 11)),
     "junebug_fly": ([beetle("junebug", "fly", t) for t in (0.0, 0.25, 0.5, 0.75)], 50, True, (5, 11)),
     "ladybug_crawl": ([beetle("ladybug", "crawl", t) for t in (0.0, 0.25, 0.5, 0.75)], 120, True, (5, 11)),
@@ -2883,7 +2917,7 @@ SPRITES = {
     **{f"melon_split_{k}_{shape}": ([melon_split(g, shape, t) for t in (0.1, 0.25, 0.4, 0.6, 0.75, 0.9, 1.0)], 140,
                                     False, (20, 30))
        for k, g in PUMPKIN_SIZES.items() for shape in MELON_SHAPES},
-    **{f"butterfly_{kind}": ([butterfly(t, kind) for t in (0.0, 0.25, 0.5, 0.75)], 70, True, (7, 7))
+    **{f"butterfly_{kind}": ([butterfly_flying(t, kind) for t in (0.0, 0.25, 0.5, 0.75)], 70, True, (9, 8))
        for kind in ("white", "sulphur", "azure")},
     **{f"butterfly_{kind}_rest": ([butterfly(kind=kind, span=sp) for sp in (1.0, 0.8, 0.45, 0.3, 0.45, 0.8)], 260,
                                   True, (7, 10))

@@ -9,9 +9,9 @@ from pathlib import Path
 from PySide6.QtCore import QElapsedTimer, QPoint, QProcess, QRect, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QColor, QCursor, QIcon, QPainter, QPixmap, QTransform
 from PySide6.QtWidgets import (QApplication, QCheckBox, QGroupBox, QLabel, QMenu, QPushButton, QSystemTrayIcon,
-                               QVBoxLayout, QWidget)
+                               QTabWidget, QVBoxLayout, QWidget)
 
-from pet import __version__, discord, save, screens, seasons, sprites
+from pet import __version__, discord, save, screens, seasons, sprites, weather
 
 FRAME_MS = 33
 TASKBAR_SCRIPT = Path(__file__).resolve().parent / "taskbar_buttons.ps1"
@@ -86,6 +86,8 @@ class Stage:
         self.active_timer = QTimer()  # every couple of seconds: are you using Discord right now?
         self.active_timer.timeout.connect(self.check_discord_use)
         self.active_timer.start(2000)
+        # rain and snow from the local weather, fetched in the background every half hour
+        self.weather = weather.Watcher(self.settings).start()
 
     def check_discord_use(self):
         if not self.world.mischief("discord"):
@@ -300,6 +302,7 @@ class Stage:
         self.elapsed += dt
         cursor = self.to_world(QCursor.pos())
         before = [d.area() for d in self.desktops]
+        self.world.weather = self.weather.current()
         self.world.update(dt, cursor)
         if self.world.grab_requests:
             self._grab_icons()
@@ -430,9 +433,6 @@ class Desktop(QWidget):
             self.stage.released()
 
 
-SEASON_WORDS = {("winter", "spring", "summer", "autumn"): "all year"}
-
-
 class ToyBoxWindow(QWidget):
     """A small window listing every fox and item with a checkbox: tick what you want on the desktop.
     Opens when you click the fox icon in the tray."""
@@ -443,24 +443,33 @@ class ToyBoxWindow(QWidget):
         self.setWindowTitle("Toy Box")
         self.setWindowIcon(toybox.tray.icon())
         self.layout_ = QVBoxLayout(self)
-        self.boxes = {}
+        self.boxes = {}  # (kind, name) -> its checkboxes (an item out in two seasons is on both seasons' tabs)
         foxes = QGroupBox("Foxes")
         fox_layout = QVBoxLayout(foxes)
         for palette, label in (("orange", "Orange fox"), ("grey", "Grey fox")):
             box = QCheckBox(label)
             box.toggled.connect(lambda on, p=palette: toybox._set_fox(p, on))
             fox_layout.addWidget(box)
-            self.boxes[("fox", palette)] = box
+            self.boxes[("fox", palette)] = [box]
         self.layout_.addWidget(foxes)
-        items = QGroupBox("On the desktop")
-        item_layout = QVBoxLayout(items)
-        for name, item in seasons.ITEMS.items():
-            when = SEASON_WORDS.get(tuple(item["seasons"]), " and ".join(item["seasons"]))
-            box = QCheckBox(f"{item['label']}  ({when})")
-            box.toggled.connect(lambda on, n=name: toybox._set_item(n, on))
-            item_layout.addWidget(box)
-            self.boxes[("item", name)] = box
-        self.layout_.addWidget(items)
+        # the items, on tabs: the ones out all year, then each season's
+        self.tabs = QTabWidget()
+        self.tabs.setUsesScrollButtons(False)  # wide enough to show every tab
+        self.tab_of = {}
+        for key, title in (("all", "All year"),) + tuple((s, s.title()) for s in seasons.SEASONS):
+            page = QWidget()
+            page_layout = QVBoxLayout(page)
+            names = [n for n, item in seasons.ITEMS.items()
+                     if (key == "all") == (len(item["seasons"]) == len(seasons.SEASONS))
+                     and (key == "all" or key in item["seasons"])]
+            for name in sorted(names, key=lambda n: seasons.ITEMS[n]["label"]):
+                box = QCheckBox(seasons.ITEMS[name]["label"])
+                box.toggled.connect(lambda on, n=name: toybox._set_item(n, on))
+                page_layout.addWidget(box)
+                self.boxes.setdefault(("item", name), []).append(box)
+            page_layout.addStretch(1)
+            self.tab_of[key] = self.tabs.addTab(page, title)
+        self.layout_.addWidget(self.tabs)
         mischief = QGroupBox("Mischief")
         mischief_layout = QVBoxLayout(mischief)
         for key, label in (("discord", "Steal Discord messages (and put them back)"),
@@ -468,7 +477,7 @@ class ToyBoxWindow(QWidget):
             box = QCheckBox(label)
             box.toggled.connect(lambda on, k=key: toybox._set_mischief(k, on))
             mischief_layout.addWidget(box)
-            self.boxes[("mischief", key)] = box
+            self.boxes[("mischief", key)] = [box]
         self.layout_.addWidget(mischief)
         self.note = QLabel()
         self.note.setWordWrap(True)
@@ -480,25 +489,26 @@ class ToyBoxWindow(QWidget):
     def refresh(self):
         """Show the current settings (without firing the checkboxes' handlers)."""
         settings, season = self.toybox.settings, self.toybox.world.season
-        for (kind, name), box in self.boxes.items():
-            box.blockSignals(True)
+        for (kind, name), boxes in self.boxes.items():
             if kind == "fox":
-                box.setChecked(bool(settings["foxes"].get(name)))
+                on = bool(settings["foxes"].get(name))
             elif kind == "mischief":
-                box.setChecked(bool(settings.get("mischief", {}).get(name, True)))
+                on = bool(settings.get("mischief", {}).get(name, True))
             else:
-                box.setChecked(bool(settings["items"].get(name, {}).get("out")))
-                box.setEnabled(True)
-                in_season = season in seasons.ITEMS[name]["seasons"]
-                font = box.font()
-                font.setItalic(not in_season)  # ticked items from another season wait for their season
-                box.setFont(font)
-            box.blockSignals(False)
-        self.note.setText(f"It's {season} now. Items in italics belong to another season: tick them and "
-                          f"they'll come out when their season does.")
+                on = bool(settings["items"].get(name, {}).get("out"))
+            for box in boxes:
+                box.blockSignals(True)
+                box.setChecked(on)
+                box.blockSignals(False)
+        for key, index in self.tab_of.items():
+            title = "All year" if key == "all" else key.title()
+            self.tabs.setTabText(index, f"{title} (now)" if key == season else title)
+        self.note.setText(f"It's {season} now. Things ticked on another season's tab come out when their season "
+                          f"does.")
 
     def open(self):
         self.refresh()
+        self.tabs.setCurrentIndex(self.tab_of[self.toybox.world.season])  # this season's things first
         self.adjustSize()
         self.show()
         self.raise_()
@@ -533,15 +543,16 @@ class ToyBox:
         for palette, label in (("orange", "Orange fox"), ("grey", "Grey fox")):
             self._check(m, label, self.settings["foxes"].get(palette, False),
                         lambda on, p=palette: self._set_fox(p, on))
-        m.addSection(f"Toy box ({self.world.season.title()})")
         items = seasons.items_for(self.world.season)
-        for name in items:
-            item = self.settings["items"].setdefault(name, {"out": False, "x": None})
-            self._check(m, seasons.ITEMS[name]["label"], item.get("out", False),
-                        lambda on, n=name: self._set_item(n, on))
-        if not items:
-            disabled = m.addAction("Nothing for this season yet")
-            disabled.setEnabled(False)
+        all_year = [n for n in items if len(seasons.ITEMS[n]["seasons"]) == len(seasons.SEASONS)]
+        for title, names in (("All year", all_year),
+                             (f"This season ({self.world.season.title()})", [n for n in items if n not in all_year])):
+            m.addSection(title)
+            for name in sorted(names, key=lambda n: seasons.ITEMS[n]["label"]):
+                item = self.settings["items"].setdefault(name, {"out": False, "x": None})
+                self._check(m, seasons.ITEMS[name]["label"], item.get("out", False),
+                            lambda on, n=name: self._set_item(n, on))
+        m.addSection("Things to do")
         if self.world.tree() is not None and self.world.season == "autumn":
             m.addAction("Shake down an acorn", lambda: self.world.drop_acorn(self.world.tree()))
         if self.world.season == "winter":
@@ -561,14 +572,16 @@ class ToyBox:
             m.addAction("Dig up a taskbar treasure", self._dig)
         m.addAction("Zoomies!", self._zoomies)
         m.addAction("Make it blustery", lambda: self.world.blustery())
+        m.addAction("Make it rain", lambda: self.world.make_it("rain"))
+        m.addAction("Make it snow", lambda: self.world.make_it("snow"))
         m.addAction("Steal a Discord message", self._steal_discord)
         visit = m.addMenu("Invite a visitor")
-        for kind in seasons.VISITORS.get(self.world.season, ()):
+        for kind in seasons.VISITORS.get(self.world.season, ()) + ("owl",):
             label = {"jay": "Blue jay", "woolly": "Woolly bear caterpillar", "migrants": "Geese flying south",
                      "geese": "Geese stopping by to honk", "squirrel": "Squirrel",
                      "turkeys": "Wild turkeys", "crows": "Crows", "junebug": "June beetle",
                      "ladybug": "Ladybug", "cicada": "Cicada", "butterflies": "Butterflies",
-                     "songbirds": "Songbirds"}.get(kind, kind.title())
+                     "songbirds": "Songbirds", "owl": "Owl (it usually comes at night)"}.get(kind, kind.title())
             visit.addAction(label, lambda k=kind: self.world.invite_visitor(k))
 
         m.addSeparator()
@@ -582,6 +595,7 @@ class ToyBox:
             action.setCheckable(True)
             action.setChecked(current == key)
             group.addAction(action)
+        self._check(m, self._weather_label(), self.settings.get("weather", True), self._set_weather)
         size_menu = m.addMenu("Size")
         sizes = QActionGroup(size_menu)
         for value in (1, 2, 3):
@@ -654,6 +668,17 @@ class ToyBox:
         for crop in list(self.world.of("crop")):
             self.world.plant_crop(crop.variant, replant=True)
         save.store(self.settings)
+
+    def _weather_label(self):
+        report = self.desktop.weather.current() if self.settings.get("weather", True) else None
+        now = {None: "", "rain": " (raining now)", "snow": " (snowing now)"}[report.falling if report else None]
+        return "Local weather (rain and snow)" + now
+
+    def _set_weather(self, on):
+        self.settings["weather"] = bool(on)
+        save.store(self.settings)
+        if on:
+            self.desktop.weather.refresh()
 
     def _set_snow(self, on):
         self.settings["snow"] = bool(on)

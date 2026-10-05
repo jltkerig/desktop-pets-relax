@@ -13,7 +13,7 @@ from PySide6.QtCore import QElapsedTimer, QRect, Qt, QTimer
 from PySide6.QtGui import QColor, QLinearGradient, QPainter
 from PySide6.QtWidgets import QMessageBox, QWidget
 
-from pet import screens
+from pet import screens, weather
 from pet.view import Frames
 from pet.world import World
 
@@ -88,6 +88,11 @@ class SaverWindow(QWidget):
         sky.setColorAt(0, QColor(top))
         sky.setColorAt(1, QColor(bottom))
         painter.fillRect(0, 0, w, self.ground_y, sky)
+        falling = self.world.falling
+        if falling:  # clouded over: greyer for rain (darker still in a downpour), paler for snow
+            grey = QColor(150, 158, 168) if falling == "rain" else QColor(200, 206, 214)
+            grey.setAlpha(170 if self.world.heavy else 120)
+            painter.fillRect(0, 0, w, self.ground_y, grey)
         if light in ("night", "dawn", "dusk"):
             t = self.saver.elapsed
             fade = 1.0 if light == "night" else 0.35
@@ -154,6 +159,7 @@ class Saver:
         self.world = World(width, ground + 2, saver_settings(settings, main_h),
                            seams=[s["offset"] for s in slices[1:]])
         self.frames = Frames()
+        self.weather = weather.Watcher(settings).start()  # rain or snow, if it's raining or snowing outside
         self.elapsed = 0.0  # before any window shows: they use it to twinkle the stars
         by_corner = {(s.geometry().x(), s.geometry().y()): s for s in screens_}
         self.windows = [SaverWindow(self, by_corner.get((sl["x"], sl["y"]), screens_[0]), sl) for sl in slices]
@@ -170,6 +176,7 @@ class Saver:
     def tick(self):
         dt = self.clock.restart() / 1000
         self.elapsed += dt
+        self.world.weather = self.weather.current()
         self.world.update(dt, None)
         for win in self.windows:
             win.update()

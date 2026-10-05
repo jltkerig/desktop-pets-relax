@@ -5,9 +5,9 @@ import random
 
 from pet import daylight, seasons, sprites
 from pet.fox import TROT, WALK, ZOOM, Fox, Step
-from pet.items import (Acorn, Birch, Climbable, Corn, CornCob, Crop, Den, Leaf, Melon, Message, Prop, Pumpkin,
-                       Treasure, Tree)
-from pet.visitors import (Beetle, Cicada, Flutterby, Goose, Jay, Squirrel, Woolly, crow_party, migrating_v,
+from pet.items import (Acorn, Birch, Climbable, Corn, CornCob, Crop, Den, Firefly, Glow, Kernel, Leaf, Melon,
+                       Message, Prop, Pumpkin, Treasure, Tree)
+from pet.visitors import (Beetle, Cicada, Flutterby, Goose, Jay, Owl, Squirrel, Woolly, crow_party, migrating_v,
                           songbirds, turkey_flock)
 
 LEAF_COLOURS = ("red", "orange", "yellow", "brown")
@@ -32,6 +32,8 @@ class World:
         self.weather_timer = self.rng.uniform(15 * 60, 60 * 60)  # until the next chance of a blustery spell
         self.seams = list(seams)
         self.dirty = False  # settings changed here (pumpkins planted); the window saves them
+        self.weather = None         # the local weather report (pet/weather.py), set by the window; None: no idea
+        self.shower = (None, 0.0)   # ("rain" | "snow", seconds left): a shower asked for from the tray menu
         # self.seams: where one monitor ends and the next begins, along the strip
         self.taskbar_spots = []   # x of each taskbar icon, filled in by the window
         self.images = {}          # treasure key -> picture of the icon (set by the window)
@@ -67,11 +69,14 @@ class World:
 
     @property
     def snowy(self):
-        """Is there snow on the oak? You can choose from the tray menu; otherwise it snows on some winter days
-        and not others (the same all day)."""
+        """Is there snow on the oak? You can choose from the tray menu; otherwise, if the local weather is known,
+        whether there's snow on the ground where you are, or else it snows on some winter days and not others
+        (the same all day)."""
         chosen = self.settings.get("snow", "auto")
         if chosen in (True, False):
             return chosen
+        if self.weather is not None:  # the real thing: is there snow on the ground where you are?
+            return self.weather.snow_on_ground
         return random.Random(self.now().date().toordinal()).random() < 0.6
 
     def resize(self, width, height):
@@ -311,6 +316,9 @@ class World:
         self._spawn(dt)
         for thing in list(self.things):
             thing.update(dt)
+        self.leave_paw_prints()
+        self.night_lights(dt)
+        self.precipitation(dt)
         self.things = [t for t in self.things if not t.gone]
 
     def blustery(self, minutes=None):
@@ -318,6 +326,45 @@ class World:
         self.blustery_left = (minutes or self.rng.uniform(3, 8)) * 60
         self.wind_dir = self.rng.choice((-1, 1))
         self._gust_phase = 0.0
+
+    def make_it(self, kind, minutes=None):
+        """A shower of rain (or snow) for a few minutes, asked for from the tray menu."""
+        self.shower = (kind, (minutes or 4) * 60)
+
+    @property
+    def falling(self):
+        """What's coming down: "rain", "snow" or None (a shower you asked for, else the local weather)."""
+        kind, left = self.shower
+        if kind and left > 0:
+            return kind
+        return self.weather.falling if self.weather is not None else None
+
+    @property
+    def heavy(self):
+        kind, left = self.shower
+        if kind and left > 0:
+            return False
+        return bool(self.weather is not None and self.weather.heavy)
+
+    def precipitation(self, dt):
+        """Raindrops (or snowflakes) falling over everything, and splashing (or settling) on the ground."""
+        from pet.items import RainDrop, SnowFlake
+        kind, left = self.shower
+        if kind and left > 0:
+            self.shower = (kind, left - dt)
+        falling = self.falling
+        if falling is None:
+            return
+        width = self.width / 1920
+        if falling == "rain":
+            rate, cap, make = (240 if self.heavy else 90) * width, int(500 * width) + 20, RainDrop
+        else:
+            rate, cap, make = (45 if self.heavy else 18) * width, int(220 * width) + 20, SnowFlake
+        if len(self.of(make.kind)) >= cap:
+            return
+        count = int(rate * dt) + (1 if self.rng.random() < rate * dt % 1 else 0)
+        for _ in range(count):
+            self.add(make(self))
 
     def _weather(self, dt):
         """Every so often (about once in an hour or two) the wind gets up for a few minutes, in gusts."""
@@ -379,9 +426,11 @@ class World:
 
     def invite_visitor(self, kind=None):
         allowed = seasons.VISITORS.get(self.season, ())
-        if self.daylight() == "night" and kind is None:
-            allowed = ()  # the squirrel, the birds and the rest are tucked up at night
+        if (self.daylight() == "night" and kind is None) or kind == "owl":
+            allowed = ("owl",)  # the squirrel, the birds and the rest are tucked up at night: only the owl's about
         choices = [k for k in allowed if not self.of(k)]
+        if "owl" in choices and not (self.of("tree") or self.of("birch")):
+            choices.remove("owl")  # it needs a tree to sit in
         acorns = [a for a in self.of("acorn") if a.on_ground and not a.taken]
         if "squirrel" in choices and not acorns:
             choices.remove("squirrel")
@@ -410,6 +459,8 @@ class World:
         pick = self.rng.choice(choices)
         if kind is None and "crows" in choices and self.cobs_on_ground() and self.rng.random() < 0.8:
             pick = "crows"  # corn lying about: the crows are never far away
+        if pick == "owl":
+            return self.add(Owl(self))
         if pick == "squirrel":
             # squirrels much prefer acorns; a corn cob only now and then, or if there's nothing else
             nuts = [a for a in acorns if not getattr(a, "is_cob", False)]
@@ -454,7 +505,12 @@ class World:
         return dens[0] if dens else None
 
     def nap_spot(self, fox):
-        """The den if there is one (it curls up inside), else under the oak, else where it is."""
+        """The den if there is one (it curls up inside), else under the oak, else where it is. Now and then in the
+        daytime, for a change, a nap in the dappled shade under the birch."""
+        fox.naps = getattr(fox, "naps", 0) + 1
+        birch = next(iter(self.of("birch")), None)
+        if birch is not None and fox.naps % 3 == 0 and self.daylight() == "day":
+            return birch.x + (14 if fox.palette == "orange" else -14) * self.scale
         den = self.den()
         if den is not None:
             return den.entrance_x()
@@ -515,7 +571,7 @@ class World:
 
     def visitor_to_watch(self, fox):
         for kind in ("squirrel", "jay", "woolly", "goose", "frog", "turkey", "crow", "inchworm", "butterfly",
-                     "beetle", "cicada", "spider", "songbird"):
+                     "beetle", "cicada", "spider", "songbird", "owl"):
             for v in self.of(kind):
                 if v not in fox.watched and abs(v.x - fox.x) < 600 * self.scale / 2 and 0 < v.x < self.width:
                     return v
@@ -802,6 +858,109 @@ class World:
                Step("happy", 1.0), Step("crouch", 0.3, face=out),
                Step("hop", to_x=out, to_y=self.ground, leap=14, then=lambda: self.splash(pool, 5)),
                Step("scratch"), Step("happy", 0.8))
+
+    def floater_near(self, fox):
+        """A butterfly flying low, or a bit of seed fluff drifting past, close enough for a fox to pounce at."""
+        s = self.scale
+        near = [t for t in self.of("butterfly") + self.of("fluff") + self.of("firefly")
+                if abs(t.x - fox.x) < 160 * s and t.y > self.ground - 70 * s and getattr(t, "state", "") != "rest"]
+        return min(near, key=lambda t: abs(t.x - fox.x)) if near else None
+
+    def chase_floater(self, fox, thing):
+        """A crouch, a wiggle, and a leap at it. It always gets away (the butterfly flutters up, the fluff floats
+        off), and the fox is delighted anyway."""
+        x = max(40.0, min(self.width - 40.0, thing.x))
+        fox.do(Step("crouch", 0.5, face=thing.x),
+               Step("pounce", to_x=x, leap=26, then=lambda: self._dodge(thing)),
+               Step("land"), Step("happy", 1.0), Step("tilt", face=thing.x))
+
+    def _dodge(self, thing):
+        s = self.scale
+        if thing.kind == "butterfly":
+            thing.state, thing.target = "flutter", None
+            thing.y -= 24 * s
+        elif thing.kind == "firefly":
+            thing.home_y -= 30 * s  # up and away, still blinking
+        else:
+            thing.vy = -30.0  # the fluff puffs up out of reach
+
+    def produce_near(self, fox, reach):
+        """Something tasty lying on the ground nearby: an apple, a tomato, a lettuce (or a radish)."""
+        food = [a for a in self.of("acorn") if getattr(a, "produce", None) and a.on_ground and not a.taken
+                and abs(a.x - fox.x) < reach * self.scale / 2]
+        return min(food, key=lambda a: abs(a.x - fox.x)) if food else None
+
+    def nibble(self, fox, food):
+        """Trot over, sniff, munch. Yum! (A radish, though: bleh! a shake of the head.)"""
+        from pet.visitors import Bubble
+        s = self.scale
+        food.taken = True  # spoken for
+        side = 1 if fox.x < food.x else -1
+        spot = max(40.0, min(self.width - 40.0, food.x - side * 16 * s))
+        radish = food.produce == "radish"
+
+        def eat():
+            if food.gone:
+                return
+            for _ in range(4):
+                self.add(Kernel(self, food.x + self.rng.uniform(-3, 3) * s, food.y - 3 * s, food.bit))
+            food.gone = True
+            bubble = self.add(Bubble(self, fox, "bleh_bubble" if radish else "yum_bubble", rise=34))
+            bubble.life = 1.8  # long enough to read
+
+        after = [Step("scratch"), Step("look")] if radish else [Step("happy", 1.2)]
+        fox.do(Step("trot", to_x=spot, speed=TROT), Step("sniff", face=food.x), Step("chew", 1.6, then=eat), *after)
+
+    @property
+    def dark(self):
+        return self.daylight() in ("night", "dusk")
+
+    def lit_up(self):
+        """What glows at night: jack-o'-lanterns and the Christmas tree. (thing, glow sprite, how high its middle is:
+        None for halfway up)"""
+        lit = []
+        for p in self.of("pumpkin"):
+            if p.anim.name.endswith("_jack"):
+                lit.append((p, "glow_warm_big" if p.huge else "glow_warm", None))
+        for p in self.of("prop"):
+            if p.variant == "xmas_tree":
+                lit.append((p, "glow_lights", None))
+        return lit
+
+    def night_lights(self, dt):
+        """After dark: glows over the jack-o'-lanterns and the Christmas lights, and fireflies over the grass on a
+        summer night. They fade away at dawn."""
+        glows = {g.holder: g for g in self.of("glow") if g.holder.kind != "firefly"}
+        wanted = {thing: (sprite, dy) for thing, sprite, dy in self.lit_up()} if self.dark else {}
+        for holder, g in glows.items():
+            if holder not in wanted:
+                g.fading = True
+        for holder, (sprite, dy) in wanted.items():
+            if holder not in glows:
+                self.add(Glow(self, holder, sprite, dy))
+        flies = [f for f in self.of("firefly") if not f.leaving]
+        if self.dark and self.season == "summer" and not self.snowed_over and self.falling is None:
+            if len(flies) < 12 and self.rng.random() < dt * 0.8:
+                self.add(Firefly(self))
+        else:
+            for f in flies:
+                f.leaving = True
+                f.glow.fading = True
+
+    def leave_paw_prints(self):
+        """Foxes walking about on a snowy day leave a trail of paw prints, which slowly fade."""
+        from pet.items import PawPrint
+        if not self.snowed_over:
+            return
+        s = self.scale
+        for fox in self.of("fox"):
+            if fox.alpha <= 0 or fox.held or fox.y < self.ground - 1:
+                continue
+            last = getattr(fox, "last_print", None)
+            if last is None or abs(fox.x - last) > 11 * s:
+                fox.last_print = fox.x
+                if last is not None and len(self.of("print")) < 120:
+                    self.add(PawPrint(self, fox.x, self.ground))
 
     def climbable_near(self, fox, reach):
         near = [t for t in self.of("climb") if t.available and abs(t.x - fox.x) < reach * self.scale / 2]

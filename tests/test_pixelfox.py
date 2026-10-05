@@ -17,6 +17,10 @@ from pet import save, seasons, sprites  # noqa: E402
 from pet.fox import Step  # noqa: E402
 from pet.items import Acorn  # noqa: E402
 from pet.world import World  # noqa: E402
+from pet import weather  # noqa: E402
+
+REAL_FETCH = weather.fetch
+weather.fetch = lambda lat, lon: None  # tests never ask the internet about the weather
 
 assert "pixelfox-test-" in str(save.USER_DIR), "tests must never use the real user-data folder"
 
@@ -562,10 +566,18 @@ class DayAndNight(unittest.TestCase):
         self.assertEqual(daylight.phase(noon, here), "day")
         self.assertEqual(daylight.phase(noon.replace(hour=2), here), "night")
 
-    def test_no_visitors_turn_up_by_themselves_at_night(self):
+    def test_only_the_owl_turns_up_by_itself_at_night(self):
         world, clock = make_world(orange=False, grey=False, hour=23)
-        self.assertIsNone(world.invite_visitor())
-        self.assertIsNotNone(world.invite_visitor("woolly"))  # unless you invite one
+        self.assertEqual(world.invite_visitor().kind, "owl")
+        self.assertIsNone(world.invite_visitor())                  # just the one owl
+        self.assertIsNotNone(world.invite_visitor("woolly"))       # unless you invite someone
+        world, clock = make_world(orange=False, grey=False, hour=13)
+        for _ in range(20):
+            visitor = world.invite_visitor()
+            self.assertNotEqual(getattr(visitor, "kind", None), "owl")  # never by itself in the daytime
+            for t in world.things:
+                if t.kind not in world.ITEM_KINDS and t.kind != "fox":
+                    t.gone = True
 
     def test_foxes_sleep_more_at_night(self):
         def asleep_share(hour):
@@ -1583,6 +1595,270 @@ class MoreFlowers(unittest.TestCase):
             purple = [(x, y) for x in range(img.width) for y in range(ground - 6, ground + 1)
                       if img.getpixel((x, y)) in ((0x52, 0x26, 0xa0), (0x70, 0x40, 0xc4), (0x9a, 0x6e, 0xe0))]
             self.assertTrue(purple, look)
+
+
+class FoxesAndNewThings(unittest.TestCase):
+    def test_a_fox_pounces_at_a_low_butterfly_and_it_gets_away(self):
+        from pet.visitors import Butterfly
+        world, clock = season_world("spring", orange=True)
+        fox = world.of("fox")[0]
+        fox.plan.clear()
+        bug = world.add(Butterfly(world, fox.x + 90, world.ground - 30))
+        bug.state = "flutter"
+        self.assertIs(world.floater_near(fox), bug)
+        before = bug.y
+        world.chase_floater(fox, bug)
+        self.assertEqual(fox.plan[1].anim, "pounce")
+        fox.plan[1].then()  # the moment it lands
+        self.assertLess(bug.y, before)  # up out of reach
+
+    def test_floaters_up_high_are_left_alone(self):
+        from pet.items import Fluff
+        world, _ = season_world("spring", orange=True)
+        fox = world.of("fox")[0]
+        world.add(Fluff(world, fox.x + 40, world.ground - 300))
+        self.assertIsNone(world.floater_near(fox))
+
+    def test_a_fox_nibbles_a_tomato_yum(self):
+        from pet.items import Produce
+        world, clock = season_world("summer", orange=True)
+        fox = world.of("fox")[0]
+        fox.plan.clear()
+        food = world.add(Produce(world, fox.x + 100, world.ground, "tomato", "apple_bit"))
+        food.on_ground = True
+        self.assertIs(world.produce_near(fox, 600), food)
+        world.nibble(fox, food)
+        self.assertTrue(food.taken)  # nobody else gets it
+        self.assertIsNone(world.produce_near(fox, 600))
+        for _ in range(8 * 30):
+            run(world, clock, 1 / 30)
+            if food.gone:
+                break
+        self.assertTrue(food.gone)
+        self.assertTrue(any(b.anim.name == "yum_bubble" for b in world.of("bubble")))
+
+    def test_a_radish_is_bleh(self):
+        from pet.items import Produce
+        world, clock = season_world("spring", orange=True)
+        fox = world.of("fox")[0]
+        fox.plan.clear()
+        food = world.add(Produce(world, fox.x + 100, world.ground, "radish", "leaf_bit"))
+        food.on_ground = True
+        world.nibble(fox, food)
+        for _ in range(8 * 30):
+            run(world, clock, 1 / 30)
+            if food.gone:
+                break
+        self.assertTrue(food.gone)
+        self.assertTrue(any(b.anim.name == "bleh_bubble" for b in world.of("bubble")))
+
+    def test_every_third_daytime_nap_is_under_the_birch(self):
+        world, _ = season_world("summer", orange=True)
+        fox = world.of("fox")[0]
+        birch = world.of("birch")[0]
+        spots = [world.nap_spot(fox) for _ in range(6)]
+        self.assertEqual(spots[2], birch.x + 14 * world.scale)
+        self.assertEqual(spots[5], birch.x + 14 * world.scale)
+        self.assertNotEqual(spots[0], spots[2])
+
+    def test_paw_prints_in_the_snow(self):
+        world, clock = season_world("winter", orange=True)
+        world.settings["snow"] = True
+        fox = world.of("fox")[0]
+        fox.plan.clear()
+        fox.do(Step("trot", to_x=fox.x + 300, speed=90))
+        run(world, clock, 4)
+        prints = world.of("print")
+        self.assertGreater(len(prints), 5)
+        world.settings["snow"] = False  # it melts, and so do the prints
+        run(world, clock, 0.2)
+        self.assertFalse(world.of("print"))
+
+    def test_no_paw_prints_without_snow(self):
+        world, clock = season_world("autumn", orange=True)
+        fox = world.of("fox")[0]
+        fox.plan.clear()
+        fox.do(Step("trot", to_x=fox.x + 300, speed=90))
+        run(world, clock, 4)
+        self.assertFalse(world.of("print"))
+
+
+class AtNight(unittest.TestCase):
+    def night(self, season, hour=23):
+        world, clock = make_world(season, hour=hour, orange=False, grey=False)
+        world.settings["snow"] = False
+        run(world, clock, 0.1)
+        return world, clock
+
+    def test_fireflies_on_a_summer_night(self):
+        world, clock = self.night("summer")
+        run(world, clock, 30)
+        flies = world.of("firefly")
+        self.assertTrue(flies)
+        self.assertLessEqual(len(flies), 12)
+        self.assertTrue(all(any(g.holder is f for g in world.of("glow")) for f in flies))  # each one glows
+
+    def test_fireflies_leave_in_the_morning(self):
+        world, clock = self.night("summer")
+        run(world, clock, 30)
+        clock[0] = clock[0].replace(hour=12)
+        run(world, clock, 20)
+        self.assertFalse(world.of("firefly"))
+        self.assertFalse(world.of("glow"))
+
+    def test_no_fireflies_in_the_daytime_or_out_of_summer(self):
+        world, clock = self.night("summer", hour=13)
+        run(world, clock, 30)
+        self.assertFalse(world.of("firefly"))
+        world, clock = self.night("autumn")
+        run(world, clock, 30)
+        self.assertFalse(world.of("firefly"))
+
+    def test_jack_o_lanterns_glow_after_dark(self):
+        from pet.items import Pumpkin
+        world, clock = self.night("autumn")
+        pumpkin = world.add(Pumpkin(world, 700, (clock[0] - datetime.timedelta(days=30)).timestamp(), jack=True))
+        run(world, clock, 1)
+        self.assertTrue(pumpkin.anim.name.endswith("_jack"))
+        self.assertTrue(any(g.holder is pumpkin for g in world.of("glow")))
+        clock[0] = clock[0].replace(hour=12)
+        run(world, clock, 5)
+        self.assertFalse(any(g.holder is pumpkin for g in world.of("glow")))
+
+    def test_the_christmas_tree_lights_up(self):
+        world, clock = self.night("winter")
+        tree = item(world, "xmas_tree")
+        run(world, clock, 1)
+        self.assertTrue(any(g.holder is tree and g.anim.name == "glow_lights" for g in world.of("glow")))
+
+    def test_the_owl_perches_hoots_and_leaves_at_dawn(self):
+        world, clock = self.night("autumn")
+        foxes_awake = [f.asleep for f in world.of("fox")]
+        owl = world.invite_visitor("owl")
+        run(world, clock, 30)
+        self.assertEqual(owl.state, "perch")
+        seen = set()
+        for _ in range(40 * 30):  # it hoots or turns its head every 5-14 seconds
+            run(world, clock, 1 / 30)
+            seen.add(owl.anim.name)
+            seen.update(b.anim.name for b in world.of("bubble"))
+        self.assertTrue({"owl_hoot", "owl_turn", "hoo_bubble"} & seen)
+        self.assertEqual([f.asleep for f in world.of("fox")], foxes_awake)  # it doesn't wake anyone
+        clock[0] = clock[0].replace(hour=8)
+        run(world, clock, 60)
+        self.assertTrue(owl.gone or owl.state == "leave")
+
+    def test_clicking_the_owl_sends_it_off(self):
+        world, clock = self.night("spring")
+        owl = world.invite_visitor("owl")
+        run(world, clock, 30)
+        owl.click()
+        self.assertEqual(owl.state, "leave")
+
+
+class LocalWeather(unittest.TestCase):
+    def answer(self, code, rain=0.0, snowfall=0.0, depth=0.0):
+        return {"current": {"weather_code": code, "rain": rain, "showers": 0.0, "snowfall": snowfall,
+                            "snow_depth": depth, "precipitation": rain}}
+
+    def test_reading_the_weather_report(self):
+        self.assertIsNone(weather.parse(self.answer(0)).falling)
+        self.assertEqual(weather.parse(self.answer(61, rain=0.6)).falling, "rain")
+        self.assertFalse(weather.parse(self.answer(61, rain=0.6)).heavy)
+        self.assertTrue(weather.parse(self.answer(65, rain=6)).heavy)
+        report = weather.parse(self.answer(73, snowfall=0.4))
+        self.assertEqual(report.falling, "snow")
+        self.assertTrue(report.snow_on_ground)
+        self.assertTrue(weather.parse(self.answer(2, depth=0.12)).snow_on_ground)  # yesterday's snow, still lying
+        self.assertFalse(weather.parse(self.answer(2, depth=0.0)).snow_on_ground)
+        self.assertIsNone(weather.parse({"nonsense": True}))
+        self.assertIsNone(weather.parse("not even a dict"))
+
+    def test_fetch_asks_open_meteo_for_a_rough_place_and_fails_quietly(self):
+        import contextlib
+        import io
+        asked = []
+
+        def opener(request, timeout):
+            asked.append(request.full_url)
+            return contextlib.closing(io.BytesIO(json.dumps(self.answer(63, rain=2)).encode()))
+
+        report = REAL_FETCH(51.50735, -0.12776, opener=opener)
+        self.assertEqual(report.falling, "rain")
+        self.assertIn("api.open-meteo.com", asked[0])
+        self.assertIn("latitude=51.5&longitude=-0.1&", asked[0])  # only roughly where you are
+
+        def broken(request, timeout):
+            raise OSError("no internet")
+
+        self.assertIsNone(REAL_FETCH(51.5, -0.1, opener=broken))
+
+    def test_the_watcher_keeps_the_latest_fresh_report(self):
+        settings = {"weather": True, "location": {"lat": 45.0, "lon": -93.0}}
+        reports = [weather.Report("snow")]
+        watcher = weather.Watcher(settings, fetcher=lambda lat, lon: reports[0])
+        watcher.check()
+        self.assertEqual(watcher.current().falling, "snow")
+        reports[0] = None  # offline: keep what we had
+        watcher.check()
+        self.assertEqual(watcher.current().falling, "snow")
+        later = datetime.datetime.now() + datetime.timedelta(hours=4)
+        self.assertIsNone(watcher.current(later))  # too old to trust
+        settings["weather"] = False
+        self.assertIsNone(watcher.current())  # switched off
+
+    def test_the_weather_setting_is_saved_and_checked(self):
+        path = Path(os.environ["PIXELFOX_USER_DIR"]) / "weather.json"
+        self.assertTrue(save.load(path)["weather"])
+        path.write_text(json.dumps({"weather": False}))
+        self.assertFalse(save.load(path)["weather"])
+        path.write_text(json.dumps({"weather": "sometimes"}))
+        self.assertTrue(save.load(path)["weather"])
+
+    def test_rain_falls_and_splashes(self):
+        world, clock = season_world("summer")
+        world.weather = weather.Report("rain")
+        run(world, clock, 3)
+        drops = world.of("rain")
+        self.assertTrue(drops)
+        self.assertTrue(any(d.anim.name == "rain_splash" for d in drops))
+        world.weather = weather.Report(None)
+        run(world, clock, 3)
+        self.assertFalse(world.of("rain"))  # it's stopped
+
+    def test_snow_falls_and_settles(self):
+        world, clock = season_world("winter")
+        world.weather = weather.Report("snow", snow_on_ground=True)
+        run(world, clock, 25)
+        flakes = world.of("snowflake")
+        self.assertTrue(flakes)
+        self.assertTrue(any(f.settled for f in flakes))
+
+    def test_real_snow_on_the_ground_makes_a_snowy_winter_day(self):
+        world, clock = season_world("winter")
+        world.settings["snow"] = "auto"
+        world.weather = weather.Report(None, snow_on_ground=True)
+        self.assertTrue(world.snowed_over)
+        world.weather = weather.Report(None, snow_on_ground=False)
+        self.assertFalse(world.snowed_over)
+        world.settings["snow"] = True  # what you chose from the tray menu still wins
+        self.assertTrue(world.snowed_over)
+
+    def test_make_it_rain_from_the_tray(self):
+        world, clock = season_world("spring")
+        world.make_it("rain", minutes=0.05)  # three seconds
+        run(world, clock, 2)
+        self.assertTrue(world.of("rain"))
+        run(world, clock, 3)
+        self.assertIsNone(world.falling)
+        self.assertFalse(world.of("rain"))
+
+    def test_no_fireflies_in_the_rain(self):
+        world, clock = make_world("summer", hour=23, orange=False, grey=False)
+        world.settings["snow"] = False
+        world.weather = weather.Report("rain")
+        run(world, clock, 30)
+        self.assertFalse(world.of("firefly"))
 
 
 def qt_available():

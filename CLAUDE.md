@@ -31,3 +31,8 @@
   need rebuilding; if you change launcher.c, rebuild and commit both.
 - The screen saver (`pet/saver.py`) has tests that need PySide6; they're skipped where it isn't installed.
 - `pet/world.py` and everything it uses has no Qt, so it can be tested. Keep Qt in `pet/view.py`.
+- `pet/weather.py` asks Open-Meteo for the local weather on a background thread. The tests replace
+  `weather.fetch` so they never touch the internet; keep it that way. Cloud sandboxes may block
+  `api.open-meteo.com` anyway, and the app is built to carry on quietly without a report.
+- The fox's choice list in `pet/fox.py` draws from the world's rng: add new choices at the end with weight 0
+  when they don't apply, so existing tests keep their random sequences.

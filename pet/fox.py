@@ -300,6 +300,20 @@ class Fox(Thing):
         self.world.climb(self, thing)
         return []  # climb() already filled in the plan
 
+    def _chase_floater(self):
+        thing = self.world.floater_near(self)
+        if thing is None:
+            return [Step("tilt")]
+        self.world.chase_floater(self, thing)
+        return []
+
+    def _nibble(self):
+        food = self.world.produce_near(self, 600)
+        if food is None:
+            return [Step("sniff")]
+        self.world.nibble(self, food)
+        return []
+
     def _paddle(self):
         pool = self.world.pool_near(self, 900)
         if pool is None:
@@ -422,6 +436,8 @@ class Fox(Thing):
             (1.0, lambda: [Step("groom", rng.uniform(2.0, 4.0)), Step("idle", 1.5)]),
             (self.playful * 0.6, lambda: self._tail_chase()),
             (self.playful * 0.9 if w.pool_near(self, 900) else 0.0, lambda: self._paddle()),
+            (self.playful * 3.0 if w.floater_near(self) else 0.0, lambda: self._chase_floater()),
+            (1.5 + self.boredom * 2 if w.produce_near(self, 600) else 0.0, lambda: self._nibble()),
         ]
         total = sum(weight for weight, _ in options)
         pick = rng.uniform(0, total)

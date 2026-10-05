@@ -3,6 +3,25 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.10.0
+
+- **A tidier Toy Box:** tabs for All year, Winter, Spring, Summer and Autumn (this season's tab opens first and
+  says "(now)"). The tray menu is in sections: All year, This season, and Things to do.
+- **The foxes use the new things:** they pounce at butterflies and drifting seed fluff flying low (it always gets
+  away), trot over to nibble an apple, tomato or lettuce lying about (YUM!), and pull a face at a radish
+  (BLEH!). Now and then a daytime nap is in the shade under the birch.
+- **Paw prints:** on a snowy day the foxes leave a trail of paw prints in the snow, which slowly fill in.
+- **At night:** jack-o'-lanterns glow warm orange and the Christmas tree's lights cast a soft glow. On summer
+  nights **fireflies** blink over the grass (not in the rain). A great horned **owl** comes to the oak or the
+  birch after dark, blinks, turns its head right round and hoots softly (it doesn't wake anyone), and flies off
+  at dawn or when clicked. It's the only visitor that comes by itself at night; you can also invite it.
+- **Local weather:** rain and snow fall when it's raining or snowing where you are, and in winter a snowy day
+  is one with real snow on the ground (unless you chose snow on or off yourself). It asks Open-Meteo (free, no
+  account) every half hour, sending only a rough location (the city picked from your time zone, or the one you
+  set, rounded to about 10 km). No internet, no problem: it just carries on as before. Turn it off with **Local
+  weather (rain and snow)** in the tray menu. In the screen saver the sky clouds over while it rains or snows.
+- Tray menu: **Make it rain** and **Make it snow** for a few minutes, whatever the weather.
+
 ## 1.9.0
 
 - **Daffodils** look like daffodils: a round ring of petals with a few pointed tips, and an orange trumpet.

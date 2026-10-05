@@ -44,6 +44,7 @@ DEFAULTS = {
     "season": "auto",
     "snow": "auto",  # snow on the winter oak: "auto" (some days), or true / false as chosen from the tray menu
     "scale": 2,
+    "weather": True,  # rain and snow (and snowy winter days) from the local weather; see pet/weather.py
 }
 
 
@@ -55,7 +56,7 @@ def load(path=None):
         saved = {}
     data = json.loads(json.dumps(DEFAULTS))  # a deep copy
     if isinstance(saved, dict):
-        for key in ("season", "scale", "snow"):
+        for key in ("season", "scale", "snow", "weather"):
             if key in saved:
                 data[key] = saved[key]
         for key in ("foxes", "items", "mischief"):
@@ -69,6 +70,8 @@ def load(path=None):
         data["scale"] = 2
     if data["snow"] not in ("auto", True, False):
         data["snow"] = "auto"
+    if data["weather"] not in (True, False):
+        data["weather"] = True
     return data
 
 

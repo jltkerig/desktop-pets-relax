@@ -49,10 +49,14 @@ Click the fox icon in the system tray to open the **Toy Box** window. Tick or un
 put it out or away. Items from another season show in italics and come out when their season does.
 Right-click the icon for the menu:
 
-- **Foxes** and this season's items, as checkboxes.
-- **Shake down an acorn**, **Plant new pumpkins / corn**, **Dig up a taskbar treasure**, **Zoomies!**, and
-  **Invite a visitor** (squirrel, blue jay, caterpillar, geese, wild turkeys, crows, cicada, June beetle,
-  ladybug, depending on the season). In winter, **Snow on the oak** turns the snow on or off.
+- **Foxes**, then the items out all year and this season's, as checkboxes. (The Toy Box window has a tab for
+  each season.)
+- **Things to do:** **Shake down an acorn**, **Plant new pumpkins / corn / watermelons**, **Replant the
+  garden**, **Dig up a taskbar treasure**, **Zoomies!**, **Make it blustery**, **Make it rain**, **Make it
+  snow**, and **Invite a visitor** (squirrel, blue jay, caterpillar, geese, wild turkeys, crows, cicada, June
+  beetle, ladybug, butterflies, songbirds, depending on the season, and the owl). In winter, **Snow on the
+  oak** turns the snow on or off.
+- **Local weather (rain and snow):** rain or snow falls when it's raining or snowing where you are (see below).
 - **Season:** follows the date (northern hemisphere), or preview any season.
 - **Size:** 1x, 2x or 3x.
 - **Pause**, and **Quit**.
@@ -79,6 +83,17 @@ Right-click the icon for the menu:
 - **Crows** chat, play with what's lying about, and sometimes borrow the scarecrow's hat. Click one to shoo them;
   if it drops the hat, click the hat to put it back.
 - **Rest the cursor near the bottom of the screen:** a playful fox may crouch, wiggle and pounce on it.
+- **At night:** jack-o'-lanterns and the Christmas tree glow, fireflies blink on summer nights, and an owl
+  comes to sit in the oak or the birch. On snowy days the foxes leave paw prints.
+
+### Local weather
+
+Pixel Fox asks [Open-Meteo](https://open-meteo.com) (free, no account or key) about the weather every half
+hour. It sends only a rough location: the city it picked from your computer's time zone (the same one it uses
+for sunrise and sunset), or the place in `user-data/world.json` under `"location": {"lat": .., "lon": ..}`,
+rounded to about 10 km. If it's raining or snowing there, it rains or snows on your desktop, and in winter real
+snow on the ground means a snowy day. Without internet it simply carries on as before. Untick **Local weather**
+in the tray menu to stop asking.
 
 Clicks on empty parts of the screen go straight through to your desktop and windows.
 
@@ -92,9 +107,10 @@ start.ps1          checks for updates (update.ps1), installs what's needed, star
 pet/world.py       everything on the desktop, what appears when, how things meet
 pet/fox.py         a fox's moods (playful, bored, sleepy; no hunger) and how it picks what to do
 pet/items.py       the oak (all four seasons), falling leaves, branches, snow, acorns, pumpkins, the scarecrow's hat
-pet/visitors.py    the squirrel, blue jay, woolly bear, geese, frog, wild turkeys and crows
+pet/visitors.py    the squirrel, blue jay, woolly bear, geese, frog, turkeys, crows, butterflies, the owl...
 pet/seasons.py     which season it is and what belongs to it
 pet/view.py        the see-through window, the mouse, the tray menu
+pet/weather.py     is it raining or snowing where you are? (Open-Meteo, every half hour, in the background)
 pet/save.py        user-data/world.json: what's out and where
 art/make_art.py    draws every sprite into art/sprites/ (python art/make_art.py --preview to see them all)
 tests/             python -m unittest discover -s tests

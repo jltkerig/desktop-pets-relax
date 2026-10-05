@@ -1,0 +1,11 @@
+{
+  "frame_width": 44,
+  "frame_height": 36,
+  "frames": 4,
+  "ms": 140,
+  "loop": true,
+  "anchor": [
+    22,
+    18
+  ]
+}

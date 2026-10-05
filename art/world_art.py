@@ -221,6 +221,23 @@ COMMON.update({
     "stalk": ("#2e5a14", "#447e1e", "#5c9e2a", "#80c048", "#183208"),
 })
 
+def _daffodil_head(c, x, y, size=1.0):
+    """A daffodil flower at (x, y): four pointed petals poking out like a star (placed pixel by pixel, so the
+    points stay sharp at this size) round an orange trumpet."""
+    cx, cy = int(round(x)), int(round(y))
+    reach = 3 if size >= 1 else 2
+    for dx, dy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):  # the four points
+        for k in range(1, reach + 1):
+            light = 3 if dy < 0 else 2
+            _px(c, cx + dx * k, cy + dy * k, "daffodil", light if k < reach else 1)
+            if k == 1:  # thicker near the middle
+                _px(c, cx + dx, cy, "daffodil", 2)
+                _px(c, cx, cy + dy, "daffodil", 2)
+    _px(c, cx, cy, "daffodil_cup", 2)        # the trumpet, poking out in the middle
+    _px(c, cx + 1, cy, "daffodil_cup", 3)
+    _px(c, cx, cy + 1, "daffodil_cup", 1)
+
+
 def _twig(c, x1, y1, x2, y2, mat="bark", level=1):
     """A 1-pixel twig."""
     steps = int(max(abs(x2 - x1), abs(y2 - y1))) + 1
@@ -331,11 +348,7 @@ def oak_bare(sway=0.0, seed=7, snow=False, spring=False):
                 _twig(c, fx, OAK_GROUND, fx + sway * 0.4, top, "stalk", 1)
                 _twig(c, fx - 1, OAK_GROUND, fx - 3, OAK_GROUND - h * 0.7, "stalk", 2)
                 _twig(c, fx + 1, OAK_GROUND, fx + 2, OAK_GROUND - h * 0.5, "stalk", 1)
-                tx = fx + sway * 0.4
-                for a in range(6):
-                    ang = a / 6 * 2 * math.pi
-                    c.ellipse(tx + math.cos(ang) * 1.8, top + math.sin(ang) * 1.5, 1.2, 1.0, "daffodil")
-                c.ellipse(tx + 1.0, top + 0.3, 1.3, 1.2, "daffodil_cup")
+                _daffodil_head(c, fx + sway * 0.4, top, 0.85)
     if snow:
         # snow lying along the tops of the branches
         for y in range(1, 228):
@@ -1843,10 +1856,7 @@ def flower_bed(kind, sway=0.0):
         hx = x + lean
         _twig(c, x, ground, hx, y + 2, "stalk", 1)
         if kind == "daffodils":
-            for a in range(6):
-                ang = a / 6 * 2 * math.pi
-                c.ellipse(hx + math.cos(ang) * 2.0, y + math.sin(ang) * 1.6, 1.3, 1.1, "daffodil")
-            c.ellipse(hx + 1.0, y + 0.3, 1.4, 1.3, "daffodil_cup")
+            _daffodil_head(c, hx, y)
         else:  # a tulip: a closed cup of petals
             mat = TULIP_COLOURS[k % len(TULIP_COLOURS)]
             c.ellipse(hx, y, 2.4, 2.8, mat)

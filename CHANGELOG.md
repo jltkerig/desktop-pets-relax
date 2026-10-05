@@ -3,6 +3,11 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.8.1
+
+- Daffodils have four pointed petals poking out round their orange trumpets (in the flower bed and under the
+  spring oak), instead of round heads.
+
 ## 1.8.0
 
 - **Spring flower beds** in the Toy Box: **daffodils**, **tulips** (red, pink, yellow and purple) and **violets**.

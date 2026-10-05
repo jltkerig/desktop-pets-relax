@@ -3,6 +3,16 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.6.0
+
+- **Screen saver:** `Pixel Fox.scr`. Right-click it and choose **Install**, then pick it in Windows' screen saver
+  settings. It fills every monitor with your foxes and the things you've put out, drawn bigger, over a sky that
+  follows the time of day (stars at night) and ground with grass that changes colour with the seasons (only the
+  odd tip pokes through the snow). **Only a mouse click or a key press closes it**; moving the mouse doesn't, and
+  the pointer is hidden. It can run while the desktop pets are running too. No desktop mischief in it, and
+  nothing it does is saved. The little preview in Windows' settings stays empty.
+- `start.ps1` remembers where Python is (`python-path.txt`) so the screen saver starts straight away.
+
 ## 1.5.1
 
 - **Winter oak:** the trunk now forks into a thick V of two limbs instead of ending flat at the top, with a

@@ -14,6 +14,10 @@ lying about.
 
 Double-click **Pixel Fox.exe** (or **Pixel Fox.cmd**, or run `.\start.ps1` in PowerShell).
 
+**Screen saver:** right-click **Pixel Fox.scr** and choose **Install** (it stays in the Pixel Fox folder), then
+pick it in Windows' screen saver settings. Start Pixel Fox once first, so it knows where Python is. Only a mouse
+click or a key press closes the screen saver; moving the mouse doesn't.
+
 Pixel Fox.exe starts it with no window at all. Right-click it to pin it to the taskbar or Start, or to make a
 desktop shortcut; keep the .exe itself in the Pixel Fox folder. If it can't start, it tells you, and
 Pixel Fox.cmd shows what went wrong.
@@ -73,6 +77,7 @@ Clicks on empty parts of the screen go straight through to your desktop and wind
 
 ```
 Pixel Fox.exe      double-click to start (runs start.ps1; source in launcher/)
+Pixel Fox.scr      the screen saver (runs pixelfox.py --scr; pet/saver.py draws it)
 pixelfox.py        start here
 start.ps1          checks for updates (update.ps1), installs what's needed, starts it
 pet/world.py       everything on the desktop, what appears when, how things meet

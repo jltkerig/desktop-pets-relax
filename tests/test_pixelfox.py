@@ -1203,6 +1203,78 @@ class OakThroughTheYear(unittest.TestCase):
                 self.assertTrue(any(a > 0 for a in near), (look, x, y))
 
 
+def qt_available():
+    try:
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        from PySide6.QtWidgets import QApplication  # noqa: F401
+        return True
+    except Exception:  # PySide6 or its system libraries missing: only the Qt-free tests run
+        return False
+
+
+@unittest.skipUnless(qt_available(), "needs PySide6")
+class ScreenSaver(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from PySide6.QtWidgets import QApplication
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_windows_switches(self):
+        from pet import saver
+        self.assertEqual(saver.mode(["/s"]), "run")
+        self.assertEqual(saver.mode(["/S"]), "run")
+        self.assertEqual(saver.mode(["/p", "1234"]), "preview")
+        self.assertEqual(saver.mode(["/c:5678"]), "settings")
+        self.assertEqual(saver.mode([]), "settings")  # double-clicked
+
+    def test_bigger_and_no_mischief_and_nothing_saved(self):
+        from pet import saver
+        settings = save.load(Path(os.environ["PIXELFOX_USER_DIR"]) / "missing.json")
+        copy_ = saver.saver_settings(settings, 1080)
+        self.assertEqual(copy_["scale"], 3)
+        self.assertFalse(any(copy_["mischief"].values()))
+        self.assertTrue(any(settings["mischief"].values()))  # your own settings untouched
+
+    def make(self):
+        from pet import saver
+        settings = save.load(Path(os.environ["PIXELFOX_USER_DIR"]) / "missing.json")
+        return saver.Saver(self.app, settings)
+
+    def mouse(self, win, kind, button):
+        from PySide6.QtCore import QPointF, Qt
+        from PySide6.QtGui import QMouseEvent
+        point = QPointF(50, 50)
+        self.app.sendEvent(win, QMouseEvent(kind, point, point, button, button, Qt.NoModifier))
+
+    def test_moving_the_mouse_does_not_close_it_but_a_click_does(self):
+        from PySide6.QtCore import QEvent, Qt
+        running = self.make()
+        win = running.windows[0]
+        running.tick()
+        self.mouse(win, QEvent.MouseMove, Qt.NoButton)
+        self.assertTrue(running.timer.isActive())
+        self.mouse(win, QEvent.MouseButtonPress, Qt.LeftButton)
+        self.assertFalse(running.timer.isActive())
+
+    def test_a_key_press_closes_it(self):
+        from PySide6.QtCore import QEvent, Qt
+        from PySide6.QtGui import QKeyEvent
+        running = self.make()
+        self.app.sendEvent(running.windows[0], QKeyEvent(QEvent.KeyPress, Qt.Key_A, Qt.NoModifier, "a"))
+        self.assertFalse(running.timer.isActive())
+
+    def test_it_draws_sky_ground_and_grass(self):
+        running = self.make()
+        running.tick()
+        win = running.windows[0]
+        img = win.grab().toImage()
+        sky = img.pixelColor(5, 5)
+        earth = img.pixelColor(5, win.height() - 5)
+        self.assertNotEqual(sky.name(), earth.name())
+        self.assertTrue(win.blades)
+        running.close()
+
+
 class Version(unittest.TestCase):
     def test_the_version_is_in_the_changelog(self):
         import pet

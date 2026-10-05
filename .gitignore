@@ -2,6 +2,8 @@
 user-data/
 # Put an empty file with this name in the app's folder to stop it updating itself
 no-update
+# Where Python is, remembered by start.ps1 for the screen saver
+python-path.txt
 __pycache__/
 *.pyc
 *.log

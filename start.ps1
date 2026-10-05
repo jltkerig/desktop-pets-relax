@@ -1,10 +1,12 @@
 # Starts Pixel Fox with no console window. Run it again any time; a second copy just exits.
 # First it checks GitHub for a newer version and installs it (see update.ps1). -NoUpdate skips that.
-param([switch]$NoUpdate)
+# -Saver "/s" runs the screen saver instead (no update check, and it waits until the screen saver closes);
+# "Pixel Fox.scr" uses this when it doesn't know where Python is yet.
+param([switch]$NoUpdate, [string]$Saver)
 $ErrorActionPreference = "Stop"
 $ProjectPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-if (-not $NoUpdate -and (Test-Path (Join-Path $ProjectPath "update.ps1"))) {
+if (-not $NoUpdate -and -not $Saver -and (Test-Path (Join-Path $ProjectPath "update.ps1"))) {
     . (Join-Path $ProjectPath "update.ps1")
     if (Update-PixelFox $ProjectPath) {
         # start again with the freshly updated start.ps1, in case it changed too
@@ -32,5 +34,11 @@ if (-not (Test-Path (Join-Path $ProjectPath "art\sprites\fox_orange_idle.png")))
 # pythonw.exe sits next to python.exe and runs without a console window.
 $Windowless = Join-Path (Split-Path $PythonPath -Parent) "pythonw.exe"
 if (-not (Test-Path $Windowless)) { $Windowless = $PythonPath }
+# remember it for "Pixel Fox.scr", so the screen saver starts straight away without looking for Python
+try { Set-Content -Path (Join-Path $ProjectPath "python-path.txt") -Value $Windowless -Encoding Unicode } catch { }
+if ($Saver) {
+    Start-Process -FilePath $Windowless -ArgumentList "pixelfox.py", "--scr", $Saver -WorkingDirectory $ProjectPath -Wait
+    return
+}
 Start-Process -FilePath $Windowless -ArgumentList "pixelfox.py" -WorkingDirectory $ProjectPath
 Write-Host "Pixel Fox is running. Right-click the fox icon in the system tray for the toy box."

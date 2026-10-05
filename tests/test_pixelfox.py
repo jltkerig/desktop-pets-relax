@@ -738,6 +738,31 @@ class DiscordMischief(unittest.TestCase):
                 busy.setPixelColor(x, y, QColor((x * 7) % 256, (y * 13) % 256, (x + y) % 256))
         self.assertIsNone(background_colour(busy))  # a picture, not a plain background
 
+    def test_only_the_words_are_taken(self):
+        try:
+            from PySide6.QtGui import QColor, QImage
+            from pet.view import text_only
+        except ImportError:
+            self.skipTest("needs PySide6")
+        image = QImage(300, 40, QImage.Format_RGB32)
+        image.fill(QColor(49, 51, 56))
+        for x in range(4, 36):  # an avatar at the left
+            for y in range(4, 36):
+                image.setPixelColor(x, y, QColor(88, 101, 242))
+        for x in range(80, 200):  # a line of "text"
+            for y in (18, 19, 22):
+                if x % 3:
+                    image.setPixelColor(x, y, QColor(220, 222, 225))
+        words, crop = text_only(image, QColor(49, 51, 56), skip_left=44)
+        self.assertGreaterEqual(crop.left(), 44)           # not the avatar
+        self.assertLessEqual(crop.left(), 80)
+        self.assertGreaterEqual(crop.right(), 199)
+        self.assertLess(crop.width(), 140)                 # cropped to the words
+        self.assertEqual(words.pixelColor(words.width() - 1, 0).alpha(), 0)  # background see-through
+        blank = QImage(300, 40, QImage.Format_RGB32)
+        blank.fill(QColor(49, 51, 56))
+        self.assertIsNone(text_only(blank, QColor(49, 51, 56)))  # no words, nothing taken
+
     def test_if_the_window_changes_the_message_just_vanishes(self):
         self.world.steal_message(self.fox)
         self.world.cancel_message("message1")

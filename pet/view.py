@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 from PySide6.QtCore import QElapsedTimer, QPoint, QProcess, QRect, Qt, QTimer
-from PySide6.QtGui import QAction, QActionGroup, QColor, QCursor, QIcon, QPainter, QPixmap, QTransform
+from PySide6.QtGui import QAction, QActionGroup, QColor, QCursor, QIcon, QImage, QPainter, QPixmap, QTransform
 from PySide6.QtWidgets import (QApplication, QCheckBox, QGroupBox, QLabel, QMenu, QPushButton, QSystemTrayIcon,
                                QTabWidget, QVBoxLayout, QWidget)
 
@@ -42,6 +42,47 @@ class Frames:
         right, left = self.cache[key]
         frames = right if facing > 0 else left
         return frames[min(frame, len(frames) - 1)]
+
+
+AVATAR_COLUMN = 44  # Qt pixels at the left of the chat column where avatars are (never taken)
+
+
+def text_only(image, background, skip_left=0):
+    """Just the text out of a picture of a Discord message: (picture with the background see-through, the part
+    of the original it came from as a QRect), or None if there's no text. background: a QColor."""
+    w, h = image.width(), image.height()
+    br, bg_, bb = background.red(), background.green(), background.blue()
+
+    def diff(c):
+        return max(abs(c.red() - br), abs(c.green() - bg_), abs(c.blue() - bb))
+
+    xs, ys = [], []
+    for y in range(h):
+        for x in range(max(0, skip_left), w):
+            if diff(image.pixelColor(x, y)) > 48:
+                xs.append(x)
+                ys.append(y)
+    if len(xs) < 12:
+        return None
+    left, right = max(skip_left, min(xs) - 2), min(w - 1, max(xs) + 2)
+    top, bottom = max(0, min(ys) - 2), min(h - 1, max(ys) + 2)
+    out = QImage(right - left + 1, bottom - top + 1, QImage.Format_ARGB32)
+    out.fill(Qt.transparent)
+    for y in range(top, bottom + 1):
+        for x in range(left, right + 1):
+            c = image.pixelColor(x, y)
+            d = diff(c)
+            if d >= 14:  # text (its soft edges partly see-through)
+                out.setPixelColor(x - left, y - top, QColor(c.red(), c.green(), c.blue(), min(255, (d - 14) * 4)))
+    # a thin dark outline round the letters, so they read on grass, sky or snow
+    ow, oh = out.width(), out.height()
+    solid = {(x, y) for y in range(oh) for x in range(ow) if out.pixelColor(x, y).alpha() > 120}
+    edge = QColor(max(0, br - 20), max(0, bg_ - 20), max(0, bb - 20), 200)
+    for x, y in solid:
+        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if 0 <= nx < ow and 0 <= ny < oh and (nx, ny) not in solid and out.pixelColor(nx, ny).alpha() < 120:
+                out.setPixelColor(nx, ny, edge)
+    return out, QRect(left, top, right - left + 1, bottom - top + 1)
 
 
 def background_colour(image):
@@ -197,13 +238,28 @@ class Stage:
         if image.isNull() or cover is None:
             self.world.cancel_message(key)  # couldn't see it properly: better not to steal anything
             return
-        width = min(picture.width(), 150 * self.world.scale)
+        # just the words: past the avatar column, cropped to the text, Discord's background made see-through
+        to_image = image.width() / max(1, band.width())  # logical -> picture pixels
+        found = text_only(image, cover, skip_left=int(AVATAR_COLUMN * to_image))
+        if found is None:
+            self.world.cancel_message(key)  # no text there after all
+            return
+        words, crop = found
+        gap = QRect(band.x() + int(crop.x() / to_image), band.y() + int(crop.y() / to_image),
+                    int(crop.width() / to_image) + 1, int(crop.height() / to_image) + 1)
+        picture = QPixmap.fromImage(words)
+        width = min(gap.width(), 150 * self.world.scale)
         small = picture.scaledToWidth(int(width), Qt.SmoothTransformation)
         self.world.images[key] = small
+        home = self.to_world(QPoint(gap.center().x(), gap.bottom()))
         for msg in self.world.of("message"):
             if msg.key == key:
                 msg.size = (float(small.width()), float(small.height()))
-        self.covers[key] = (band, cover, hwnd, bounds)
+                if home[0] > -9999:  # it flies back to where the words were
+                    msg.home = home
+                    if msg.state == "home":
+                        msg.x, msg.y = home
+        self.covers[key] = (gap, cover, hwnd, bounds)
         self.update()
 
     def guard_covers(self):

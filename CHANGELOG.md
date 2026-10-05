@@ -3,6 +3,13 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.11.5
+
+- **A stolen Discord message is just the words:** the fox carries only the text (name, time and message),
+  cropped close, with Discord's background see-through and a thin dark outline so it reads on any background.
+  The avatar is left alone, the gap is only where the words were, and the message flies back to exactly that
+  spot. If there are no words there, nothing is taken.
+
 ## 1.11.4
 
 - **Fixed: a box left over Discord.** The patch that hides the gap where a message was "stolen" went up as soon

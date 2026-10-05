@@ -13,7 +13,7 @@ what's in it. Don't read whole packages: find the file below, read it (or grep f
 | `pet/visitors/` | Creatures: `base` (Visitor, Bubble, Perch), `autumn` (squirrel, jay, woolly, geese, frog, turkeys), `crows`, `bugs` (inchworm, butterfly, beetles, cicada, spider), `spring` (flower butterflies, songbirds), `night` (owl). |
 | `pet/view/` | Qt: `frames` (sprite frames, drag settings), `windows` (monitor windows, sun/moon window), `stage` (main loop, mouse, taskbar, Discord, folders), `toybox` (tray menu, Toy Box window), `discord_pics`. |
 | `pet/seasons.py` | Which items and visitors belong to each season. `pet/save.py`: settings file and its defaults. |
-| `pet/sky.py`, `pet/weather.py`, `pet/daylight.py` | Sun/moon position, local weather, night/day. `pet/desktop_icons.py`, `pet/discord.py`: Windows-only helpers. |
+| `pet/sky.py`, `pet/weather.py`, `pet/daylight.py` | Sun/moon clock, local weather, night/day. `pet/desktop_icons.py`, `pet/discord.py`: Windows-only helpers. |
 | `art/world_art/` | Sprite drawing, one file per theme: `common`, `trees`, `critters`, `autumn`, `yard`, `winter`, `spring`, `summer`, `garden`, `sky`. Each has `sprites()` listing its sprites. `art/fox_art.py`: the foxes. |
 | `tests/` | One file per topic (`test_foxes`, `test_seasons`, `test_garden`, `test_visitors`, `test_mischief`, `test_weather_sky`, `test_app`). Every file imports `helpers` first (scratch user-data folder, no internet). |
 
@@ -64,6 +64,7 @@ update this table. Import from the package (`from pet.items import Pumpkin`); ad
 - `pet/weather.py` asks Open-Meteo for the local weather on a background thread. The tests replace
   `weather.fetch` so they never touch the internet; keep it that way. Cloud sandboxes may block
   `api.open-meteo.com` anyway, and the app is built to carry on quietly without a report.
-- `astral`'s moon functions want UTC datetimes (convert first); see `pet/sky.py`.
+- The sun and moon are a clock (`pet/sky.py`): sun 6 AM-6 PM, moon 6 PM-6 AM, by the hour, not astronomy
+  (the owner wants to read the time from them).
 - The fox's choice list in `pet/fox.py` draws from the world's rng: add new choices at the end with weight 0
   when they don't apply, so existing tests keep their random sequences.

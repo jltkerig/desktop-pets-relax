@@ -3,6 +3,14 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.15.0
+
+- **The sun and moon are a clock now**, so you can tell the time at a glance: the sun crosses the sky from 6 AM
+  (low on the left) through noon (at the top, in the middle) to 6 PM (low on the right), then the moon does the
+  same from 6 PM through midnight to 6 AM. There's always one of them up. The moon still shows tonight's phase,
+  but never vanishes (a new moon shows as a thin crescent). The tray item is now **Sun and moon clock in the
+  sky**.
+
 ## 1.14.2
 
 - **Fixed: the sun and moon didn't show on the desktop.** Their window was put at the very bottom of the stack,

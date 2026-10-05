@@ -115,7 +115,7 @@ pet/items/         things on the desktop: base bits, garden, trees, yard, toys, 
 pet/visitors/      creatures that come and go: autumn, crows, bugs, spring, night
 pet/view/          the windows and tray: frames, windows, stage, toybox, discord_pics
 pet/seasons.py     which season it is and what belongs to it
-pet/sky.py         where the sun and moon are (and the moon's phase)
+pet/sky.py         the sun and moon clock: where they are at this hour (and the moon's phase)
 pet/weather.py     is it raining or snowing where you are? (Open-Meteo, every half hour, in the background)
 pet/desktop_icons.py  the desktop's folder icons: where they are, and moving them (Windows)
 pet/save.py        user-data/world.json: what's out and where

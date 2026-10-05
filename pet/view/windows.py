@@ -4,17 +4,18 @@ from PySide6.QtCore import QPoint, QRect, Qt
 from PySide6.QtGui import QPainter
 from PySide6.QtWidgets import QWidget
 
-from pet import sky, sprites
+from pet import desktop_layer, sky, sprites
 from .frames import Frames
 
 
 class SkyWindow(QWidget):
-    """The sun by day, the moon by night (in its phase), behind every other window: a small window kept at the
-    bottom of the stack that clicks go straight through, moved along its arc across all the monitors."""
+    """The sun by day, the moon by night (in its phase), behind every other window: a small window kept just
+    above the desktop that clicks go straight through, moved along its arc across all the monitors."""
 
     def __init__(self, stage):
-        super().__init__(None, Qt.FramelessWindowHint | Qt.Tool | Qt.WindowStaysOnBottomHint |
-                         Qt.WindowTransparentForInput | Qt.WindowDoesNotAcceptFocus | Qt.NoDropShadowWindowHint)
+        # (not Qt's "stay on bottom": on Windows that puts it under the desktop wallpaper, out of sight)
+        super().__init__(None, Qt.FramelessWindowHint | Qt.Tool | Qt.WindowTransparentForInput |
+                         Qt.WindowDoesNotAcceptFocus | Qt.NoDropShadowWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_ShowWithoutActivating)
         self.stage = stage
@@ -45,7 +46,8 @@ class SkyWindow(QWidget):
         self.setGeometry(corner.x(), corner.y(), w, h)
         if not self.isVisible():
             self.show()
-        self.lower()  # and stay behind everything
+        if not desktop_layer.just_above_desktop(self.winId()):  # behind every window, in front of the wallpaper
+            self.lower()
         self.update()
 
     def paintEvent(self, event):

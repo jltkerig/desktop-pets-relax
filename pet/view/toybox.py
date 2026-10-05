@@ -5,7 +5,7 @@ from PySide6.QtGui import QAction, QActionGroup, QIcon
 from PySide6.QtWidgets import (QCheckBox, QGroupBox, QLabel, QMenu, QPushButton, QSystemTrayIcon, QTabWidget,
                                QVBoxLayout, QWidget)
 
-from pet import __version__, save, seasons, sprites
+from pet import __version__, save, seasons, sky, sprites
 
 
 class ToyBoxWindow(QWidget):
@@ -181,7 +181,8 @@ class ToyBox:
             action.setChecked(current == key)
             group.addAction(action)
         self._check(m, self._weather_label(), self.settings.get("weather", True), self._set_weather)
-        self._check(m, "Sun and moon in the sky", self.settings.get("sky", True), self._set_sky)
+        self._check(m, f"Sun and moon in the sky ({sky.describe(self.world.now(), self.settings)})",
+                    self.settings.get("sky", True), self._set_sky)
         size_menu = m.addMenu("Size")
         sizes = QActionGroup(size_menu)
         for value in (1, 2, 3):

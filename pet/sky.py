@@ -80,3 +80,35 @@ def placement(now, settings=None):
         up = max(0.0, min(1.0, elevation / highest))
         return body, _across(azimuth, latitude), up, (0 if body == "sun" else phase_frame(now)), latitude < 0
     return None
+
+
+def moonrise_after(now, settings=None):
+    """When the moon next rises (a local datetime), or None if that can't be worked out (no astral)."""
+    observer, zone = _place(settings)
+    if observer is None:
+        return None
+    local = _local(now, zone)
+    try:
+        from astral import moon
+        for days in range(3):
+            day = (local + datetime.timedelta(days=days)).date()
+            try:
+                rise = moon.moonrise(observer, day, local.tzinfo)
+            except Exception:
+                continue  # no moonrise that day
+            if rise is not None and rise > local:
+                return rise
+    except Exception:
+        pass
+    return None
+
+
+def describe(now, settings=None):
+    """A few words for the tray menu: what's in the sky now, or when the moon rises."""
+    found = placement(now, settings)
+    if found is not None:
+        return "the sun's up" if found[0] == "sun" else "the moon's up"
+    rise = moonrise_after(now, settings)
+    if rise is None:
+        return "nothing up right now"
+    return "the moon rises at " + rise.strftime("%I:%M %p").lstrip("0")

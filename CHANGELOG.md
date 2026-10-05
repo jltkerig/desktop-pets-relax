@@ -3,6 +3,14 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.14.2
+
+- **Fixed: the sun and moon didn't show on the desktop.** Their window was put at the very bottom of the stack,
+  which on Windows is underneath the desktop wallpaper itself. Now it's slotted in just above the desktop, behind
+  every other window.
+- The tray menu says what's in the sky: "Sun and moon in the sky (the moon's up)", or when the moon next rises
+  if neither is up (the real moon is below the horizon about half the time; a waning moon rises late at night).
+
 ## 1.14.1
 
 - Updating from a downloaded ZIP now removes the old single files left over from before 1.14.0 (copies made

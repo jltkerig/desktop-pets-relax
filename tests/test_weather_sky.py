@@ -261,6 +261,18 @@ class SunAndMoon(unittest.TestCase):
         self.assertLess(afternoon[1], 0.25)
         self.assertTrue(morning[4])           # mirrored
 
+    def test_the_tray_says_whats_up_or_when_the_moon_rises(self):
+        from pet import sky
+        self.assertEqual(sky.describe(self.at(10), self.MINNEAPOLIS), "the sun's up")
+        self.assertEqual(sky.describe(self.at(3), self.MINNEAPOLIS), "the moon's up")
+        self.assertEqual(sky.describe(self.at(20), self.MINNEAPOLIS), "the moon rises at 2:34 AM")
+
+    def test_away_from_windows_the_desktop_layer_does_nothing(self):
+        from pet import desktop_layer
+        if desktop_layer.ON_WINDOWS:
+            self.skipTest("only checks the non-Windows fallback")
+        self.assertFalse(desktop_layer.just_above_desktop(1234))
+
     def test_moon_phases(self):
         from pet import sky
         utc = datetime.timezone.utc

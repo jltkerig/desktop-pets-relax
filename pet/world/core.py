@@ -88,7 +88,7 @@ class Core:
             thing.x = max(20.0, min(width - 20.0, thing.x))
         self.taskbar_spots = []
 
-    ITEM_KINDS = ("tree", "prop", "corn", "den", "climb", "pumpkin", "birch", "melon", "crop")
+    ITEM_KINDS = ("tree", "prop", "corn", "den", "climb", "pumpkin", "birch", "melon", "crop", "yard")
 
     def add(self, thing):
         self.things.append(thing)
@@ -223,6 +223,7 @@ class Core:
                 if thing.kind in ("leaf", "acorn", "squirrel", "jay", "twig", "snow", "inchworm", "butterfly",
                                   "beetle", "cicada", "spider", "silk"):
                     thing.gone = True
+        self.put_out_fun(wanted_items)  # the newer seasonal things (after the trees: the nest and kite need one)
         for palette, out in self.settings["foxes"].items():
             have = [f for f in self.of("fox") if f.palette == palette]
             if out and not have:
@@ -249,6 +250,7 @@ class Core:
         self.leave_paw_prints()
         self.night_lights(dt)
         self.precipitation(dt)
+        self.fun(dt)
         self.folder_rest = max(0.0, self.folder_rest - dt)
         self.things = [t for t in self.things if not t.gone]
 

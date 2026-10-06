@@ -254,37 +254,61 @@ class Goose(Visitor):
 
 
 class Frog(Visitor):
-    """A frog that hops out of the den when you knock, ribbits a couple of times, and hops away."""
+    """A frog that hops out of the den when you knock, ribbits a couple of times, and hops away. In summer one
+    comes visiting (visiting=True): it hops in to sit by the pool or the cattails for a while, ribbiting now and
+    then, and leaps away when a fox pounces at it."""
     kind = "frog"
     z = 24
 
-    def __init__(self, world, x):
+    def __init__(self, world, x, visiting=False):
         super().__init__(world, x, world.ground, "frog_sit")
         self.facing = world.rng.choice((-1, 1))
         self.state = "out"
         self.timer = 0.0
+        self.visiting = visiting
         self.ribbits = world.rng.randint(2, 3)
         self.hop_to = x + self.facing * 30 * world.scale
+        self.stay = 0.0
+        if visiting:  # in from the nearer side
+            self.hop_to = x
+            self.x = -20.0 if x < world.width / 2 else world.width + 20.0
+            self.stay = world.rng.uniform(30, 50)
+            self.ribbits = 10 ** 6
+
+    def startle(self):
+        """A fox pounced: one big leap away."""
+        if self.state != "away":
+            self.state = "away"
+            self.anim.play("frog_hop")
+
+    def click(self):
+        self.startle()
 
     def update(self, dt):
         super().update(dt)
         self.timer += dt
         w = self.world
-        if self.state == "out":  # one hop out of the doorway
+        if self.state == "out":  # one hop out of the doorway (or all the way in, visiting)
             self.anim.play("frog_hop")
             if self.move_to(self.hop_to, 40, dt):
                 self.state, self.timer = "sit", 0.0
                 self.anim.play("frog_sit")
-        elif self.state == "sit" and self.timer > 1.0:
-            if self.ribbits > 0:
-                self.ribbits -= 1
-                self.timer = 0.0
-                w.add(Bubble(w, self, "ribbit_bubble", rise=18))
-            else:
-                self.state = "away"
-                self.anim.play("frog_hop")
+        elif self.state == "sit":
+            self.stay -= dt
+            if self.visiting and (self.stay <= 0 or any(
+                    abs(f.x - self.x) < 40 * w.scale and f.step is not None and f.step.anim in ("run", "pounce", "dive")
+                    for f in w.of("fox"))):
+                self.startle()
+            elif self.timer > (w.rng.uniform(5, 9) if self.visiting else 1.0):
+                if self.ribbits > 0:
+                    self.ribbits -= 1
+                    self.timer = 0.0
+                    w.add(Bubble(w, self, "ribbit_bubble", rise=18))
+                else:
+                    self.state = "away"
+                    self.anim.play("frog_hop")
         elif self.state == "away":
-            if self.move_to(self.leave_x(), 45, dt):
+            if self.move_to(self.leave_x(), 70 if self.visiting else 45, dt):
                 self.gone = True
 
 

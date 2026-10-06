@@ -11,7 +11,7 @@ FRAME_MS = 33
 TASKBAR_SCRIPT = Path(__file__).resolve().parent / "taskbar_buttons.ps1"
 TASKBAR_REFRESH_MS = 3 * 60 * 1000
 DRAG_START = 6  # pixels the mouse must move before a press becomes a drag
-PLACED_ITEMS = ("tree", "birch", "prop", "corn", "crop", "den", "climb")  # dragged along, and the spot remembered
+PLACED_ITEMS = ("tree", "birch", "prop", "corn", "crop", "den", "climb", "yard")  # dragged along, and the spot remembered
 DRAGGED_ALONG = PLACED_ITEMS + ("pumpkin", "melon")                     # slid along the ground when dragged
 
 

@@ -174,7 +174,9 @@ class ToyBox:
                      "geese": "Geese stopping by to honk", "squirrel": "Squirrel",
                      "turkeys": "Wild turkeys", "crows": "Crows", "junebug": "June beetle",
                      "ladybug": "Ladybug", "cicada": "Cicada", "butterflies": "Butterflies",
-                     "songbirds": "Songbirds", "owl": "Owl (it usually comes at night)"}.get(kind, kind.title())
+                     "songbirds": "Songbirds", "owl": "Owl (it usually comes at night)",
+                     "winterbirds": "Cardinals and chickadees", "bunnies": "Baby bunnies",
+                     "frog": "A frog (by the water)"}.get(kind, kind.title())
             visit.addAction(label, lambda k=kind: self.world.invite_visitor(k))
 
         m.addSeparator()

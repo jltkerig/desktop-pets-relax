@@ -3,6 +3,43 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.18.0
+
+Lots of new things for winter, spring and summer, and the foxes play with all of them.
+
+- **Winter:**
+  - **Snowman.** A fox may pinch his carrot nose and run off with it. Click the carrot, or drop it back on his
+    face, and it goes back on. If it gets eaten, he finds a new one. On days without snow he slumps a little.
+  - **Snowball pile.** Drag a snowball up off the top and throw it, or click the pile. Snowballs burst into a
+    puff of snow when they land, or when they hit a fox, who doesn't mind a bit. The foxes chase them.
+  - **Frozen pond.** Foxes take a run-up and skid across it (WHEE!).
+  - **Bird feeder,** with **cardinals and chickadees**, new winter visitors. They sit on the feeder or peck up
+    spilt seed under it. The foxes stalk them, and they always get away.
+  - **Presents.** A fox dives into the big box and hides, its face peeking out from under the lid and its tail
+    sticking out. Click the presents and it pops out.
+- **Spring:**
+  - **Rain puddles** form when it rains (any season but winter) and dry up afterwards. Foxes splash in them,
+    then leave muddy paw prints. Click a puddle to splash it.
+  - **Baby bunnies**, a new spring visitor. They nibble the grass. The foxes chase them, but they're far too
+    quick.
+  - **Robin's nest** in the oak. Click it and the robin shows you her three blue eggs. A fox nosing about under
+    the tree gets told off: TWEET!
+  - **Kite.** It's stuck in the oak and tugged by the wind. Click it and it flutters down. Pick it up to fly it
+    about, and a fox runs along underneath. Gusts can blow it back into the tree.
+  - **Watering can** (spring and summer). Hold it over the garden rows, the corn or the flowers: it pours, and
+    they grow faster (flowers bob happily). It stays where you put it.
+- **Summer:**
+  - **Sprinkler.** Foxes dash through it and shake themselves off. Click it to turn it off or on.
+  - **Beach ball.** Throw it and a fox chases it and noses it back up into the air. It floats in the kiddie
+    pool.
+  - **Hammock.** A sleepy fox climbs in for a nap on summer days.
+  - **Firefly jar.** A fox that catches a firefly at night may pop it in, and the jar glows. Click it to let
+    them go; they go by themselves at dawn.
+  - **Sunflowers** turn their heads to follow the sun across the sky (by the sun clock), and hang their heads
+    at night.
+  - **A frog** visits the pool, the cattails or a puddle, and leaps away when a fox pounces.
+- Fixed: clickable things that can't be dragged (like the scarecrow's dropped hat) can be clicked now.
+
 ## 1.17.1
 
 - **Fixed: updates could get stuck for good** after git crashed once and left `.git\index.lock` behind (every

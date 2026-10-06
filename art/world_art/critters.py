@@ -502,7 +502,10 @@ SONGBIRDS = {  # back, breast, head, beak
     "robin": ("robin_back", "robin_breast", "bug_black", "beak"),
     "bluebird": ("bluebird", "robin_breast", "bluebird", "bug_black"),
     "goldfinch": ("goldfinch", "goldfinch", "goldfinch", "daffodil_cup"),
+    "cardinal": ("bird", "bird", "bird", "carrot"),            # winter: at the bird feeder
+    "chickadee": ("grey", "chick_buff", "bug_black", "bug_black"),
 }
+COMMON.update({"chick_buff": ("#8a6c48", "#b8946a", "#d6b68c", "#eedab4", "#463420")})
 
 
 def songbird(kind="robin", pose="perch", t=0.0):
@@ -539,6 +542,13 @@ def songbird(kind="robin", pose="perch", t=0.0):
         c.ellipse(hx - 0.4, hy - 1.2, 1.6, 0.9, "bug_black")  # black cap
     if kind == "robin":
         c.pixel(hx + 0.2, hy - 1.2, "white", 3)  # the white ring round its eye
+    if kind == "cardinal":  # a pointed crest, and a black mask round the beak
+        c.polygon([(hx - 2.2, hy - 0.6), (hx - 3.4, hy - 4.6), (hx + 0.6, hy - 1.8)], "bird", lum=0.6)
+        c.pixel(hx + 1.6, hy + 0.6, "bug_black", 1)
+        c.pixel(hx + 1.6, hy - 0.4, "bug_black", 1)
+    if kind == "chickadee":  # white cheeks under the black cap, a black bib
+        c.ellipse(hx - 0.2, hy + 0.8, 1.7, 1.0, "white", bias=0.3)
+        c.pixel(hx + 1.2, hy + 2.2, "bug_black", 1)
     open_ = pose == "sing" and t < 0.75
     if open_:
         c.capsule(hx + 2, hy - 0.6, hx + 4.4, hy - 1.8, 0.4, 0.3, beak)

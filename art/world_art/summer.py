@@ -1,9 +1,11 @@
-"""Summer things: the slide, the kiddie pool, dahlias, dandelions, cattails."""
+"""Summer things: the slide, the kiddie pool, dahlias, dandelions, cattails, the sprinkler, the beach ball, the
+hammock, the firefly jar and the sunflowers."""
 import math
 import random
 
 from pixelkit import COMMON, Canvas, bezier
-from .common import _twig
+from .common import _px, _twig
+from .sky import glow
 
 
 # -- summer fun: a slide and a kiddie pool --------------------------------------------------------------------
@@ -183,6 +185,161 @@ def cattails(stage, sway=0.0, burst=0.0):
     return c.to_image()
 
 
+# -- summer fun: a sprinkler, a beach ball, a hammock, a firefly jar, sunflowers ------------------------------
+
+COMMON.update({
+    "sprinkler": ("#9a7a0c", "#c8a01c", "#e8c436", "#f8e47a", "#4e3c04"),
+    "ball_red": ("#8a1418", "#c02028", "#e43c40", "#f47472", "#46080a"),
+    "ball_blue": ("#1a4a9a", "#2a68c8", "#4a8ce8", "#86b6f6", "#0c244e"),
+    "ball_yellow": ("#b8900c", "#e8bc1c", "#f8d83c", "#fcf090", "#5e4606"),
+    "hammock_a": ("#8a2a1a", "#b8402a", "#d86040", "#ee9070", "#46140a"),
+    "hammock_b": ("#a8946a", "#d0bc90", "#e8d8b4", "#f8f0dc", "#54482e"),
+    "glass": ("#7a9aa8", "#a8c4d0", "#cce0e8", "#f0fafc", "#4a6470"),
+    "sunflower": ("#b07a0a", "#e0a418", "#f4c430", "#fce27a", "#5a3c04"),
+    "sunflower_disc": ("#2e1a0a", "#4a2c12", "#6a4220", "#865a32", "#160c04"),
+})
+
+
+def sprinkler(sweep=None):
+    """100 x 44: a garden sprinkler: a yellow bar on a little sled base, throwing a fan of water up in an arch.
+    sweep: -1 .. 1, which way the fan leans as it swings from side to side (None: turned off)."""
+    c = Canvas(100, 44)
+    c.capsule(42, 42, 58, 42, 1.0, 1.0, "grey")                    # the base
+    c.capsule(44, 39, 56, 39, 1.2, 1.2, "sprinkler", bias=0.1)     # the bar with its holes
+    for x in range(45, 56, 2):
+        c.pixel(x, 38, "sprinkler", 0)
+    c.capsule(50, 42, 50, 40, 0.8, 0.8, "grey")
+    img = c.to_image()
+    c = Canvas(100, 44)  # the water on a layer of its own, without outlines, so the drops look light
+    if sweep is not None:
+        for k in range(-3, 4):  # streams of drops arcing up and over
+            vx = sweep * 34 + k * 6
+            for i in range(1, 21):
+                t = i / 20
+                x, y = 50 + vx * t, 37 - 70 * t + 72 * t * t
+                if (i + k) % 2 == 0 and 0 <= x < 100 and y < 43:
+                    c.pixel(x, y, "water", 3 if i % 4 else 2)
+    img.alpha_composite(c.to_image(outline=False))
+    return img
+
+
+BALL_COLOURS = ("ball_red", "white", "ball_blue", "ball_yellow", "white", "ball_red")
+
+
+def beach_ball(spin=0.0):
+    """13 x 13: a beach ball: bright red, white, blue and yellow panels round a white cap. spin turns it."""
+    c = Canvas(13, 13)
+    c.ellipse(6.5, 6.5, 5.6, 5.6, "white", bias=0.15)
+    for y in range(13):
+        for x in range(13):
+            if c.mat[y][x] is not None:
+                a = (math.atan2(y + 0.5 - 6.5, x + 0.5 - 6.5) / (2 * math.pi) + spin) % 1
+                c.mat[y][x] = BALL_COLOURS[int(a * 6) % 6]
+    c.ellipse(5.8, 5.8, 1.4, 1.4, "white", bias=0.4)  # the cap where the panels meet
+    return c.to_image()
+
+
+HAMMOCK_SAG = 31  # the fabric's lowest point (frame y), where a fox lies
+
+
+def _hammock_curve(x, sway):
+    mid = 42 + sway
+    return 16 + (1 - ((x - mid) / 30) ** 2) * (HAMMOCK_SAG - 16)
+
+
+def hammock(sway=0.0):
+    """84 x 40: a striped hammock slung between two wooden posts. sway: swinging a little side to side. This is
+    the back of it: hammock_front is the near edge, drawn in front of a fox lying in it."""
+    c = Canvas(84, 40)
+    for x1, x2 in ((5, 9), (79, 75)):  # the posts, leaning in a little
+        c.capsule(x1, 39, x2, 6, 1.4, 1.2, "post")
+    for x in range(12, 73):  # the far half of the fabric: stripes, in shadow
+        top = _hammock_curve(x, sway) - 6
+        for y in range(int(top), int(_hammock_curve(x, sway)) + 1):
+            mat = "hammock_a" if (x // 4) % 2 else "hammock_b"
+            _px(c, x, y, mat, 0 if y < top + 2 else 1)
+    for side, (px_, x) in ((-1, (9, 12)), (1, (75, 72))):  # ropes from the posts to the ends
+        _twig(c, px_, 8, x + sway * 0.3, _hammock_curve(x, sway) - 6, "twine", 2)
+        _twig(c, px_, 8, x + sway * 0.3, _hammock_curve(x, sway), "twine", 1)
+    return c.to_image()
+
+
+def hammock_front(sway=0.0):
+    """84 x 40: the near edge of the hammock (see hammock)."""
+    c = Canvas(84, 40)
+    for x in range(12, 73):
+        bottom = _hammock_curve(x, sway) + 1
+        for y in range(int(bottom) - 3, int(bottom) + 1):
+            mat = "hammock_a" if (x // 4) % 2 else "hammock_b"
+            _px(c, x, y, mat, 3 if y == int(bottom) - 3 else 2 if y < bottom - 1 else 1)
+    return c.to_image()
+
+
+def firefly_jar(count=0, t=0.0):
+    """14 x 18: a glass jar with a punched tin lid; count fireflies inside (0 .. 4), blinking."""
+    c = Canvas(14, 18)
+    for y in range(4, 17):  # the glass: just its edges and a shine, so you see inside
+        _px(c, 2, y, "glass", 1)
+        _px(c, 11, y, "glass", 0)
+    for x in range(2, 12):
+        _px(c, x, 17, "glass", 1)
+        _px(c, x, 4, "glass", 2)
+    for y in range(6, 14):
+        _px(c, 4, y, "glass", 3 if y % 3 else 2)
+    c.capsule(2, 2.5, 11, 2.5, 1.2, 1.2, "hoop", bias=0.1)  # the lid
+    for x in (4, 7, 10):
+        c.pixel(x, 2, "hoop", 0)
+    rng = random.Random(count)
+    for k in range(count):
+        x, y = rng.randint(5, 9), rng.randint(7, 15)
+        lit = (k + int(t * 4)) % 3 != 0
+        _px(c, x, y, "firefly", 3 if lit else 0)
+        if lit:
+            _px(c, x + 1, y, "firefly", 2)
+    return c.to_image(outline=False)
+
+
+SUNFLOWERS = [(10, 50), (22, 58), (34, 44)]  # x, height of each flower
+
+
+def sunflower_heads(look):
+    """Where each flower's head is (frame x, y) for a look (0 .. 4 facing left to right, or 'night')."""
+    turn = 0 if look == "night" else (look - 2) / 2
+    return [(x + turn * 2, 63 - h + (5 if look == "night" else 0)) for x, h in SUNFLOWERS]
+
+
+def sunflowers(look=2, sway=0.0):
+    """44 x 64: three tall sunflowers, their big heads turned toward the sun. look: 0 .. 4, facing far left ..
+    straight out .. far right; 'night': heads hanging down, asleep."""
+    c = Canvas(44, 64)
+    ground = 63
+    night = look == "night"
+    turn = 0 if night else (look - 2) / 2
+    for k, ((x, h), (hx, hy)) in enumerate(zip(SUNFLOWERS, sunflower_heads(look))):
+        lean = sway * (h / 60)
+        hx += lean
+        _twig(c, x, ground, hx - turn, hy + 3, "stalk", 1)
+        _twig(c, x + 1, ground, hx - turn + 1, hy + 3, "stalk", 2)
+        for j, ly in enumerate(range(ground - 10, hy + 8, -11)):  # big leaves up the stalk
+            side = 1 if (j + k) % 2 else -1
+            c.ellipse(x + side * 3.5 + lean * (ground - ly) / h, ly, 3.0, 1.6, "dahlia_leaf", angle=side * 25)
+        if night:  # hanging its head, the back of it toward you
+            c.ellipse(hx + 1, hy + 1, 3.2, 4.2, "sunflower", bias=-0.1)
+            for a in range(0, 360, 45):
+                c.pixel(hx + 1 + math.cos(math.radians(a)) * 3.6, hy + 1 + math.sin(math.radians(a)) * 4.6, "sunflower", 1)
+            c.ellipse(hx + 1, hy + 1, 1.6, 2.4, "dahlia_leaf")
+            continue
+        rx = 5.2 * (1 - 0.4 * abs(turn))  # turned away, the round face looks narrower
+        for a in range(0, 360, 30):  # the petals, round the edge
+            ca, sa = math.cos(math.radians(a)), math.sin(math.radians(a))
+            c.ellipse(hx + ca * rx, hy + sa * 5.2, 1.6, 1.6, "sunflower", bias=0.1)
+        c.ellipse(hx + turn * 1.2, hy, rx * 0.62, 3.2, "sunflower_disc", bias=0.1)
+        for a in range(0, 360, 72):  # seeds glinting in the disc
+            c.pixel(hx + turn * 1.2 + math.cos(math.radians(a)) * rx * 0.3, hy + math.sin(math.radians(a)) * 1.5,
+                    "sunflower_disc", 3)
+    return c.to_image()
+
+
 def sprites():
     """This file's sprites: name -> (frames, ms per frame, loop, anchor[, extra])."""
     return {
@@ -201,5 +358,17 @@ def sprites():
         "fluff": ([fluff(k) for k in range(4)], 160, True, (2, 2)),
         "cattail_fluff": ([fluff(k, "log_end") for k in range(4)], 160, True, (2, 2)),
         **{f"cattails_{s}": ([cattails(s, sw) for sw in (0, 1, 2, 1, 0, -1, -2, -1)], 300, True, (25, 58)) for s in range(5)},
+        "sprinkler": ([sprinkler(a) for a in (-1, -0.66, -0.33, 0, 0.33, 0.66, 1, 0.66, 0.33, 0, -0.33, -0.66)], 140,
+                      True, (50, 43)),
+        "sprinkler_off": ([sprinkler()], 1000, False, (50, 43)),
+        "beachball": ([beach_ball(k / 6) for k in range(6)], 80, True, (6, 12)),
+        "beachball_still": ([beach_ball()], 1000, False, (6, 12)),
+        "hammock": ([hammock(sw) for sw in (0, 0.5, 1, 0.5, 0, -0.5, -1, -0.5)], 220, True, (42, 39)),
+        "hammock_front": ([hammock_front(sw) for sw in (0, 0.5, 1, 0.5, 0, -0.5, -1, -0.5)], 220, True, (42, 39)),
+        **{f"firefly_jar_{n}": ([firefly_jar(n, t) for t in (0, 0.25, 0.5)], 260, True, (7, 17)) for n in range(5)},
+        "glow_jar": ([glow(34, 34, (230, 255, 120), s) for s in (0.7, 0.85, 0.6)], 260, True, (17, 17)),
+        **{f"sunflowers_{look}": ([sunflowers(look, sw) for sw in (0, 1, 0, -1)], 600, True, (22, 63),
+                                  {"perches": sunflower_heads(look)})
+           for look in (0, 1, 2, 3, 4, "night")},
         "cattails_burst": ([cattails(3, 0, b) for b in (0.2, 0.5, 0.8, 1.0)] + [cattails(0, 0)], 110, False, (25, 58)),
     }

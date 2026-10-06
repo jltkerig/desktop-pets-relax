@@ -39,7 +39,14 @@ DEFAULTS = {
               "watermelons": {"out": True, "x": None, "patch": []},
               "tomatoes": {"out": True, "x": None, "planted": None},
               "dahlias": {"out": True, "x": None}, "dandelions": {"out": True, "x": None},
-              "cattails": {"out": True, "x": None, "planted": None}},
+              "cattails": {"out": True, "x": None, "planted": None},
+              "snowman": {"out": True, "x": None}, "snowballs": {"out": True, "x": None},
+              "pond": {"out": True, "x": None}, "feeder": {"out": True, "x": None},
+              "gifts": {"out": True, "x": None}, "nest": {"out": True, "x": None},
+              "kite": {"out": True, "x": None}, "watering_can": {"out": True, "x": None},
+              "sprinkler": {"out": True, "x": None}, "beachball": {"out": True, "x": None},
+              "hammock": {"out": True, "x": None}, "firefly_jar": {"out": True, "x": None},
+              "sunflowers": {"out": True, "x": None}},
     # Discord message stealing, taskbar treasure digging, moving folder icons about on the desktop
     "mischief": {"discord": True, "treasure": True, "folders": True},
     "decorations": [],   # pumpkins put out to decorate: {x, size, shape, jack, and on/level/dx if on something}

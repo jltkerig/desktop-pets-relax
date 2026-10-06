@@ -3,8 +3,8 @@ from pet import seasons
 from pet.fox import Step, ZOOM
 from pet.items import Acorn, Leaf
 from pet.visitors import (
-    Beetle, Cicada, Flutterby, Goose, Jay, Owl, Squirrel, Woolly, crow_party, migrating_v, songbirds,
-    turkey_flock)
+    Beetle, Cicada, Flutterby, Frog, Goose, Jay, Owl, Squirrel, Woolly, bunnies, crow_party, migrating_v,
+    songbirds, turkey_flock, winter_birds)
 from .core import LEAF_COLOURS
 
 
@@ -78,6 +78,10 @@ class Visits:
             choices.remove("butterflies")
         if "songbirds" in choices and self.of("songbird"):
             choices.remove("songbirds")
+        if "winterbirds" in choices and self.of("songbird"):
+            choices.remove("winterbirds")
+        if "bunnies" in choices and self.of("bunny"):
+            choices.remove("bunnies")
         if kind is not None:
             choices = [kind] if kind in choices else []
         if not choices:
@@ -109,6 +113,16 @@ class Visits:
             return self.add(Beetle(self, self.tree(), pick))
         if pick == "cicada":
             return self.add(Cicada(self, self.tree()))
+        if pick == "winterbirds":
+            return [self.add(bird) for bird in winter_birds(self)][0]
+        if pick == "bunnies":
+            return [self.add(bunny) for bunny in bunnies(self)][0]
+        if pick == "frog":  # by the water if there is some: the pool, the cattails, a puddle
+            water = [p for p in self.of("prop") if p.variant == "pool"] + \
+                [c for c in self.of("crop") if c.variant == "cattails"] + self.of("puddle")
+            spot = self.rng.choice(water).x + self.rng.uniform(-50, 50) * self.scale if water else \
+                self.rng.uniform(0.2, 0.8) * self.width
+            return self.add(Frog(self, max(30.0, min(self.width - 30.0, spot)), visiting=True))
         if pick == "geese":
             foxes = self.of("fox")
             centre = self.rng.choice(foxes).x if foxes else self.width * 0.5
@@ -137,7 +151,7 @@ class Visits:
 
     def visitor_to_watch(self, fox):
         for kind in ("squirrel", "jay", "woolly", "goose", "frog", "turkey", "crow", "inchworm", "butterfly",
-                     "beetle", "cicada", "spider", "songbird", "owl"):
+                     "beetle", "cicada", "spider", "songbird", "owl", "bunny"):
             for v in self.of(kind):
                 if v not in fox.watched and abs(v.x - fox.x) < 600 * self.scale / 2 and 0 < v.x < self.width:
                     return v

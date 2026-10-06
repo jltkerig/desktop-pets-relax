@@ -1,4 +1,4 @@
-"""Spring and summer visitors: butterflies that rest on the flowers, and songbirds that sing."""
+"""Spring and summer visitors: butterflies that rest on the flowers, songbirds that sing, and baby bunnies."""
 import math
 
 from pet.items import Note
@@ -13,6 +13,9 @@ def flower_heads(world):
     spots = []
     for thing in world.of("prop"):
         if thing.variant in ("daffodils", "tulips", "violets", "dahlias", "dandelions"):
+            spots += thing.flower_heads()
+    for thing in world.of("yard"):
+        if thing.variant == "sunflowers":
             spots += thing.flower_heads()
     return spots
 
@@ -207,3 +210,79 @@ def songbirds(world):
     """One songbird, or a pair of the same kind."""
     species = world.rng.choice(("robin", "robin", "bluebird", "goldfinch"))
     return [SongBird(world, species, delay=i * 1.5) for i in range(world.rng.choice((1, 1, 2)))]
+
+
+# -- spring: baby bunnies ----------------------------------------------------------------------------------
+
+class Bunny(Visitor):
+    """A baby bunny: it hops in, nibbles the grass, sits with its nose twitching, hops about a bit, and goes.
+    If a fox dashes at it, it's off like a shot (much too quick to catch). Click it and it hops away too."""
+    kind = "bunny"
+    z = 23
+    FLEE_SPEED = 150  # quicker than a fox's sprint
+
+    def __init__(self, world, spot, side, delay=0.0):
+        super().__init__(world, -20.0 if side < 0 else world.width + 20.0, world.ground, "bunny_hop")
+        self.spot = max(30.0, min(world.width - 30.0, spot))
+        self.delay = delay
+        self.state = "arrive"  # arrive, graze, flee
+        self.timer = 0.0
+        self.stay = world.rng.uniform(40, 80)
+        self.hop_to = None
+        self.doing_for = 0.0
+
+    def flee(self):
+        if self.state != "flee":
+            self.state = "flee"
+            self.anim.play("bunny_hop")
+            self.facing = -1 if self.x < self.world.width / 2 else 1
+
+    def click(self):
+        self.flee()
+
+    def scared(self):
+        s = self.world.scale
+        return any(abs(f.x - self.x) < 70 * s and f.step is not None and
+                   f.step.anim in ("run", "trot", "pounce", "dive") for f in self.world.of("fox"))
+
+    def update(self, dt):
+        super().update(dt)
+        w, rng = self.world, self.world.rng
+        self.timer += dt
+        if self.state == "arrive":
+            if self.timer < self.delay:
+                return
+            if self.move_to(self.spot, 60, dt):
+                self.state, self.doing_for = "graze", 0.0
+            return
+        if self.state == "flee":
+            if self.move_to(self.leave_x(), self.FLEE_SPEED, dt):
+                self.gone = True
+            return
+        self.stay -= dt
+        if self.stay <= 0 or self.scared():
+            return self.flee()
+        if self.hop_to is not None:
+            if self.move_to(self.hop_to, 40, dt):
+                self.hop_to, self.doing_for = None, 0.0
+            return
+        self.doing_for -= dt
+        if self.doing_for <= 0:  # something new: nibble, sit, or a little hop
+            roll = rng.random()
+            if roll < 0.45:
+                self.anim.play("bunny_nibble")
+                self.doing_for = rng.uniform(2, 4)
+            elif roll < 0.8:
+                self.anim.play("bunny_sit")
+                self.doing_for = rng.uniform(1, 3)
+            else:
+                self.anim.play("bunny_hop")
+                self.hop_to = max(30.0, min(w.width - 30.0, self.x + rng.uniform(-30, 30) * w.scale))
+
+
+def bunnies(world):
+    """Two or three baby bunnies, hopping in together from one side."""
+    rng, s = world.rng, world.scale
+    side = rng.choice((-1, 1))
+    centre = rng.uniform(0.2, 0.8) * world.width
+    return [Bunny(world, centre + (i * 22 - 20) * s, side, delay=i * 0.6) for i in range(rng.randint(2, 3))]

@@ -7,15 +7,20 @@ what's in it. Don't read whole packages: find the file below, read it (or grep f
 
 | Where | What |
 |---|---|
-| `pet/world/` | The world, no Qt. `World` (in `__init__.py`) is built from: `core` (what's out: `rebuild`, season/snow, `add`/`of`, `update` each frame), `garden` (pumpkin/melon patches, decorating pumpkins, corn, vegetable rows, hoe), `visits` (leaves, acorns, which visitors turn up), `foxplay` (a fox alone: naps, chasing, pool, nibbling, climbing, fetching thrown balls/cobs), `friends` (two foxes), `mischief` (taskbar treasure, Discord, desktop folders), `outdoors` (wind, rain/snow, night glows, fireflies, paw prints). All methods share `self`. |
+| `pet/world/` | The world, no Qt. `World` (in `__init__.py`) is built from: `core` (what's out: `rebuild`, season/snow, `add`/`of`, `update` each frame), `garden` (pumpkin/melon patches, decorating pumpkins, corn, vegetable rows, hoe), `visits` (leaves, acorns, which visitors turn up), `foxplay` (a fox alone: naps, chasing, pool, nibbling, climbing, fetching thrown balls/cobs), `friends` (two foxes), `mischief` (taskbar treasure, Discord, desktop folders), `outdoors` (wind, rain/snow, night glows, fireflies, paw prints), `yardfun` (the newer seasonal things: putting them out, puddles, the kite, toys thrown, extra fox choices via `season_options`), `fun_winter` / `fun_spring` / `fun_summer` (the games foxes play with them). All methods share `self`. |
 | `pet/fox.py` | A fox's moods, its plan of `Step`s, and `choose()` (the weighted list of things to do). |
-| `pet/items/` | Things: `base` (small falling bits), `garden` (Pumpkin, DecoPumpkin, Melon, Crop, Corn, CornCob, Produce), `trees` (Tree, Birch), `yard` (Prop, Hat, Den, Climbable...), `toys` (Treasure ball, Message, Folder), `sky` (Glow, Firefly, PawPrint, RainDrop, SnowFlake). |
-| `pet/visitors/` | Creatures: `base` (Visitor, Bubble, Perch), `autumn` (squirrel, jay, woolly, geese, frog, turkeys), `crows`, `bugs` (inchworm, butterfly, beetles, cicada, spider), `spring` (flower butterflies, songbirds), `night` (owl). |
+| `pet/items/` | Things: `base` (small falling bits), `garden` (Pumpkin, DecoPumpkin, Melon, Crop, Corn, CornCob, Produce), `trees` (Tree, Birch), `yard` (Prop, Hat, Den, Climbable...), `toys` (Treasure ball, Message, Folder), `sky` (Glow, Firefly, PawPrint, RainDrop, SnowFlake), `play` (YardThing: base for the newer draggable yard things; Ball: a throwable toy), `winter` (Snowman, Carrot, SnowballPile, Snowball, Pond, Feeder, Gifts), `spring` (Puddle, MudPrint, Nest, Kite, WateringCan), `summer` (Sprinkler, BeachBall, Hammock, FireflyJar, Sunflowers). |
+| `pet/visitors/` | Creatures: `base` (Visitor, Bubble, Perch), `autumn` (squirrel, jay, woolly, geese, frog, turkeys), `crows`, `bugs` (inchworm, butterfly, beetles, cicada, spider), `spring` (flower butterflies, songbirds, bunnies), `winter` (cardinals and chickadees at the feeder), `night` (owl). |
 | `pet/view/` | Qt: `frames` (sprite frames, drag settings), `windows` (monitor windows, sun/moon window), `stage` (main loop, mouse, taskbar, Discord, folders), `toybox` (tray menu, Toy Box window), `discord_pics`. |
 | `pet/seasons.py` | Which items and visitors belong to each season. `pet/save.py`: settings file and its defaults. |
 | `pet/sky.py`, `pet/weather.py`, `pet/daylight.py`, `pet/updates.py` | Sun/moon clock, local weather, night/day, checking GitHub for a newer version (tray menu). `pet/desktop_icons.py`, `pet/discord.py`: Windows-only helpers. |
 | `art/world_art/` | Sprite drawing, one file per theme: `common`, `trees`, `critters`, `autumn`, `yard`, `winter`, `spring`, `summer`, `garden`, `sky`. Each has `sprites()` listing its sprites. `art/fox_art.py`: the foxes. |
-| `tests/` | One file per topic (`test_foxes`, `test_seasons`, `test_garden`, `test_visitors`, `test_mischief`, `test_weather_sky`, `test_app`). Every file imports `helpers` first (scratch user-data folder, no internet). |
+| `tests/` | One file per topic (`test_foxes`, `test_seasons`, `test_garden`, `test_visitors`, `test_mischief`, `test_weather_sky`, `test_app`, `test_yard_fun` for the newer seasonal things). Every file imports `helpers` first (scratch user-data folder, no internet). |
+
+**Adding a new yard thing** (something to drag about and click): subclass `YardThing` in `pet/items/<season>.py`,
+add it to `YARD_ITEMS` in `pet/world/yardfun.py` (class and first spot), to `seasons.ITEMS` and `save.DEFAULTS`,
+and give foxes a game with it in `season_options` plus a method in `fun_<season>.py`. Things you pick up and
+throw set `carryable = True` and have `pick_up()` and `throw(vx, vy)` (the Stage does the rest).
 
 **Adding something new:** put it in the file for its subject (a new summer item: `pet/items/yard.py` or
 `garden.py`, its art in `art/world_art/summer.py` and that file's `sprites()`, its season in `seasons.py`,

@@ -34,14 +34,27 @@ ITEMS = {
     "dahlias": {"label": "Dahlias", "seasons": ("summer", "autumn")},
     "dandelions": {"label": "Dandelions", "seasons": ("spring", "summer")},
     "cattails": {"label": "Cattails", "seasons": ("summer",)},
+    "snowman": {"label": "Snowman", "seasons": ("winter",)},
+    "snowballs": {"label": "Snowball pile", "seasons": ("winter",)},
+    "pond": {"label": "Frozen pond", "seasons": ("winter",)},
+    "feeder": {"label": "Bird feeder", "seasons": ("winter",)},
+    "gifts": {"label": "Presents", "seasons": ("winter",)},
+    "nest": {"label": "Robin's nest (in the oak)", "seasons": ("spring",)},
+    "kite": {"label": "Kite", "seasons": ("spring",)},
+    "watering_can": {"label": "Watering can", "seasons": ("spring", "summer")},
+    "sprinkler": {"label": "Sprinkler", "seasons": ("summer",)},
+    "beachball": {"label": "Beach ball", "seasons": ("summer",)},
+    "hammock": {"label": "Hammock", "seasons": ("summer",)},
+    "firefly_jar": {"label": "Firefly jar", "seasons": ("summer",)},
+    "sunflowers": {"label": "Sunflowers", "seasons": ("summer",)},
 }
 
 # Visitors that drop by on their own, per season. Crows are about all year round.
 VISITORS = {
     "autumn": ("squirrel", "jay", "woolly", "migrants", "geese", "turkeys", "crows", "cicada"),
-    "winter": ("crows",),
-    "spring": ("crows", "butterflies", "songbirds"),
-    "summer": ("crows", "junebug", "ladybug"),
+    "winter": ("crows", "winterbirds"),
+    "spring": ("crows", "butterflies", "songbirds", "bunnies"),
+    "summer": ("crows", "junebug", "ladybug", "frog"),
 }
 
 

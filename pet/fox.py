@@ -55,6 +55,8 @@ class Fox(Thing):
         self.dragging_folder = None  # a desktop folder icon it's dragging along
         self.carrying = None   # a dug-up treasure in its mouth
         self.in_den = False    # curled up inside the den (hidden; the den shows its tail tip)
+        self.hiding_in = None  # the presents it's hiding in (hidden; they show it peeking out)
+        self.muddy = 0.0       # seconds of muddy paw prints left (after splashing in a puddle)
         self.rng = world.rng
 
     # -- what other things call ------------------------------------------------------------------------
@@ -63,6 +65,12 @@ class Fox(Thing):
         return f"fox_{self.palette}_{short}"
 
     def leave_den(self):
+        """Out of the den (or the presents it was hiding in): visible again."""
+        if self.hiding_in is not None:
+            if getattr(self.hiding_in, "hider", None) is self:
+                self.hiding_in.hider = None
+            self.hiding_in = None
+            self.alpha = 1.0
         if self.in_den:
             self.in_den = False
             self.alpha = 1.0
@@ -95,7 +103,7 @@ class Fox(Thing):
         if self.asleep:
             self.do(Step("wake"), Step("tilt", face=goose_x), Step("happy", 1.0, face=goose_x))
             self.just_woke = True
-        elif self.step is None or self.step.anim not in ("tilt", "hop", "pounce", "trot"):
+        elif self.step is None or self.step.anim not in ("tilt", "hop", "pounce", "trot", "crouch"):
             self.do(Step("tilt", face=goose_x), Step("hop", face=goose_x), Step("watch", 2.0, face=goose_x))
 
     def pet(self):
@@ -222,7 +230,7 @@ class Fox(Thing):
         if step.to_x is not None and abs(step.to_x - self.x) > 1:
             self.facing = 1 if step.to_x > self.x else -1
         self.asleep = step.anim == "sleep"
-        if self.asleep:
+        if self.asleep and not self.up_high:  # (not when napping in the hammock)
             den = self.world.den()
             if den is not None and abs(self.x - den.entrance_x()) < 24 * self.world.scale:
                 self.in_den = True     # into the den: it disappears inside, its tail tip shows in the doorway
@@ -254,6 +262,8 @@ class Fox(Thing):
                     finished = True  # at the fallen folder
                 elif getattr(target, "is_ball", False) and target.low():
                     finished = True  # caught up with a bouncing ball, low enough to grab
+            if target.kind == "kite" and not target.held:
+                finished = True  # you let go of the kite: never mind
         elif step.leap and step.to_x is not None:
             total = sprites.duration(self.anim.name)
             t = min(1.0, step.elapsed / total)
@@ -356,6 +366,10 @@ class Fox(Thing):
             self.plan.extend([Step("stretch"), Step("yawn") if rng.random() < 0.5 else Step("idle", 2.0)])
             return
         if self.energy < 0.4 or (night and self.energy < 0.8):
+            hammock = w.hammock_for(self)  # a summer nap in the hammock, now and then
+            if hammock is not None:
+                w.nap_in_hammock(self, hammock)
+                return
             friend = w.sleeping_friend(self)
             if friend is not None and w.den() is None and rng.random() < 0.8:
                 w.snuggle(self, friend)
@@ -448,6 +462,7 @@ class Fox(Thing):
             (self.playful * 0.9 if w.pool_near(self, 900) else 0.0, lambda: self._paddle()),
             (self.playful * 3.0 if w.floater_near(self) else 0.0, lambda: self._chase_floater()),
             (1.5 + self.boredom * 2 if w.produce_near(self, 600) else 0.0, lambda: self._nibble()),
+            *w.season_options(self),  # the newer seasonal things: snowman, pond, puddles, sprinkler...
         ]
         total = sum(weight for weight, _ in options)
         pick = rng.uniform(0, total)

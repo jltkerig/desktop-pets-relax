@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QApplication
 import json
 
 from pet import desktop_icons, discord, save, screens, weather
+from pet.things import Thing
 from .frames import DRAGGED_ALONG, DRAG_START, FRAME_MS, Frames, PLACED_ITEMS, TASKBAR_REFRESH_MS, TASKBAR_SCRIPT
 from .discord_pics import AVATAR_COLUMN, background_colour, text_only
 from .windows import Desktop, SkyWindow
@@ -397,20 +398,26 @@ class Stage:
 
     def pressed(self, x, y):
         thing = self.world.thing_at(x, y, draggable_only=True)
+        top = self.world.thing_at(x, y)
+        if top is not None and not top.draggable and type(top).click is not Thing.click:
+            thing = top  # something clickable in front (the robin's nest, a puddle...): it gets the click
         if thing is not None:
             self.press = (thing, (x, y), thing.x)
 
     def moved(self, x, y, buttons):
         if self.press and self.dragging is None:
             thing, (sx, sy), _ = self.press
-            if abs(x - sx) + abs(y - sy) > DRAG_START:
+            if abs(x - sx) + abs(y - sy) > DRAG_START and thing.draggable:
                 self.dragging = thing
+                if hasattr(thing, "lift") and sy - y > abs(x - sx):  # up off the snowball pile: a snowball
+                    thing = self.dragging = thing.lift()
+                    self.press = (thing, (x, y), thing.x)
                 if thing.kind == "pumpkin" and self.world.decos_in_season() and \
                         self.world.pick_pumpkin(thing) is not None:  # (only a ripe one: young ones slide)
                     thing = self.dragging = self.world.of("deco")[-1]  # lifted out of the patch: picked
                     self.press = (thing, (x, y), thing.x)
                 if thing.kind == "fox" or getattr(thing, "is_cob", False) or getattr(thing, "is_ball", False) or \
-                        getattr(thing, "is_deco", False):
+                        getattr(thing, "is_deco", False) or getattr(thing, "carryable", False):
                     thing.pick_up()
                     self.trail = []
         if self.dragging is not None and self.dragging.kind in DRAGGED_ALONG:
@@ -433,7 +440,8 @@ class Stage:
 
     def released(self):
         if self.dragging is not None:
-            if getattr(self.dragging, "is_ball", False) or getattr(self.dragging, "is_cob", False):
+            if getattr(self.dragging, "is_ball", False) or getattr(self.dragging, "is_cob", False) or \
+                    getattr(self.dragging, "carryable", False):
                 self.dragging.throw(*self.throw_speed())  # how fast your hand was moving as you let go
             elif self.dragging.kind == "fox" or getattr(self.dragging, "is_deco", False):
                 self.dragging.drop()

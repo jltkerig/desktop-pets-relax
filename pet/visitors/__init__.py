@@ -4,7 +4,8 @@
     autumn  squirrel, jay, woolly bear, geese, frog, turkeys
     crows   crows and where they perch
     bugs    inchworm, butterfly, beetles, cicada, spider
-    spring  butterflies on flowers, songbirds
+    spring  butterflies on flowers, songbirds, baby bunnies
+    winter  cardinals and chickadees at the bird feeder
     night   the owl
 
 Import from here (from pet.visitors import Crow); new visitors go in the file they belong to, and get listed below.
@@ -16,7 +17,8 @@ from .crows import (
     CAWS, Crow, CrowParty, DEN_PERCHES, FAVOURITES, PROP_PERCHES, PUMPKIN_HEIGHT, PUMPKIN_SHAPE_HEIGHT,
     SCARECROW_ARMS, TALKING, crow_party, crow_perches, favourite, scarecrow_of)
 from .bugs import Beetle, Butterfly, Cicada, Inchworm, Silk, Spider
-from .spring import Flutterby, SongBird, flower_heads, songbirds
+from .spring import Bunny, Flutterby, SongBird, bunnies, flower_heads, songbirds
+from .winter import WinterBird, winter_birds
 from .night import Owl
 
 __all__ = [
@@ -24,5 +26,6 @@ __all__ = [
     "TurkeyFlock", "Woolly", "migrating_v", "turkey_flock", "CAWS", "Crow", "CrowParty", "DEN_PERCHES",
     "FAVOURITES", "PROP_PERCHES", "PUMPKIN_HEIGHT", "PUMPKIN_SHAPE_HEIGHT", "SCARECROW_ARMS", "TALKING",
     "crow_party", "crow_perches", "favourite", "scarecrow_of", "Beetle", "Butterfly", "Cicada", "Inchworm", "Silk",
-    "Spider", "Flutterby", "SongBird", "flower_heads", "songbirds", "Owl",
+    "Spider", "Flutterby", "SongBird", "flower_heads", "songbirds", "Owl", "Bunny", "bunnies", "WinterBird",
+    "winter_birds",
 ]

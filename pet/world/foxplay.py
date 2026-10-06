@@ -171,11 +171,15 @@ class FoxPlay:
         off), and the fox is delighted anyway."""
         x = max(40.0, min(self.width - 40.0, thing.x))
         fox.do(Step("crouch", 0.5, face=thing.x),
-               Step("pounce", to_x=x, leap=26, then=lambda: self._dodge(thing)),
+               Step("pounce", to_x=x, leap=26, then=lambda: self._dodge(thing, fox)),
                Step("land"), Step("happy", 1.0), Step("tilt", face=thing.x))
 
-    def _dodge(self, thing):
+    def _dodge(self, thing, fox=None):
         s = self.scale
+        if thing.kind == "firefly" and fox is not None and not thing.gone:
+            jar = self.jar_for(thing)  # a firefly jar nearby: now and then one's caught and popped in
+            if jar is not None and self.rng.random() < 0.5:
+                return self.into_the_jar(fox, thing, jar)
         if thing.kind == "butterfly":
             thing.state, thing.target = "flutter", None
             thing.y -= 24 * s

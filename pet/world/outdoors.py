@@ -86,6 +86,9 @@ class Outdoors:
         for p in self.of("prop"):
             if p.variant == "xmas_tree":
                 lit.append((p, "glow_lights", None))
+        for jar in self.of("yard"):
+            if jar.variant == "firefly_jar" and jar.count:
+                lit.append((jar, "glow_jar", 9))
         return lit
 
     def night_lights(self, dt):
@@ -109,16 +112,18 @@ class Outdoors:
                 f.glow.fading = True
 
     def leave_paw_prints(self):
-        """Foxes walking about on a snowy day leave a trail of paw prints, which slowly fade."""
-        from pet.items import PawPrint
-        if not self.snowed_over:
+        """Foxes walking about on a snowy day leave a trail of paw prints, which slowly fade. (So do muddy foxes
+        fresh from splashing in a puddle.)"""
+        from pet.items import MudPrint, PawPrint
+        snowy = self.snowed_over
+        if not snowy and not any(getattr(f, "muddy", 0) > 0 for f in self.of("fox")):
             return
         s = self.scale
         for fox in self.of("fox"):
-            if fox.alpha <= 0 or fox.held or fox.y < self.ground - 1:
+            if fox.alpha <= 0 or fox.held or fox.y < self.ground - 1 or not (snowy or getattr(fox, "muddy", 0) > 0):
                 continue
             last = getattr(fox, "last_print", None)
             if last is None or abs(fox.x - last) > 11 * s:
                 fox.last_print = fox.x
                 if last is not None and len(self.of("print")) < 120:
-                    self.add(PawPrint(self, fox.x, self.ground))
+                    self.add((PawPrint if snowy else MudPrint)(self, fox.x, self.ground))

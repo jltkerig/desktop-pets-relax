@@ -1,0 +1,25 @@
+{
+  "frame_width": 44,
+  "frame_height": 64,
+  "frames": 4,
+  "ms": 600,
+  "loop": true,
+  "anchor": [
+    22,
+    63
+  ],
+  "perches": [
+    [
+      12.0,
+      13
+    ],
+    [
+      24.0,
+      5
+    ],
+    [
+      36.0,
+      19
+    ]
+  ]
+}

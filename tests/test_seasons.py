@@ -237,12 +237,25 @@ class OakThroughTheYear(unittest.TestCase):
 
     def test_birds_sit_on_real_branches_of_the_bare_oak(self):
         from PIL import Image
-        for look in ("oak_winter", "oak_snow", "oak_spring"):
+        for look in ("oak_winter", "oak_snow"):
             m = sprites.meta(look)
             img = Image.open(sprites.SPRITE_DIR / f"{look}.png").convert("RGBA")
             self.assertGreaterEqual(len(m["perches"]), 4)
             for x, y in m["perches"]:
                 near = [img.getpixel((round(x) + dx, round(y) + dy))[3] for dx in (-1, 0, 1) for dy in (-1, 0, 1)]
+                self.assertTrue(any(a > 0 for a in near), (look, x, y))
+
+    def test_birds_sit_on_the_leaves_of_a_leafy_oak(self):
+        from PIL import Image
+        for season, look in (("autumn", "oak"), ("summer", "oak_summer"), ("spring", "oak_spring")):
+            world, _, _ = self.oak(season)
+            tree = world.tree()
+            m = sprites.meta(look)
+            img = Image.open(sprites.SPRITE_DIR / f"{look}.png").convert("RGBA")
+            ax, ay = m["anchor"]
+            for px, py in tree.perch_points():
+                x, y = round(ax + (px - tree.x) / world.scale), round(ay - (tree.y - py) / world.scale)
+                near = [img.getpixel((x + dx, y + dy))[3] for dx in (-2, 0, 2) for dy in (0, 2, 4)]
                 self.assertTrue(any(a > 0 for a in near), (look, x, y))
 
 

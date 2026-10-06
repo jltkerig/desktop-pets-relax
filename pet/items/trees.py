@@ -30,7 +30,7 @@ class Tree(Thing):
 
     @property
     def bare(self):
-        return self.look in ("oak_winter", "oak_snow", "oak_spring")
+        return self.look in ("oak_winter", "oak_snow")
 
     def update(self, dt):
         if self.anim.name != self.look:

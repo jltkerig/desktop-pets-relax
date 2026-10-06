@@ -3,6 +3,23 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.20.0
+
+More beautiful trees.
+
+- **Oak:** the leafy crown is now a heap of rounded leaf clusters, each lit from the top left, with small
+  leaves drawn inside. Darker clusters sit behind, the big limbs show through, and the colour deepens toward
+  the bottom of the crown.
+  - **Summer:** rich greens shading to blue-green underneath.
+  - **Autumn:** each cluster is gold, orange or red, instead of speckled noise.
+  - **Spring:** a fresh, airy pale-green crown with dangling catkins, instead of bare branches. Birds now sit
+    on top of the crown, as in summer.
+- **Birch:**
+  - Hanging curtains of small leaf clusters along its drooping twigs: bright green in summer, gold in autumn,
+    and a few pale ones with catkins in spring.
+  - Its limbs bow upward, and the bark has cleaner black markings and dark chevrons under the branches.
+  - In winter it has a fine haze of thin hanging twigs.
+
 ## 1.19.0
 
 Smoother running and a tidier tray menu.

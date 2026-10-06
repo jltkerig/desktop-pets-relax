@@ -3,6 +3,7 @@ import math
 import random
 
 from pixelkit import COMMON, Canvas
+from . import foliage
 from .common import _daffodil_head, _px, _rot_pts, _twig
 
 
@@ -82,114 +83,76 @@ def _limb(c, x1, y1, x2, y2, w1, w2):
 BARE_FORK = [(OAK_X - 4, 132, OAK_X - 30, 92, 10, 6), (OAK_X + 4, 132, OAK_X + 28, 90, 10, 6)]
 
 
-# the crown's colours: (cut-off, leaf colour) from the top of the crown to the bottom
-CROWN_COLOURS = {
-    "autumn": ((0.3, "leaf_yellow"), (0.62, "leaf_orange"), (0.8, "leaf_red"), (9.0, "leaf_brown")),
-    "summer": ((0.3, "leaf_summer_light"), (0.58, "leaf_green"), (0.8, "leaf_summer_dark"), (9.0, "leaf_summer_blue")),
-}
+# the big limbs inside a leafy crown, up from the top of the trunk: a few bends each, (x, y, radius)
+OAK_LIMBS = (((110, 152, 6.0), (100, 130, 4.8), (86, 112, 3.6), (68, 100, 2.4), (56, 94, 1.5)),
+             ((112, 148, 6.0), (124, 126, 4.8), (142, 110, 3.5), (160, 100, 2.4), (170, 96, 1.5)),
+             ((110, 142, 5.2), (107, 118, 4.0), (110, 96, 3.0), (106, 74, 2.0)),
+             ((100, 130, 3.0), (92, 108, 2.4), (86, 86, 1.6)),
+             ((124, 126, 3.0), (132, 104, 2.4), (136, 84, 1.6)))
+
+
+def _oak_limbs(c, lean):
+    for limb in OAK_LIMBS:
+        for (x1, y1, r1), (x2, y2, r2) in zip(limb, limb[1:]):
+            c.capsule(x1 + lean(y1), y1, x2 + lean(y2), y2, r1, r2, "bark")
+
+
+def _oak_clusters(season, seed=7):
+    """The leaf clusters of a leafy oak (the same in every frame): a broad, rounded crown of big clumps, darker
+    ones behind. A spring crown is smaller-leaved and airier."""
+    rng = random.Random(seed + 50)
+    spring = season == "spring"
+    spots = foliage.scatter(rng, OAK_CROWN[0], OAK_CROWN[1] + 2, 92, 58, 34 if spring else 46,
+                            11 if spring else 13, 17 if spring else 21, flat_bottom=0.25)
+    clusters = []
+    for x, y, r in spots:
+        height = 1 - (y - 30) / 120
+        back = rng.random() < 0.38
+        tones = (foliage.autumn_tones(rng, height, back) if season == "autumn"
+                 else foliage.TONES["spring" if spring else "summer"])
+        clusters.append(foliage.Cluster(x, y, r, tones, back=back, lift=rng.uniform(-0.04, 0.04),
+                                        phase=rng.uniform(0, 6.3)))
+    return clusters
+
+
+OAK_CLUSTERS = {season: _oak_clusters(season) for season in ("autumn", "summer", "spring")}
 
 
 def oak(sway=0.0, seed=7, season="autumn"):
-    """220 x 232. Flat pixel-art trunk and branches; a big leafy crown. sway moves the crown a little.
-    season: "autumn" (gold, orange, red and brown) or "summer" (vibrant greens, shading to blue, green acorns)."""
+    """220 x 232: the leafy oak. A flared trunk and big limbs, and a broad crown of rounded leaf clusters lit
+    from the top left (darker clusters behind, the limbs showing through the gaps). season: "autumn" (gold,
+    orange, red and russet clusters), "summer" (deep greens shading to blue underneath, green acorns, pansies)
+    or "spring" (fresh pale green, airier, with catkins, and violets and daffodils underneath)."""
     c = Canvas(OAK_W, OAK_H)
     rng = random.Random(seed)
-    _oak_trunk(c, rng, sway)
-    # the crown: one leafy mass with a bumpy oak outline, lit as a single rounded shape
-    cx0, cy0 = OAK_CROWN[0] + sway, OAK_CROWN[1]
-    rx0, ry0 = 74, 50  # the core; lobes of different sizes make the outline
-    lumps = [(cx0, cy0, rx0, ry0)]
-    for i in range(20):  # big and small lobes, unevenly spaced, so the silhouette is irregular
-        a = i / 20 * 2 * math.pi + rng.uniform(-0.2, 0.2)
-        reach = rng.uniform(0.78, 1.08)
-        lumps.append((cx0 + math.cos(a) * rx0 * reach, cy0 + math.sin(a) * ry0 * reach - (5 if math.sin(a) < 0 else 0),
-                      rng.uniform(11, 27), rng.uniform(9, 20)))
-    lobes = list(lumps)
-    def in_lobes(x, y):
-        return any(((x - lx) / lrx) ** 2 + ((y - ly) / lry) ** 2 <= 1 for lx, ly, lrx, lry in lobes)
-    for _ in range(26):  # small leafy tufts sitting on the edge, half poking out
-        a = rng.uniform(0, 2 * math.pi)
-        if math.sin(a) > 0.75:
-            continue  # not hanging below the crown's middle, where the trunk is
-        d = 0.0
-        while in_lobes(cx0 + math.cos(a) * d * 1.4, cy0 + math.sin(a) * d) and d < 120:
-            d += 1  # walk out from the centre to the edge
-        lumps.append((cx0 + math.cos(a) * d * 1.4, cy0 + math.sin(a) * d, rng.uniform(3, 6), rng.uniform(2.5, 4.5)))
-    notches = []  # bites out of the edge give it corners
-    for _ in range(9):
-        a = rng.uniform(0, 2 * math.pi)
-        d = 0.0
-        while in_lobes(cx0 + math.cos(a) * d * 1.4, cy0 + math.sin(a) * d) and d < 120:
-            d += 1
-        notches.append((cx0 + math.cos(a) * (d * 1.4 + 2), cy0 + math.sin(a) * (d + 1.5), rng.uniform(4, 7), rng.uniform(3, 5)))
-    holes = [(cx0 - 30 + rng.uniform(-4, 4), cy0 + 18, 3.6, 2.6), (cx0 + 36 + rng.uniform(-4, 4), cy0 - 10, 3.0, 2.2),
-             (cx0 + 6, cy0 + 30, 2.6, 2.0)]
-    def inside(x, y, shapes):
-        return any(((x - lx) / lrx) ** 2 + ((y - ly) / lry) ** 2 <= 1 for lx, ly, lrx, lry in shapes)
-    def in_crown(x, y):
-        return inside(x, y, lumps) and not inside(x, y, notches) and not inside(x, y, holes)
-    # calm colour: broad patches that flow from golden on top, through orange, to deep red and brown below
-    cell = {}
-    def colour(x, y):
-        key = ((x + 3 * ((y // 4) % 2)) // 6, y // 4)  # leaf clusters about 6 x 4, staggered like brickwork
-        if key not in cell:
-            kx, ky = key[0] * 6, key[1] * 4
-            top = max(0.0, min(1.0, (ky - (cy0 - ry0 - 20)) / (2 * ry0 + 40)))  # 0 at the top, 1 at the bottom
-            side = (kx - cx0) / (rx0 + 30)                                     # -1 left .. 1 right
-            wave = (math.sin(kx * 0.045 + 1.3) + math.sin(ky * 0.06 + 0.4)) / 4  # gentle, wide drifts
-            v = top * 0.42 + side * 0.06 + wave * 1.1 + 0.12 + rng.uniform(-0.07, 0.07)
-            v = 0.5 + (v - 0.5) * 0.7  # fewer extremes: mostly warm orange and red, a little gold and brown
-            cuts = CROWN_COLOURS[season]
-            mat = next(m for cut, m in cuts if v < cut)
-            # near a boundary, mix the two colours in a checkerboard so the change is soft
-            for cut, m in cuts[:-1]:
-                if abs(v - cut) < 0.045 and (key[0] + key[1]) % 2:
-                    nxt = cuts[[c_ for c_, _ in cuts].index(cut) + 1][1]
-                    mat = nxt if v < cut else m
-            cell[key] = (mat, rng.uniform(-0.04, 0.04))
-        return cell[key]
-    for y in range(0, 160):
-        for x in range(0, OAK_W):
-            if not in_crown(x + 0.5, y + 0.5):
-                continue
-            nx, ny = (x + 0.5 - cx0) / (rx0 + 16), (y + 0.5 - cy0) / (ry0 + 14)
-            mat, jitter = colour(x, y)
-            lum = Canvas._shade(max(-1, min(1, nx)), max(-1, min(1, ny)), jitter)
-            if rng.random() < 0.012:  # an occasional small shadow between leaves
-                lum -= 0.25
-            c.mat[y][x], c.lum[y][x], c.fixed[y][x] = mat, lum, None
-    # keep only the crown piece joined to the middle (no floating crumbs)
-    seen, stack = set(), [(int(cx0), int(cy0))]
-    while stack:
-        x, y = stack.pop()
-        if (x, y) in seen or not (0 <= x < OAK_W and 0 <= y < 160) or not (c.mat[y][x] or "").startswith("leaf"):
-            continue
-        seen.add((x, y))
-        stack.extend(((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)))
-    for y in range(160):
-        for x in range(OAK_W):
-            if (c.mat[y][x] or "").startswith("leaf") and (x, y) not in seen:
-                c.mat[y][x] = None
-    # a jagged, leafy edge: nibble some edge pixels away and push others out a pixel
-    edge = [(x, y) for y in range(1, 159) for x in range(1, OAK_W - 1)
-            if c.mat[y][x] and c.mat[y][x].startswith("leaf")
-            and any(c.mat[y + dy][x + dx] is None for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))]
-    for x, y in edge:
-        roll = rng.random()
-        if roll < 0.22:
-            c.mat[y][x] = None
-        elif roll < 0.45:
-            dx, dy = rng.choice(((1, 0), (-1, 0), (0, -1), (1, -1), (-1, -1)))
-            if c.mat[y + dy][x + dx] is None:
-                c.mat[y + dy][x + dx], c.lum[y + dy][x + dx], c.fixed[y + dy][x + dx] = c.mat[y][x], c.lum[y][x], None
+    _oak_trunk(c, rng, sway, branches=False)
+
+    def lean(y):
+        return sway * max(0.0, (150 - y) / 150) * 1.6  # higher up sways more
+
+    clusters = OAK_CLUSTERS[season]
+    back = [k for k in clusters if k.back]
+    front = [k for k in clusters if not k.back]
+    foliage.paint(c, back, 28, 150, sway=lean)
+    _oak_limbs(c, lean)
+    foliage.paint(c, front, 28, 150, sway=lean)
     if season == "summer":  # green acorns here and there, hanging under the leaves
         arng = random.Random(seed + 100)
-        for _ in range(9):
-            x, y = arng.randrange(50, 172), arng.randrange(60, 130)
+        for _ in range(10):
+            x, y = arng.randrange(56, 166), arng.randrange(70, 130)
             if (c.mat[y][x] or "").startswith("leaf") and (c.mat[y + 6][x] or "").startswith("leaf"):
-                c.ellipse(x + sway * 0.3, y + 1.6, 1.4, 1.8, "acorn_green")
-                c.ellipse(x + sway * 0.3, y, 1.7, 1.0, "cap")
+                c.ellipse(x + lean(y), y + 1.6, 1.4, 1.8, "acorn_green")
+                c.ellipse(x + lean(y), y, 1.7, 1.0, "cap")
         _pansies(c, OAK_GROUND, OAK_X, 92)  # pansies growing round the foot of the tree
+    elif season == "spring":  # catkins dangling below the new leaves
+        krng = random.Random(seed + 200)
+        for _ in range(40):
+            x, y = krng.randrange(30, 190), krng.randrange(40, 150)
+            if (c.mat[y][x] or "").startswith("leaf") and c.mat[y + 2][x] is None:
+                length = krng.randint(3, 5)
+                for k in range(length):
+                    _px(c, int(x + lean(y) * 0.2), y + 1 + k, "catkin", 3 if k < 2 else 2)
+        _spring_flowers(c, seed, sway)
     return c.to_image()
 
 
@@ -260,10 +223,9 @@ def bare_oak_shape(seed=7):
 BARE_SEGMENTS, BARE_TIPS, BARE_PERCHES = bare_oak_shape()
 
 
-def oak_bare(sway=0.0, seed=7, snow=False, spring=False):
+def oak_bare(sway=0.0, seed=7, snow=False):
     """220 x 232: the oak without its leaves: a winter tree of bare, branching limbs and twigs. snow: snow
-    lying along the branches and in a drift round the roots. spring: buds, small new leaves and tiny acorns on
-    the twigs, and violets and daffodils growing underneath."""
+    lying along the branches and in a drift round the roots."""
     c = Canvas(OAK_W, OAK_H)
     rng = random.Random(seed)
     _oak_trunk(c, rng, sway, top=132, branches=False)
@@ -280,38 +242,6 @@ def oak_bare(sway=0.0, seed=7, snow=False, spring=False):
         else:
             _twig(c, x1 + lean(y1), y1, x2 + lean(y2), y2)
     tips = [(x + lean(y), y) for x, y in BARE_TIPS]
-    if spring:
-        for x, y in tips:
-            roll = rng.random()
-            if roll < 0.45:  # small new leaves, fresh and pale
-                c.ellipse(x + rng.uniform(-1, 1), y - 1, rng.uniform(1.6, 2.6), rng.uniform(1.0, 1.6), "leaf_spring",
-                          angle=rng.uniform(-40, 40))
-            elif roll < 0.85:  # a fat bud
-                c.ellipse(x, y, 1.0, 1.2, "bud")
-            elif roll < 0.93:  # a tiny new acorn
-                c.ellipse(x, y + 1.4, 0.9, 1.1, "acorn_green")
-                c.pixel(x, y, "cap", 1)
-        # violets and daffodils growing round the roots
-        frng = random.Random(seed + 7)
-        for _ in range(18):
-            fx = OAK_X + frng.choice((-1, 1)) * frng.uniform(20, 92)
-            if frng.random() < 0.55:  # a violet: a low clump of heart-shaped leaves and purple flowers
-                c.ellipse(fx - 1.5, OAK_GROUND - 1.2, 2.2, 1.6, "stalk")
-                c.ellipse(fx + 1.8, OAK_GROUND - 1.0, 2.0, 1.4, "stalk", bias=-0.2)
-                for k, (dx, h) in enumerate(((-1.5, 5), (1.5, 6.5))[: 1 + (frng.random() < 0.6)]):
-                    _twig(c, fx + dx, OAK_GROUND - 2, fx + dx + sway * 0.2, OAK_GROUND - h, "stalk", 1)
-                    for a in range(5):
-                        ang = a / 5 * 2 * math.pi - math.pi / 2
-                        c.ellipse(fx + dx + sway * 0.2 + math.cos(ang) * 1.3, OAK_GROUND - h - 1 + math.sin(ang) * 1.1,
-                                  0.9, 0.9, "violet")
-                    c.pixel(fx + dx + sway * 0.2, OAK_GROUND - h - 1, "daffodil", 3)
-            else:  # a daffodil: a tall stem and leaf, six petals, and an orange trumpet
-                h = frng.uniform(11, 16)
-                top = OAK_GROUND - h
-                _twig(c, fx, OAK_GROUND, fx + sway * 0.4, top, "stalk", 1)
-                _twig(c, fx - 1, OAK_GROUND, fx - 3, OAK_GROUND - h * 0.7, "stalk", 2)
-                _twig(c, fx + 1, OAK_GROUND, fx + 2, OAK_GROUND - h * 0.5, "stalk", 1)
-                _daffodil_head(c, fx + sway * 0.4, top, 0.85)
     if snow:
         # snow lying along the tops of the branches
         for y in range(1, 228):
@@ -330,6 +260,30 @@ def oak_bare(sway=0.0, seed=7, snow=False, spring=False):
             for k in range(depth):
                 _px(c, x, OAK_GROUND - k, "snow", 3 if k == depth - 1 else 2 if k > depth - 3 else 1)
     return c.to_image()
+
+
+def _spring_flowers(c, seed, sway):
+    """Violets and daffodils growing round the oak's roots."""
+    frng = random.Random(seed + 7)
+    for _ in range(18):
+        fx = OAK_X + frng.choice((-1, 1)) * frng.uniform(20, 92)
+        if frng.random() < 0.55:  # a violet: a low clump of heart-shaped leaves and purple flowers
+            c.ellipse(fx - 1.5, OAK_GROUND - 1.2, 2.2, 1.6, "stalk")
+            c.ellipse(fx + 1.8, OAK_GROUND - 1.0, 2.0, 1.4, "stalk", bias=-0.2)
+            for k, (dx, h) in enumerate(((-1.5, 5), (1.5, 6.5))[: 1 + (frng.random() < 0.6)]):
+                _twig(c, fx + dx, OAK_GROUND - 2, fx + dx + sway * 0.2, OAK_GROUND - h, "stalk", 1)
+                for a in range(5):
+                    ang = a / 5 * 2 * math.pi - math.pi / 2
+                    c.ellipse(fx + dx + sway * 0.2 + math.cos(ang) * 1.3, OAK_GROUND - h - 1 + math.sin(ang) * 1.1,
+                              0.9, 0.9, "violet")
+                c.pixel(fx + dx + sway * 0.2, OAK_GROUND - h - 1, "daffodil", 3)
+        else:  # a daffodil: a tall stem and leaf, six petals, and an orange trumpet
+            h = frng.uniform(11, 16)
+            top = OAK_GROUND - h
+            _twig(c, fx, OAK_GROUND, fx + sway * 0.4, top, "stalk", 1)
+            _twig(c, fx - 1, OAK_GROUND, fx - 3, OAK_GROUND - h * 0.7, "stalk", 2)
+            _twig(c, fx + 1, OAK_GROUND, fx + 2, OAK_GROUND - h * 0.5, "stalk", 1)
+            _daffodil_head(c, fx + sway * 0.4, top, 0.85)
 
 
 # -- small things --------------------------------------------------------------------------------------
@@ -486,6 +440,50 @@ def birch_shape(seed=5):
 BIRCH_LIMBS, BIRCH_TWIGS, BIRCH_TIPS, BIRCH_PERCHES, BIRCH_TOP = birch_shape()
 
 
+def _birch_clusters(season):
+    """The birch's leaves: small hanging curtains of leaf clusters along its drooping twigs and at the ends of
+    its limbs (a few, and smaller, in spring), some behind the branches."""
+    rng = random.Random(33)
+    tones = foliage.TONES[{"summer": "birch", "autumn": "birch_gold", "spring": "spring"}[season]]
+    spots = [(x2, y2 - (y2 - y1) * 0.3) for x1, y1, x2, y2 in BIRCH_TWIGS]
+    spots += [(x2, y2 + 3) for x1, y1, x2, y2, w in BIRCH_LIMBS]
+    spots += [(BIRCH_X + rng.uniform(-6, 6), BIRCH_TOP + 6 + k * 9) for k in range(4)]  # the very top
+    clusters = []
+    for x, y in spots:
+        if season == "spring" and rng.random() < 0.45:
+            continue
+        r = rng.uniform(3.6, 5.6) if season == "spring" else rng.uniform(4.6, 7.2)
+        clusters.append(foliage.Cluster(x + rng.uniform(-2, 2), y + rng.uniform(-2, 3), r, tones,
+                                        back=rng.random() < 0.35, lift=rng.uniform(-0.05, 0.05) + 0.04,
+                                        phase=rng.uniform(0, 6.3), tall=rng.uniform(1.25, 1.6)))
+    return clusters
+
+
+BIRCH_CLUSTERS = {season: _birch_clusters(season) for season in ("summer", "autumn", "spring")}
+
+
+def _birch_strands(seed=12):
+    """A winter birch's fine hanging twigs: from points along each limb, a thin strand that arcs out a little
+    and falls straight down."""
+    rng = random.Random(seed)
+    strands = []
+    for x1, y1, x2, y2, w in BIRCH_LIMBS:
+        side = 1 if x2 > x1 else -1
+        for _ in range(rng.randint(5, 8)):
+            f = rng.uniform(0.3, 1.0)
+            x, y = x1 + (x2 - x1) * f, y1 + (y2 - y1) * f
+            length = rng.uniform(10, 26)
+            points = [(x, y)]
+            for k in range(1, 5):
+                t = k / 4
+                points.append((x + side * (1 - (1 - t) ** 2) * rng.uniform(2, 4), y + t * length))
+            strands.append(points)
+    return strands
+
+
+BIRCH_STRANDS = _birch_strands()
+
+
 def birch(season="summer", sway=0.0, snow=False):
     """110 x 196: a slender birch with white bark and black markings. season: winter (bare, purplish twigs),
     spring (catkins and a few pale new leaves), summer (light, bright green), autumn (golden yellow). snow:
@@ -506,43 +504,56 @@ def birch(season="summer", sway=0.0, snow=False):
         for x in range(left, right + 1):
             band = (x - left) / max(1, right - left)
             _px(c, x, y, "birch_bark", 3 if band < 0.3 else 2 if band < 0.65 else 1 if band < 0.9 else 0)
-    for _ in range(46):  # the black markings: short horizontal dashes
-        y = rng.randrange(BIRCH_TOP + 6, BIRCH_GROUND - 6)
+    for _ in range(58):  # the black markings: horizontal dashes of all lengths, thicker toward the foot
+        y = int(BIRCH_TOP + 6 + (rng.random() ** 0.8) * (BIRCH_GROUND - BIRCH_TOP - 12))
         cx = BIRCH_X + (BIRCH_GROUND - y) * 0.03 + lean(y)
-        w = rng.choice((1, 2, 2, 3))
-        x0 = int(round(cx + rng.uniform(-3, 2)))
+        w = rng.choice((1, 2, 2, 3, 3, 4))
+        x0 = int(round(cx + rng.uniform(-4, 2)))
         for x in range(x0, x0 + w):
             if c.mat[y][x] == "birch_bark":
                 _px(c, x, y, "bug_black", rng.choice((0, 1)))
+    for x1, y1, x2, y2, w in BIRCH_LIMBS:  # a dark chevron under each big limb, where it leaves the trunk
+        if w >= 2:
+            side = 1 if x2 > x1 else -1
+            for k in range(3):
+                for xx, yy in ((x1 + lean(y1) - side * k, y1 + 1 + k), (x1 + lean(y1) + side * 0.5, y1 + 1 + k)):
+                    if c.mat[int(yy)][int(round(xx))] == "birch_bark":
+                        _px(c, int(round(xx)), int(yy), "bug_black", 1)
     for y in range(BIRCH_GROUND - 7, BIRCH_GROUND + 1):  # the dark, cracked foot of an old birch
         for x in range(BIRCH_W):
             if c.mat[y][x] == "birch_bark" and rng.random() < 0.55:
                 _px(c, x, y, "birch_twig", rng.choice((0, 1)))
-    for x1, y1, x2, y2, w in BIRCH_LIMBS:
-        if w >= 2:
-            _branch(c, x1 + lean(y1), y1, x2 + lean(y2), y2, 2)
-        else:
-            _twig(c, x1 + lean(y1), y1, x2 + lean(y2), y2, "birch_twig", 1)
+    leafy = season in ("summer", "autumn", "spring")
+    clusters = BIRCH_CLUSTERS.get(season, [])
+    foliage.paint(c, [k for k in clusters if k.back], BIRCH_TOP, 150, sway=lambda y: lean(y) * 1.2, cell=(3, 3))
+    for x1, y1, x2, y2, w in BIRCH_LIMBS:  # each limb bows up a little, then levels out toward its tip
+        mx, my = x1 + (x2 - x1) * 0.45, y1 + (y2 - y1) * 0.45 - abs(x2 - x1) * 0.16
+        for (ax, ay), (bx, by) in (((x1, y1), (mx, my)), ((mx, my), (x2, y2))):
+            if w >= 2:
+                _branch(c, ax + lean(ay), ay, bx + lean(by), by, 2)
+            else:
+                _twig(c, ax + lean(ay), ay, bx + lean(by), by, "birch_twig", 1)
+    # the fine hanging twigs go on a layer of their own, without an outline, so they stay one pixel thin
+    fine = Canvas(BIRCH_W, BIRCH_H)
     for x1, y1, x2, y2 in BIRCH_TWIGS:
-        _twig(c, x1 + lean(y1), y1, x2 + lean(y2) * 1.3, y2, "birch_twig", 1)
-    leaves = {"summer": ("leaf_summer_light", "leaf_green", "leaf_summer_light"),
-              "autumn": ("leaf_yellow", "leaf_yellow", "leaf_orange")}.get(season)
-    lrng = random.Random(21)
-    for x, y in BIRCH_TIPS:
-        lx = x + lean(y) * 1.3
-        if leaves:  # small leaves in loose clusters along the hanging twigs
-            for _ in range(5):
-                c.ellipse(lx + lrng.uniform(-2.5, 2.5), y + lrng.uniform(-3, 2), lrng.uniform(1.0, 1.8), 1.0,
-                          lrng.choice(leaves), angle=lrng.uniform(-40, 40))
-        elif season == "spring":
-            if lrng.random() < 0.5:  # a catkin dangling
+        _twig(fine, x1 + lean(y1), y1, x2 + lean(y2) * 1.3, y2, "birch_twig", 1)
+    if not leafy:  # winter: a fine purplish haze of thin twigs hanging from every limb
+        for points in BIRCH_STRANDS:
+            for (x1, y1), (x2, y2) in zip(points, points[1:]):
+                _twig(fine, x1 + lean(y1) * 1.3, y1, x2 + lean(y2) * 1.4, y2, "birch_twig", 2)
+    foliage.paint(c, [k for k in clusters if not k.back], BIRCH_TOP, 150, sway=lambda y: lean(y) * 1.2,
+                  cell=(3, 3))
+    if season == "spring":  # catkins dangling among the new leaves
+        lrng = random.Random(21)
+        for x, y in BIRCH_TIPS:
+            if lrng.random() < 0.45:
+                lx = x + lean(y) * 1.3
                 _twig(c, lx, y, lx + 0.4, y + 4, "catkin", 2)
                 c.pixel(lx + 0.4, y + 4, "catkin", 3)
-            elif lrng.random() < 0.6:
-                c.ellipse(lx, y, 1.2, 0.9, "leaf_spring")
     if season == "summer":
         _pansies(c, BIRCH_GROUND, BIRCH_X, 46, seed=8)  # pansies round its foot
     if snow:
+        lrng = random.Random(21)
         for y in range(1, BIRCH_GROUND - 8):
             for x in range(BIRCH_W):
                 if c.mat[y][x] in ("birch_twig", "bark") and c.mat[y - 1][x] is None and lrng.random() < 0.6:
@@ -552,7 +563,9 @@ def birch(season="summer", sway=0.0, snow=False):
             if d < 1:
                 for k in range(int((1 - d * d) * 5) + 1):
                     _px(c, x, BIRCH_GROUND - k, "snow", 3 if k == int((1 - d * d) * 5) else 2)
-    return c.to_image()
+    image = fine.to_image(outline=False)
+    image.alpha_composite(c.to_image())  # (the tree in front: the twigs show where nothing else is)
+    return image
 
 
 def _pansies(c, ground, centre, spread, seed=3):
@@ -583,8 +596,7 @@ def sprites():
                        {"perches": BARE_PERCHES}),
         "oak_snow": ([oak_bare(s, snow=True) for s in (0, 1, 1, 0, -1, -1)], 600, True, (OAK_X, OAK_GROUND),
                      {"perches": BARE_PERCHES}),
-        "oak_spring": ([oak_bare(s, spring=True) for s in (0, 1, 1, 0, -1, -1)], 600, True, (OAK_X, OAK_GROUND),
-                       {"perches": BARE_PERCHES}),
+        "oak_spring": ([oak(s, season="spring") for s in (0, 1, 1, 0, -1, -1)], 600, True, (OAK_X, OAK_GROUND)),
         "acorn": ([acorn(r) for r in range(4)], 90, True, (6, 9)),
         "dirt_mound": ([dirt_mound(s) for s in (0.2, 0.5, 0.8, 1.0)], 200, False, (8, 7)),
         "twig": ([twig(k) for k in range(8)], 90, True, (8, 9)),

@@ -160,7 +160,7 @@ class Acorn(Thing):
                 self.vx = 0.0
         if self.x < 6 or self.x > self.world.width - 6:
             self.vx = -self.vx * 0.5
-            self.x = max(6.0, min(self.world.width - 6.0, self.x))
+            self.x = self.world.clamp_x(self.x, 6.0)
 
 
 class Mound(Thing):

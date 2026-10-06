@@ -21,12 +21,9 @@ class YardFun:
         """Put out (or take in) the newer seasonal things, as the settings and season ask."""
         s = self.scale
         for name, (cls, share) in YARD_ITEMS.items():
-            have = [t for t in self.of("yard") if t.variant == name]
+            have = self.yard_things(name)
             if name in wanted and not have:
-                x = self.settings["items"].get(name, {}).get("x")
-                if not (isinstance(x, (int, float)) and 0 < x < self.width):
-                    x = max(40.0, min(self.width - 40.0, self.width * share))
-                self.add(cls(self, x, name))
+                self.add(cls(self, self.spot_for(name, self.clamp_x(self.width * share)), name))
             elif name not in wanted:
                 for thing in have:
                     if getattr(thing, "hider", None) is not None:
@@ -36,7 +33,7 @@ class YardFun:
         if "beachball" in wanted and not balls:
             pool = next((p for p in self.of("prop") if p.variant == "pool"), None)
             x = pool.x + 52 * s if pool is not None else self.width * 0.7
-            self.add(BeachBall(self, max(40.0, min(self.width - 40.0, x))))
+            self.add(BeachBall(self, self.clamp_x(x)))
         elif "beachball" not in wanted:
             for ball in balls:
                 ball.gone = True
@@ -46,10 +43,7 @@ class YardFun:
                     ball.gone = True
         cans = self.of("can")
         if "watering_can" in wanted and not cans:
-            x = self.settings["items"].get("watering_can", {}).get("x")
-            if not (isinstance(x, (int, float)) and 0 < x < self.width):
-                x = self.width * 0.235
-            self.add(WateringCan(self, x))
+            self.add(WateringCan(self, self.spot_for("watering_can", self.width * 0.235)))
         elif "watering_can" not in wanted:
             for can in cans:
                 can.gone = True
@@ -69,6 +63,10 @@ class YardFun:
         if self.season == "winter":
             for puddle in self.of("puddle"):
                 puddle.gone = True
+
+    def yard_things(self, name):
+        """The yard things of one sort (the snowman, the hammock...) that are out."""
+        return [t for t in self.of("yard") if t.variant == name]
 
     def fun(self, dt):
         """Every frame: puddles form in the rain, muddy paws dry off, foxes chase the kite you're flying."""
@@ -107,8 +105,7 @@ class YardFun:
             close = [t for t in things if abs(t.x - fox.x) < reach * s / 2]
             return min(close, key=lambda t: abs(t.x - fox.x)) if close else None
 
-        def yard(name):
-            return [t for t in self.of("yard") if t.variant == name]
+        yard = self.yard_things
 
         def act(action, *args):
             def make():

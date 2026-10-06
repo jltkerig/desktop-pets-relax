@@ -3,6 +3,24 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.19.0
+
+Smoother running and a tidier tray menu.
+
+- **Smoother:**
+  - Each frame now redraws only what moved or changed, not almost the whole screen. That's about 20 to 30 times
+    fewer pixels a frame with everything out.
+  - The frame timer is precise, so movement doesn't judder.
+  - Winter no longer works out "is it a snowy day?" from scratch dozens of times a frame.
+  - The desktop folders are looked for every 10 seconds instead of every 5.
+- **Tray menu:** grouped into submenus: Things to do, Weather, Invite a visitor, Mischief and Settings
+  (season, size, sun and moon clock). The items to put out now live only in the Toy Box (click the tray icon).
+  The Mischief submenu can also turn each kind of mischief on or off.
+- **Toy Box:** each season's tab has "Put all out" and "Take all in" buttons. Long tabs show two columns. The
+  two fox checkboxes sit side by side.
+- **Code tidy-up:** the "keep it on screen" and "use the saved spot" code is shared (`clamp_x`, `spot_for`). The
+  Toy Box window has its own file, and the visitor names live with the seasons.
+
 ## 1.18.0
 
 Lots of new things for winter, spring and summer, and the foxes play with all of them.

@@ -1,7 +1,7 @@
 """The windows: one see-through Desktop window per monitor (drawing the world, passing clicks on), and the
 sun/moon window kept behind everything."""
 from PySide6.QtCore import QPoint, QRect, Qt
-from PySide6.QtGui import QPainter
+from PySide6.QtGui import QPainter, QRegion
 from PySide6.QtWidgets import QWidget
 
 from pet import desktop_layer, sky, sprites
@@ -81,24 +81,22 @@ class Desktop(QWidget):
     def to_world(self, px, py):
         return float(px - self.dx), float(py - self.dy)
 
-    def area(self):
-        """The part of this window everything covers (only that part is redrawn)."""
-        area = QRect()
-        for thing in self.world.things:
-            if thing.kind == "folder":
-                continue  # the real icon is drawn by Windows
-            left, top, w, h = thing.rect()
+    def update_rects(self, rects):
+        """Redraw just these parts of the strip (where things were and are now), if they're on this monitor."""
+        view, region = self.rect(), QRegion()
+        for left, top, w, h in rects:
             r = QRect(int(left + self.dx) - 2, int(top + self.dy) - 2, int(w) + 4, int(h) + 4)
-            if r.intersects(self.rect()):
-                area = area.united(r)
-        return area
+            if r.intersects(view):
+                region += r
+        if not region.isEmpty():
+            self.update(region)
 
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setCompositionMode(QPainter.CompositionMode_Source)
         painter.fillRect(event.rect(), Qt.transparent)
         painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
-        view = self.rect()
+        view, dirty = self.rect(), event.region()
         out = {m.key for m in self.world.of("message") if m.state != "home"}
         for key, (band, colour, _, _) in getattr(self.stage, "covers", {}).items():  # gaps where messages were stolen
             if key not in out:
@@ -111,8 +109,8 @@ class Desktop(QWidget):
                 continue  # the real icon is drawn by Windows
             left, top, w, h = thing.rect()
             x, y = int(round(left + self.dx)), int(round(top + self.dy))
-            if not view.intersects(QRect(x, y, int(w), int(h))):
-                continue  # on another monitor
+            if not dirty.intersects(QRect(x, y, int(w), int(h))):
+                continue  # on another monitor, or not in the part being redrawn
             if thing.kind in ("treasure", "message"):
                 pixmap = self.world.images.get(thing.key)
                 if pixmap is None:

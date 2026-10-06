@@ -22,9 +22,9 @@ class Mischief:
             return False
         side = 1 if spot >= fox.x else -1
         stand = spot - side * 24 * self.scale
-        run_to = max(60.0, min(self.width - 60.0, stand - side * self.rng.uniform(160, 320) * self.scale))
+        run_to = self.clamp_x(stand - side * self.rng.uniform(160, 320) * self.scale, 60.0)
         if abs(run_to - stand) < 80:
-            run_to = max(60.0, min(self.width - 60.0, stand + side * 200 * self.scale))
+            run_to = self.clamp_x(stand + side * 200 * self.scale, 60.0)
         fox.do(Step("walk", to_x=stand, speed=WALK), Step("sniff", face=spot), Step("sniff", face=spot),
                Step("dig", self.rng.uniform(2.0, 3.2), face=spot, then=lambda: self.find_treasure(fox, spot)),
                Step("hop", face=spot), Step("trot", to_x=run_to, speed=TROT * 1.2, then=lambda: self.drop_treasure(fox)),
@@ -44,10 +44,10 @@ class Mischief:
         key = f"message{self._treasures}"
         msg = self.add(Message(self, key, (spot["x"], spot["y"])))
         self.screen_requests.append(("steal", key))
-        under = max(40.0, min(self.width - 40.0, spot["x"] - 20 * self.scale))
+        under = self.clamp_x(spot["x"] - 20 * self.scale)
         side = 1 if under < self.width / 2 else -1
-        away = max(60.0, min(self.width - 60.0, under + side * self.rng.uniform(220, 420) * self.scale))
-        back = max(40.0, min(self.width - 40.0, spot["x"] - 20 * self.scale))
+        away = self.clamp_x(under + side * self.rng.uniform(220, 420) * self.scale, 60.0)
+        back = self.clamp_x(spot["x"] - 20 * self.scale)
 
         def yank():
             if not msg.gone:
@@ -145,7 +145,7 @@ class Mischief:
         self.folder_spots = [f for f in self.folder_spots if f["name"] != spot["name"]]
         self.folder_rest = 8 * 60  # not another one for a good while
         side = 1 if spot["x"] >= fox.x else -1
-        under = max(40.0, min(self.width - 40.0, spot["x"] - side * 10 * s))
+        under = self.clamp_x(spot["x"] - side * 10 * s)
         high = folder.floor() - spot["y"]  # how far above the ground it is
         away = spot["x"] + side * self.rng.uniform(140, 320) * s
         if away > right - 60 or away < left + 60:

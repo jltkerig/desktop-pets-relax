@@ -28,11 +28,13 @@ class Stage:
         self.clock = QElapsedTimer()
         self.clock.start()
         self._watched = set()
+        self._looks = None  # how everything looked last frame (see looks)
         self.build()
         app = QApplication.instance()
         for signal in (app.screenAdded, app.screenRemoved, app.primaryScreenChanged):
             signal.connect(lambda *_: QTimer.singleShot(500, self.build))
         self.timer = QTimer()
+        self.timer.setTimerType(Qt.PreciseTimer)  # (the default coarse timer fires a few ms early or late: judder)
         self.timer.timeout.connect(self.tick)
         self.timer.start(FRAME_MS)
         # where the taskbar icons are (for digging up "treasure"); checked now and every few minutes
@@ -66,11 +68,11 @@ class Stage:
         self.shimmer = QTimer()  # the sun's rays shimmer
         self.shimmer.timeout.connect(lambda: self.sky.update() if self.sky.isVisible() else None)
         self.shimmer.start(900)
-        # the folder icons on the desktop, for the foxes to move about (looked for every few seconds)
+        # the folder icons on the desktop, for the foxes to move about (looked for every ten seconds)
         self.movers = {}  # folder name -> desktop_icons.Mover, while a fox has it
         self.folder_timer = QTimer()
         self.folder_timer.timeout.connect(self.look_for_folders)
-        self.folder_timer.start(5000)
+        self.folder_timer.start(10000)  # (reading the icons from Explorer takes a moment: not too often)
 
     def check_discord_use(self):
         if not self.world.mischief("discord"):
@@ -229,6 +231,7 @@ class Stage:
         return (-10000.0, -10000.0)
 
     def update(self):
+        self._looks = None
         for d in self.desktops:
             d.update()
 
@@ -371,7 +374,7 @@ class Stage:
         dt = self.clock.restart() / 1000
         self.elapsed += dt
         cursor = self.to_world(QCursor.pos())
-        before = [d.area() for d in self.desktops]
+        before = self._looks if self._looks is not None else self.looks()
         self.world.weather = self.weather.current()
         self.world.update(dt, cursor)
         if self.world.grab_requests:
@@ -388,11 +391,21 @@ class Stage:
         if self.world.dirty:
             self.world.dirty = False
             save.store(self.settings)
-        for d, old in zip(self.desktops, before):
+        after = self._looks = self.looks()
+        changed = [look[0] for thing in before.keys() | after.keys()
+                   if before.get(thing) != after.get(thing) for look in (before.get(thing), after.get(thing)) if look]
+        for d in self.desktops:
             if self.covers:
-                d.update()
+                d.update()  # (the gaps where messages were stolen follow Discord about)
             else:
-                d.update(old.united(d.area()))
+                d.update_rects(changed)
+
+    def looks(self):
+        """How everything looks right now: thing -> (where, sprite, frame, facing, alpha, picture). Only the
+        things whose look changed since the last frame are redrawn."""
+        images = self.world.images
+        return {t: (t.rect(), t.anim.name, t.anim.frame, t.facing, t.alpha, id(images.get(getattr(t, "key", None))))
+                for t in self.world.things if t.kind != "folder"}  # (the real folder icons are drawn by Windows)
 
     # -- the mouse (any monitor) -----------------------------------------------------------------------
 
@@ -422,7 +435,7 @@ class Stage:
                     self.trail = []
         if self.dragging is not None and self.dragging.kind in DRAGGED_ALONG:
             thing, (sx, _), start_x = self.press
-            thing.x = max(40.0, min(self.world.width - 40.0, start_x + x - sx))
+            thing.x = self.world.clamp_x(start_x + x - sx)
         elif self.dragging is None and not buttons:
             # stroking a fox with the cursor is petting it
             thing = self.world.thing_at(x, y)

@@ -57,7 +57,7 @@ class Firefly(Thing):
         self.phase += dt * 0.9
         if self.world.rng.random() < dt * 0.3:
             self.vx = self.world.rng.uniform(-12, 12)
-        self.x = max(10.0, min(self.world.width - 10.0, self.x + self.vx * s * dt))
+        self.x = self.world.clamp_x(self.x + self.vx * s * dt, 10.0)
         self.y = self.home_y + math.sin(self.phase) * 14 * s
         if self.leaving:
             self.alpha -= dt / 2

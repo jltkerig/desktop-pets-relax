@@ -11,8 +11,8 @@ class SummerFun:
         """A dash through the spray, a hop over the sprinkler, out the other side, and a good shake."""
         s = self.scale
         side = -1 if fox.x < sprinkler.x else 1
-        start = max(40.0, min(self.width - 40.0, sprinkler.x + side * 64 * s))
-        end = max(40.0, min(self.width - 40.0, sprinkler.x - side * 64 * s))
+        start = self.clamp_x(sprinkler.x + side * 64 * s)
+        end = self.clamp_x(sprinkler.x - side * 64 * s)
         fox.do(Step("trot", to_x=start, speed=TROT), Step("crouch", 0.4, face=sprinkler.x),
                Step("run", to_x=sprinkler.x + side * 14 * s, speed=TROT * 1.6),
                Step("hop", to_x=sprinkler.x - side * 14 * s, leap=14), Step("run", to_x=end, speed=TROT * 1.6),
@@ -28,7 +28,7 @@ class SummerFun:
         """Up to the beach ball, a nose under it to send it flying, a chase, and another boop."""
         s = self.scale
         side = -1 if fox.x < ball.x else 1
-        fox.do(Step("trot", to_x=max(40.0, min(self.width - 40.0, ball.x + side * 22 * s)), speed=TROT),
+        fox.do(Step("trot", to_x=self.clamp_x(ball.x + side * 22 * s), speed=TROT),
                Step("boop", face=ball.x, then=lambda: self.boop_ball(fox, ball)),
                Step("run", follow=ball, speed=ZOOM * 0.6),
                Step("boop", face=ball.x, then=lambda: self.boop_ball(fox, ball)), Step("happy", 1.0),
@@ -36,7 +36,7 @@ class SummerFun:
 
     def hammock_for(self, fox):
         """A free hammock for a sleepy fox's nap (on a summer day, now and then), or None."""
-        hammocks = [t for t in self.of("yard") if t.variant == "hammock" and t.occupant() is None]
+        hammocks = [t for t in self.yard_things("hammock") if t.occupant() is None]
         if not hammocks or self.season != "summer" or self.daylight() == "night":
             return None
         hammock = min(hammocks, key=lambda h: abs(h.x - fox.x))
@@ -50,14 +50,13 @@ class SummerFun:
         s = self.scale
         side = -1 if fox.x < hammock.x else 1
         bx, by = hammock.bed()
-        fox.do(Step("walk", to_x=max(40.0, min(self.width - 40.0, hammock.x + side * 34 * s)), speed=WALK),
+        fox.do(Step("walk", to_x=self.clamp_x(hammock.x + side * 34 * s), speed=WALK),
                Step("crouch", 0.4, face=hammock.x), Step("hop", to_x=bx, to_y=by, leap=12), Step("yawn"),
                Step("sleep", self.rng.uniform(150, 360)))
 
     def jar_for(self, firefly):
         """The firefly jar near a caught firefly, if it has room."""
-        jars = [t for t in self.of("yard") if t.variant == "firefly_jar" and not t.full
-                and abs(t.x - firefly.x) < 500 * self.scale]
+        jars = [t for t in self.yard_things("firefly_jar") if not t.full and abs(t.x - firefly.x) < 500 * self.scale]
         return jars[0] if jars else None
 
     def into_the_jar(self, fox, firefly, jar):
@@ -66,11 +65,11 @@ class SummerFun:
         firefly.gone = True
         firefly.glow.gone = True
         side = -1 if fox.x < jar.x else 1
-        fox.do(Step("trot", to_x=max(40.0, min(self.width - 40.0, jar.x + side * 22 * s)), speed=TROT),
+        fox.do(Step("trot", to_x=self.clamp_x(jar.x + side * 22 * s), speed=TROT),
                Step("boop", face=jar.x, then=jar.add_firefly), Step("happy", 1.2), Step("watch", 2.0, face=jar.x))
 
     def pounce_frog(self, fox, frog):
         """A crouch, a wiggle and a pounce: the frog leaps away just in time."""
-        x = max(40.0, min(self.width - 40.0, frog.x))
+        x = self.clamp_x(frog.x)
         fox.do(Step("crouch", 0.8, face=frog.x), Step("pounce", to_x=x, leap=24, then=frog.startle), Step("land"),
                Step("happy", 1.0), Step("tilt", face=frog.x))

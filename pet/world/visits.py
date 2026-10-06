@@ -122,14 +122,14 @@ class Visits:
                 [c for c in self.of("crop") if c.variant == "cattails"] + self.of("puddle")
             spot = self.rng.choice(water).x + self.rng.uniform(-50, 50) * self.scale if water else \
                 self.rng.uniform(0.2, 0.8) * self.width
-            return self.add(Frog(self, max(30.0, min(self.width - 30.0, spot)), visiting=True))
+            return self.add(Frog(self, self.clamp_x(spot, 30.0), visiting=True))
         if pick == "geese":
             foxes = self.of("fox")
             centre = self.rng.choice(foxes).x if foxes else self.width * 0.5
             gaggle = []
             for i in range(self.rng.randint(2, 3)):
                 land = centre + (90 + i * 34) * self.scale * self.rng.choice((-1, 1))
-                land = max(50.0, min(self.width - 50.0, land))
+                land = self.clamp_x(land, 50.0)
                 gaggle.append(self.add(Goose(self, land, delay=i * 0.7)))
             return gaggle[0]
         return self.add(Woolly(self))

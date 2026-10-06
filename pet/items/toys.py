@@ -64,7 +64,7 @@ class Treasure(Thing):
         self.vx, self.vy = max(-top, min(top, vx)), max(-top, min(top, vy))
         self.on_ground_for = 0.0
         self.alpha = 1.0
-        self.thrown_from = max(60.0, min(w.width - 60.0, self.x))
+        self.thrown_from = w.clamp_x(self.x, 60.0)
         w.ball_thrown(self)
 
     def click(self):

@@ -29,7 +29,7 @@ class Garden:
                 deco.holder, deco.level, deco.dx = holder, level, float(record.get("dx", 0.0))
                 deco.x = holder.x + deco.dx * s
                 deco.y = deco.floor()
-            deco.x = max(10.0, min(self.width - 10.0, deco.x))
+            deco.x = self.clamp_x(deco.x, 10.0)
 
     def add_deco(self, jack=False, x=None):
         """A single ripe pumpkin (or a jack-o'-lantern) to decorate with: it drops in onto the ground."""
@@ -72,7 +72,7 @@ class Garden:
             deco.holder, deco.level, deco.dx = holder, level, (deco.x - holder.x) / s
         else:
             deco.holder = deco.level = None
-        deco.x = max(10.0, min(self.width - 10.0, deco.x))
+        deco.x = self.clamp_x(deco.x, 10.0)
         self.save_decos()
 
     def pick_pumpkin(self, pumpkin):
@@ -111,9 +111,7 @@ class Garden:
         if replant or not isinstance(item.get("planted"), (int, float)):
             item["planted"] = self.now().timestamp()
             self.dirty = True
-        x = item.get("x")
-        if not (isinstance(x, (int, float)) and 0 < x < self.width):
-            x = self.width * 0.12  # off to the left, away from the oak
+        x = self.spot_for("corn", self.width * 0.12)  # (at first off to the left, away from the oak)
         return self.add(Corn(self, x, item["planted"]))
 
     def plant_crop(self, name, replant=False):
@@ -125,9 +123,7 @@ class Garden:
         if replant or not isinstance(item.get("planted"), (int, float)):
             item["planted"] = self.now().timestamp()
             self.dirty = True
-        x = item.get("x")
-        if not (isinstance(x, (int, float)) and 0 < x < self.width):
-            x = self.width * self.CROP_SPOTS[name]
+        x = self.spot_for(name, self.width * self.CROP_SPOTS[name])
         return self.add(Crop(self, x, item["planted"], name))
 
     CROP_SPOTS = {"tomatoes": 0.11, "cattails": 0.965, "radishes": 0.11, "lettuce": 0.19}  # where they go at first
@@ -160,7 +156,7 @@ class Garden:
         if replant or not patch:
             centre = item.get("x") if isinstance(item.get("x"), (int, float)) else self.width * share
             now = self.now().timestamp()
-            patch = [{"x": round(max(40, min(self.width - 40, centre + (i - 1) * 46 * self.scale))),
+            patch = [{"x": round(self.clamp_x(centre + (i - 1) * 46 * self.scale)),
                       "planted": now - self.rng.uniform(0, 90), "pace": round(self.rng.uniform(0.85, 1.2), 2),
                       "size": size, "shape": self.rng.choice(shapes), "jack": self.rng.random() < 0.2,
                       "giant": self.rng.random() < cls.GIANT_CHANCE}
@@ -168,7 +164,7 @@ class Garden:
             self.dirty = True
         item["patch"] = patch
         for record in patch:
-            x = max(20.0, min(self.width - 20.0, float(record["x"])))
+            x = self.clamp_x(float(record["x"]), 20.0)
             self.add(cls(self, x, record["planted"], float(record.get("pace", 1.0)), record, record["size"],
                          record["shape"], record.get("jack", False), record.get("giant", False)))
 

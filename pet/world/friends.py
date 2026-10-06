@@ -55,7 +55,7 @@ class Friends:
     def _beside(self, fox, friend):
         """Where fox should stand to be next to friend, facing it, on the side it's coming from."""
         side = -1 if fox.x < friend.x else 1
-        return max(40.0, min(self.width - 40.0, friend.x + side * 34 * self.scale))
+        return self.clamp_x(friend.x + side * 34 * self.scale)
 
     def _walk_time(self, fox, x):
         """Seconds for fox to walk to x (so a friend knows how long to wait)."""
@@ -81,7 +81,7 @@ class Friends:
     def tag_along(self, fox, friend):
         """Follow the friend on a little stroll, then sit down beside it."""
         apart = self._together(fox, friend)
-        stroll = max(60.0, min(self.width - 60.0, friend.x + self.rng.choice((-1, 1)) * self.rng.uniform(120, 260) * self.scale))
+        stroll = self.clamp_x(friend.x + self.rng.choice((-1, 1)) * self.rng.uniform(120, 260) * self.scale, 60.0)
         friend.do(Step("walk", to_x=stroll, speed=WALK), Step("idle", 8.0), Step("look"))
         fox.do(Step("look", face=friend.x), Step("trot", follow=friend, speed=TROT),
                Step("idle", 4.0, face=friend.x, then=apart))
@@ -101,7 +101,7 @@ class Friends:
         """A play bow, then a chase: the friend runs off, the fox follows, they meet with a nose boop."""
         fox.busy_with, friend.busy_with = friend, fox
         away = 1 if friend.x >= fox.x else -1
-        run_to = max(60.0, min(self.width - 60.0, friend.x + away * self.rng.uniform(140, 260) * self.scale))
+        run_to = self.clamp_x(friend.x + away * self.rng.uniform(140, 260) * self.scale, 60.0)
         meet = run_to - away * 30 * self.scale
 
         def done():

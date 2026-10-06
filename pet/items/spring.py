@@ -185,7 +185,7 @@ class Kite(Thing):
             self.anim.play("kite")
             self.vx *= max(0.0, 1 - 0.6 * dt)
             self.x += (self.vx + math.sin(self.y * 0.03) * 30 * s + w.wind * w.wind_dir * 80 * s) * dt
-            self.x = max(20.0, min(w.width - 20.0, self.x))
+            self.x = w.clamp_x(self.x, 20.0)
             self.y += (34 - w.wind * 16) * s * dt
             if self.y >= w.ground - 8 * s:
                 self.state, self.y = "ground", w.ground

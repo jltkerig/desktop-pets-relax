@@ -57,6 +57,15 @@ VISITORS = {
     "summer": ("crows", "junebug", "ladybug", "frog"),
 }
 
+# what each visitor is called in the tray menu's "Invite a visitor"
+VISITOR_LABELS = {
+    "squirrel": "Squirrel", "jay": "Blue jay", "woolly": "Woolly bear caterpillar", "migrants": "Geese flying south",
+    "geese": "Geese stopping by to honk", "turkeys": "Wild turkeys", "crows": "Crows", "cicada": "Cicada",
+    "winterbirds": "Cardinals and chickadees", "butterflies": "Butterflies", "songbirds": "Songbirds",
+    "bunnies": "Baby bunnies", "junebug": "June beetle", "ladybug": "Ladybug", "frog": "A frog (by the water)",
+    "owl": "Owl (it usually comes at night)",
+}
+
 
 def season_for(day=None):
     day = day or datetime.date.today()

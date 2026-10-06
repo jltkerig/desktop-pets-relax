@@ -9,8 +9,8 @@ class WinterFun:
     def steal_nose(self, fox, snowman):
         """Up on its hind legs to pinch the carrot, off with it (very pleased), and down it goes somewhere else."""
         s, rng = self.scale, self.rng
-        stand = max(40.0, min(self.width - 40.0, snowman.x + 30 * s))
-        away = max(60.0, min(self.width - 60.0, stand + rng.choice((-1, 1)) * rng.uniform(120, 260) * s))
+        stand = self.clamp_x(snowman.x + 30 * s)
+        away = self.clamp_x(stand + rng.choice((-1, 1)) * rng.uniform(120, 260) * s, 60.0)
 
         def grab():
             if not fox.held and fox.carrying is None and abs(fox.x - stand) < 30 * s:
@@ -32,8 +32,8 @@ class WinterFun:
         from pet.visitors import Bubble
         s = self.scale
         side = -1 if fox.x < pond.x else 1
-        start = max(40.0, min(self.width - 40.0, pond.x + side * 56 * s))
-        mid, end = pond.x, max(40.0, min(self.width - 40.0, pond.x - side * 40 * s))
+        start = self.clamp_x(pond.x + side * 56 * s)
+        mid, end = pond.x, self.clamp_x(pond.x - side * 40 * s)
 
         def whee():
             bubble = self.add(Bubble(self, fox, "whee_bubble", rise=36))
@@ -48,8 +48,8 @@ class WinterFun:
         """Low and slow toward the birds at the feeder, a wiggle, a leap... and they all flutter off."""
         s = self.scale
         side = -1 if fox.x < bird.x else 1
-        close = max(40.0, min(self.width - 40.0, bird.x + side * 60 * s))
-        sneak = max(40.0, min(self.width - 40.0, bird.x + side * 150 * s))
+        close = self.clamp_x(bird.x + side * 60 * s)
+        sneak = self.clamp_x(bird.x + side * 150 * s)
         if abs(fox.x - bird.x) < abs(sneak - bird.x):
             sneak = fox.x
 
@@ -60,7 +60,7 @@ class WinterFun:
 
         fox.do(Step("trot", to_x=sneak, speed=TROT), Step("crouch", to_x=close, speed=WALK * 0.7),
                Step("crouch", 0.8, face=bird.x),
-               Step("pounce", to_x=max(40.0, min(self.width - 40.0, bird.x)), leap=26, then=scatter),
+               Step("pounce", to_x=self.clamp_x(bird.x), leap=26, then=scatter),
                Step("land"), Step("happy", 1.0), Step("watch", 2.0, face=bird.x))
 
     def hide_in_gifts(self, fox, gifts):
@@ -68,7 +68,7 @@ class WinterFun:
         s, rng = self.scale, self.rng
         side = -1 if fox.x < gifts.x else 1
         box = gifts.x - 10 * s  # the big box is on the left
-        out = max(60.0, min(self.width - 60.0, gifts.x + side * rng.uniform(50, 80) * s))
+        out = self.clamp_x(gifts.x + side * rng.uniform(50, 80) * s, 60.0)
 
         def hide():
             if gifts.gone or gifts.hider is not None or fox.held:
@@ -76,7 +76,7 @@ class WinterFun:
             gifts.hider, fox.hiding_in = fox, gifts
             fox.alpha = 0.0
 
-        fox.do(Step("trot", to_x=max(40.0, min(self.width - 40.0, gifts.x + side * 34 * s)), speed=TROT),
+        fox.do(Step("trot", to_x=self.clamp_x(gifts.x + side * 34 * s), speed=TROT),
                Step("crouch", 0.5, face=box), Step("pounce", to_x=box, leap=20, then=hide),
                Step("idle", rng.uniform(5, 12), then=fox.leave_den), Step("hop", to_x=out, leap=16),
                Step("happy", 1.0), Step("playbow", 1.0))

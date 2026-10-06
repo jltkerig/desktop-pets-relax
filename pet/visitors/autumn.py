@@ -41,7 +41,7 @@ class Squirrel(Visitor):
                     self.acorn.gone = True  # picked up
         elif self.state == "nibble" and self.timer > 1.4:
             away = rng.uniform(160, 420) * w.scale * rng.choice((-1, 1))
-            self.bury_x = max(40.0, min(w.width - 40.0, self.x + away))
+            self.bury_x = w.clamp_x(self.x + away)
             self.state = "carry"
             self.anim.play("squirrel_carry")
         elif self.state == "carry":
@@ -226,7 +226,7 @@ class Goose(Visitor):
             if self.fly_to(self.land_x, w.ground, dt):
                 self.state, self.timer = "waddle", 0.0
                 self.anim.play("goose_walk")
-                self.waddle_to = max(40.0, min(w.width - 40.0, self.land_x + rng.uniform(-40, 40) * w.scale))
+                self.waddle_to = w.clamp_x(self.land_x + rng.uniform(-40, 40) * w.scale)
         elif self.state == "waddle":
             if self.move_to(self.waddle_to, 10, dt) or self.timer > self.linger:
                 fox = w.nearest_fox(self.x)
@@ -242,7 +242,7 @@ class Goose(Visitor):
                 if self.honks > 0:
                     self.state, self.timer = "waddle", 0.0
                     self.anim.play("goose_walk")
-                    self.waddle_to = max(40.0, min(w.width - 40.0, self.x + rng.uniform(-45, 45) * w.scale))
+                    self.waddle_to = w.clamp_x(self.x + rng.uniform(-45, 45) * w.scale)
                     self.linger = rng.uniform(3, 8)
                 else:
                     self.state = "leave"
@@ -340,7 +340,7 @@ class TurkeyFlock:
     def target(self, turkey):
         if self.last_leg:  # off the far side, each at its own pace
             return self.world.width + 60.0 if self.dir > 0 else -60.0
-        return max(30.0, min(self.world.width - 30.0, self.stops[self.leg] + turkey.offset))
+        return self.world.clamp_x(self.stops[self.leg] + turkey.offset, 30.0)
 
     def tick(self, caller, dt):
         """Run once a frame, by the first turkey still about."""

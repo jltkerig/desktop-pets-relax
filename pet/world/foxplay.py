@@ -60,7 +60,7 @@ class FoxPlay:
         """Run under a falling leaf, crouch, and pounce on it as it comes down."""
         leaf.chased = True
         side = 1 if leaf.x >= fox.x else -1
-        under = max(40.0, min(self.width - 40.0, leaf.x - side * 22 * self.scale))
+        under = self.clamp_x(leaf.x - side * 22 * self.scale)
         fox.do(Step("trot", to_x=under, speed=TROT * 1.15), Step("crouch", self.rng.uniform(0.3, 0.7), face=leaf.x),
                Step("pounce", to_x=leaf.x, leap=30, then=lambda: self.catch_leaf(fox, leaf)), Step("dive"),
                Step("hop"), Step("happy", 1.0))
@@ -151,7 +151,7 @@ class FoxPlay:
         side = -1 if fox.x < pool.x else 1
         edge = pool.x + side * 40 * s
         water = self.ground - 3 * s  # standing in the water, a little lower than the rim
-        out = max(60.0, min(self.width - 60.0, pool.x - side * rng.uniform(50, 80) * s))
+        out = self.clamp_x(pool.x - side * rng.uniform(50, 80) * s, 60.0)
         fox.do(Step("trot", to_x=edge, speed=TROT), Step("crouch", 0.4, face=pool.x),
                Step("hop", to_x=pool.x + side * 6 * s, to_y=water, leap=14, then=lambda: self.splash(pool, 12)),
                Step("happy", 1.2, then=lambda: self.splash(pool, 8)), Step("bat", then=lambda: self.splash(pool, 6)),
@@ -169,7 +169,7 @@ class FoxPlay:
     def chase_floater(self, fox, thing):
         """A crouch, a wiggle, and a leap at it. It always gets away (the butterfly flutters up, the fluff floats
         off), and the fox is delighted anyway."""
-        x = max(40.0, min(self.width - 40.0, thing.x))
+        x = self.clamp_x(thing.x)
         fox.do(Step("crouch", 0.5, face=thing.x),
                Step("pounce", to_x=x, leap=26, then=lambda: self._dodge(thing, fox)),
                Step("land"), Step("happy", 1.0), Step("tilt", face=thing.x))
@@ -200,7 +200,7 @@ class FoxPlay:
         s = self.scale
         food.taken = True  # spoken for
         side = 1 if fox.x < food.x else -1
-        spot = max(40.0, min(self.width - 40.0, food.x - side * 16 * s))
+        spot = self.clamp_x(food.x - side * 16 * s)
         radish = food.produce == "radish"
 
         def eat():
@@ -243,7 +243,7 @@ class FoxPlay:
         steps += [Step("look"), Step("happy", 1.4), Step("tilt"), Step("idle", rng.uniform(2, 5))]
         if rng.random() < 0.5:
             steps.append(Step("playbow", 1.0))
-        land = max(60.0, min(self.width - 60.0, top_x - side * rng.uniform(70, 120) * s))
+        land = self.clamp_x(top_x - side * rng.uniform(70, 120) * s, 60.0)
         steps += [Step("crouch", 0.5, face=land), Step("pounce", to_x=land, to_y=self.ground, leap=18),
                   Step("land"), Step("happy", 1.0)]
         fox.do(*steps)
@@ -251,7 +251,7 @@ class FoxPlay:
     def wander_target(self, fox):
         reach = self.rng.uniform(80, 360) * self.scale / 2
         x = fox.x + reach * self.rng.choice((-1, 1))
-        return max(60.0, min(self.width - 60.0, x))
+        return self.clamp_x(x, 60.0)
 
     def kick(self, acorn, fox):
         if acorn.gone or acorn.taken:

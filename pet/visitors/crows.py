@@ -75,7 +75,7 @@ class CrowParty:
     def ground_spot_near(self, x):
         w, rng = self.world, self.world.rng
         x += rng.uniform(25, 80) * w.scale * rng.choice((-1, 1))
-        return Perch(x=max(30.0, min(w.width - 30.0, x)))
+        return Perch(x=w.clamp_x(x, 30.0))
 
     def _landing_spots(self, count):
         """The first crow picks a spot (by some corn on the ground, up on something, or anywhere on the
@@ -86,7 +86,7 @@ class CrowParty:
         hats = w.of("hat")
         if hats or (cobs and rng.random() < 0.7):  # a dropped hat, or corn: land right by it
             thing = hats[0] if hats else rng.choice(cobs)
-            first = Perch(x=max(30.0, min(w.width - 30.0, thing.x + rng.choice((-1, 1)) * 16 * w.scale)))
+            first = Perch(x=w.clamp_x(thing.x + rng.choice((-1, 1)) * 16 * w.scale, 30.0))
         elif high and rng.random() < 0.75:
             first = favourite(high, rng)
         else:
@@ -344,7 +344,7 @@ class Crow(Visitor):
             if fox.step.anim in ("walk", "trot") and towards and abs(fox.x - self.x) < 30 * w.scale:
                 self.item = None
                 away = 1 if self.x > fox.x else -1
-                x = max(30.0, min(w.width - 30.0, self.x + away * w.rng.uniform(50, 90) * w.scale))
+                x = w.clamp_x(self.x + away * w.rng.uniform(50, 90) * w.scale, 30.0)
                 self._fly(Perch(x=x))
                 return
 
@@ -423,7 +423,7 @@ class Crow(Visitor):
                 if self.hat_age > self.hat_for and self._scarecrow_ok() and not self.party.leaving:
                     return self._return_hat()
                 if not self.perch.high and rng.random() < dt * 0.35:  # strutting about in it
-                    self.strut_to = max(30.0, min(w.width - 30.0, self.x + rng.uniform(-40, 40) * s))
+                    self.strut_to = w.clamp_x(self.x + rng.uniform(-40, 40) * s, 30.0)
                     self.state = "strut"
                     self.pose("walk")
                     return

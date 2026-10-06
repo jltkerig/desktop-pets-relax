@@ -76,7 +76,19 @@ class Core:
             return chosen
         if self.weather is not None:  # the real thing: is there snow on the ground where you are?
             return self.weather.snow_on_ground
-        return random.Random(self.now().date().toordinal()).random() < 0.6
+        day = self.now().date().toordinal()
+        if getattr(self, "_snowy_day", None) != day:  # (asked many times a frame: worked out once a day)
+            self._snowy_day, self._snowy_guess = day, random.Random(day).random() < 0.6
+        return self._snowy_guess
+
+    def clamp_x(self, x, margin=40.0):
+        """x, kept at least margin from either end of the strip."""
+        return max(margin, min(self.width - margin, x))
+
+    def spot_for(self, name, default):
+        """Where an item goes: where you last left it (from the settings), or else default."""
+        x = self.settings["items"].get(name, {}).get("x")
+        return x if isinstance(x, (int, float)) and 0 < x < self.width else default
 
     def resize(self, width, height):
         """The monitors changed: stretch or shrink the strip, keep everything on the ground and on screen."""
@@ -163,10 +175,7 @@ class Core:
                     thing.gone = True
         if "den" in wanted_items:
             if not self.of("den"):
-                x = self.settings["items"]["den"].get("x")
-                if not (isinstance(x, (int, float)) and 0 < x < self.width):
-                    x = self.width * 0.5
-                self.add(Den(self, x))
+                self.add(Den(self, self.spot_for("den", self.width * 0.5)))
         else:
             for thing in self.of("den"):
                 for fox in thing.sleepers:
@@ -179,9 +188,7 @@ class Core:
                 thing.gone = True
         for name, share in climbables.items():
             if name in wanted_items and not any(t.variant == name for t in self.of("climb")):
-                x = self.settings["items"][name].get("x")
-                if not (isinstance(x, (int, float)) and 0 < x < self.width):
-                    x = self.width * share
+                x = self.spot_for(name, self.width * share)
                 self.add(Climbable(self, x, name, self.settings["items"][name].get("layout")))
         props = {"scarecrow", "hoe", "sled", "xmas_tree", "daffodils", "tulips", "violets", "apple_barrel", "well",
                  "pool", "dahlias", "dandelions"}
@@ -193,8 +200,8 @@ class Core:
                 thing.gone = True
         for name in sorted(wanted_items & props):  # (sorted: the same order every run)
             if not any(t.variant == name for t in self.of("prop")):
-                x = self.settings["items"][name].get("x")
-                if not (isinstance(x, (int, float)) and 0 < x < self.width):
+                x = self.spot_for(name, None)
+                if x is None:
                     patch = self.settings["items"].get("pumpkins", {}).get("patch") or []
                     xs = [p["x"] for p in patch if isinstance(p, dict) and isinstance(p.get("x"), (int, float))]
                     if name in first_spot:
@@ -203,18 +210,14 @@ class Core:
                         x = (min(xs) - 34 * self.scale) if xs else self.width * 0.22
                     else:              # the scarecrow keeps watch on the right
                         x = (max(xs) + 70 * self.scale) if xs else self.width * 0.32
-                    x = max(40.0, min(self.width - 40.0, x))
+                    x = self.clamp_x(x)
                 self.add(Prop(self, x, name))
         self.put_out_decos()
         if "oak" in wanted_items and not self.of("tree"):
-            x = self.settings["items"]["oak"].get("x")
-            x = x if isinstance(x, (int, float)) and 0 < x < self.width else self.width * 0.72
-            self.add(Tree(self, x, "oak"))
+            self.add(Tree(self, self.spot_for("oak", self.width * 0.72), "oak"))
         if "birch" in wanted_items:
             if not self.of("birch"):
-                x = self.settings["items"]["birch"].get("x")
-                x = x if isinstance(x, (int, float)) and 0 < x < self.width else self.width * 0.585
-                self.add(Birch(self, x))
+                self.add(Birch(self, self.spot_for("birch", self.width * 0.585)))
         else:
             for thing in self.of("birch"):
                 thing.gone = True

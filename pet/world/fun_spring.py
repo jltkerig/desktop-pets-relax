@@ -12,8 +12,8 @@ class SpringFun:
         """A hop into the puddle (splash!), a happy stomp about in it, a hop out, and muddy paws for a while."""
         s = self.scale
         side = -1 if fox.x < puddle.x else 1
-        start = max(40.0, min(self.width - 40.0, puddle.x + side * 34 * s))
-        out = max(40.0, min(self.width - 40.0, puddle.x - side * 40 * s))
+        start = self.clamp_x(puddle.x + side * 34 * s)
+        out = self.clamp_x(puddle.x - side * 40 * s)
 
         def splash(drops, muddy=False):
             def go():

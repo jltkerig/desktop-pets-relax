@@ -285,7 +285,7 @@ class Fox(Thing):
             finished = step.elapsed >= step.seconds
         else:
             finished = self.anim.done
-        self.x = max(20.0, min(self.world.width - 20.0, self.x))
+        self.x = self.world.clamp_x(self.x, 20.0)
         if finished:
             if step.anim == "sleep":
                 self.asleep = False
@@ -355,7 +355,7 @@ class Fox(Thing):
     def choose(self):
         w, rng = self.world, self.rng
         if self.up_high:  # left up there (after being petted, say): hop back down first
-            self.plan.append(Step("hop", to_x=max(40.0, min(w.width - 40.0, self.x + self.facing * 40 * w.scale)),
+            self.plan.append(Step("hop", to_x=w.clamp_x(self.x + self.facing * 40 * w.scale),
                                   to_y=w.ground, leap=10))
             return
         if self.busy_with and (self.busy_with.gone or self.busy_with.asleep):

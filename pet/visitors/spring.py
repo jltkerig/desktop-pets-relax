@@ -51,7 +51,7 @@ class Flutterby(Visitor):
         if heads:
             near = [h for h in heads if abs(h[0] - self.x) < 600 * s] or heads
             return rng.choice(near), True
-        return (max(20.0, min(w.width - 20.0, self.x + rng.uniform(-200, 200) * s)),
+        return (w.clamp_x(self.x + rng.uniform(-200, 200) * s, 20.0),
                 w.ground - rng.uniform(40, 140) * s), False
 
     def update(self, dt):
@@ -192,7 +192,7 @@ class SongBird(Visitor):
                     self.state, self.timer = "peck", 0.0
                     self.anim.play(f"{self.species}_peck")
                 else:
-                    self.hop_to = max(30.0, min(w.width - 30.0, self.x + rng.uniform(-30, 30) * s))
+                    self.hop_to = w.clamp_x(self.x + rng.uniform(-30, 30) * s, 30.0)
                     self.state = "hop"
                     self.anim.play(f"{self.species}_hop")
         elif self.state in ("sing", "peck", "worm"):
@@ -223,7 +223,7 @@ class Bunny(Visitor):
 
     def __init__(self, world, spot, side, delay=0.0):
         super().__init__(world, -20.0 if side < 0 else world.width + 20.0, world.ground, "bunny_hop")
-        self.spot = max(30.0, min(world.width - 30.0, spot))
+        self.spot = world.clamp_x(spot, 30.0)
         self.delay = delay
         self.state = "arrive"  # arrive, graze, flee
         self.timer = 0.0
@@ -277,7 +277,7 @@ class Bunny(Visitor):
                 self.doing_for = rng.uniform(1, 3)
             else:
                 self.anim.play("bunny_hop")
-                self.hop_to = max(30.0, min(w.width - 30.0, self.x + rng.uniform(-30, 30) * w.scale))
+                self.hop_to = w.clamp_x(self.x + rng.uniform(-30, 30) * w.scale, 30.0)
 
 
 def bunnies(world):

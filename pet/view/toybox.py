@@ -1,100 +1,18 @@
-"""The tray icon's menu and the Toy Box window: foxes and items to put out, things to do, the season,
-size, weather, sky and mischief settings."""
+"""The tray icon's menu: the foxes, then things to do, the weather, visitors and mischief, and the settings
+(season, size, the sky) in their own submenus. The items to put out are in the Toy Box window
+(toybox_window.py), which opens when you click the tray icon."""
 from pathlib import Path
 
-from PySide6.QtCore import QProcess, Qt
+from PySide6.QtCore import QProcess
 from PySide6.QtGui import QAction, QActionGroup, QIcon
-from PySide6.QtWidgets import (QCheckBox, QGroupBox, QLabel, QMenu, QPushButton, QSystemTrayIcon, QTabWidget,
-                               QVBoxLayout, QWidget)
+from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
 from pet import __version__, save, seasons, sprites, updates
-
-
-class ToyBoxWindow(QWidget):
-    """A small window listing every fox and item with a checkbox: tick what you want on the desktop.
-    Opens when you click the fox icon in the tray."""
-
-    def __init__(self, toybox):
-        super().__init__(None, Qt.Tool | Qt.WindowStaysOnTopHint)
-        self.toybox = toybox
-        self.setWindowTitle(f"Toy Box - Pixel Fox {__version__}")
-        self.setWindowIcon(toybox.tray.icon())
-        self.layout_ = QVBoxLayout(self)
-        self.boxes = {}  # (kind, name) -> its checkboxes (an item out in two seasons is on both seasons' tabs)
-        foxes = QGroupBox("Foxes")
-        fox_layout = QVBoxLayout(foxes)
-        for palette, label in (("orange", "Orange fox"), ("grey", "Grey fox")):
-            box = QCheckBox(label)
-            box.toggled.connect(lambda on, p=palette: toybox._set_fox(p, on))
-            fox_layout.addWidget(box)
-            self.boxes[("fox", palette)] = [box]
-        self.layout_.addWidget(foxes)
-        # the items, on tabs: the ones out all year, then each season's
-        self.tabs = QTabWidget()
-        self.tabs.setUsesScrollButtons(False)  # wide enough to show every tab
-        self.tab_of = {}
-        for key, title in (("all", "All year"),) + tuple((s, s.title()) for s in seasons.SEASONS):
-            page = QWidget()
-            page_layout = QVBoxLayout(page)
-            names = [n for n, item in seasons.ITEMS.items()
-                     if (key == "all") == (len(item["seasons"]) == len(seasons.SEASONS))
-                     and (key == "all" or key in item["seasons"])]
-            for name in sorted(names, key=lambda n: seasons.ITEMS[n]["label"]):
-                box = QCheckBox(seasons.ITEMS[name]["label"])
-                box.toggled.connect(lambda on, n=name: toybox._set_item(n, on))
-                page_layout.addWidget(box)
-                self.boxes.setdefault(("item", name), []).append(box)
-            page_layout.addStretch(1)
-            self.tab_of[key] = self.tabs.addTab(page, title)
-        self.layout_.addWidget(self.tabs)
-        mischief = QGroupBox("Mischief")
-        mischief_layout = QVBoxLayout(mischief)
-        for key, label in (("discord", "Steal Discord messages (and put them back)"),
-                           ("treasure", "Dig up taskbar icons"),
-                           ("folders", "Move folders about on the desktop")):
-            box = QCheckBox(label)
-            box.toggled.connect(lambda on, k=key: toybox._set_mischief(k, on))
-            mischief_layout.addWidget(box)
-            self.boxes[("mischief", key)] = [box]
-        self.layout_.addWidget(mischief)
-        self.note = QLabel()
-        self.note.setWordWrap(True)
-        self.layout_.addWidget(self.note)
-        close = QPushButton("Close")
-        close.clicked.connect(self.hide)
-        self.layout_.addWidget(close)
-
-    def refresh(self):
-        """Show the current settings (without firing the checkboxes' handlers)."""
-        settings, season = self.toybox.settings, self.toybox.world.season
-        for (kind, name), boxes in self.boxes.items():
-            if kind == "fox":
-                on = bool(settings["foxes"].get(name))
-            elif kind == "mischief":
-                on = bool(settings.get("mischief", {}).get(name, True))
-            else:
-                on = bool(settings["items"].get(name, {}).get("out"))
-            for box in boxes:
-                box.blockSignals(True)
-                box.setChecked(on)
-                box.blockSignals(False)
-        for key, index in self.tab_of.items():
-            title = "All year" if key == "all" else key.title()
-            self.tabs.setTabText(index, f"{title} (now)" if key == season else title)
-        self.note.setText(f"It's {season} now. Things ticked on another season's tab come out when their season "
-                          f"does.")
-
-    def open(self):
-        self.refresh()
-        self.tabs.setCurrentIndex(self.tab_of[self.toybox.world.season])  # this season's things first
-        self.adjustSize()
-        self.show()
-        self.raise_()
-        self.activateWindow()
+from .toybox_window import MISCHIEF, ToyBoxWindow
 
 
 class ToyBox:
-    """The tray icon's menu: which foxes and items are out, the season, pause and quit."""
+    """The tray icon and its menu."""
 
     def __init__(self, app, desktop):
         self.app, self.desktop = app, desktop
@@ -115,72 +33,79 @@ class ToyBox:
             self.window.open()
 
     def build(self):
+        """The menu, made fresh each time it opens (so it only offers what makes sense right now)."""
         m = self.menu
         m.clear()
         newer = self.updates.available()
         title = m.addAction(f"Pixel Fox {__version__}" + (f"  (version {newer} is out)" if newer else ""))
         title.setEnabled(False)
-        m.addAction(f"Update to {newer} and restart" if newer else "Check for updates and restart", self._update)
-        m.addSeparator()
-        m.addAction("Open the toy box...", self.window.open)
+        m.addAction("Open the toy box (things to put out)...", self.window.open)
         m.addSection("Foxes")
         for palette, label in (("orange", "Orange fox"), ("grey", "Grey fox")):
             self._check(m, label, self.settings["foxes"].get(palette, False),
                         lambda on, p=palette: self._set_fox(p, on))
-        items = seasons.items_for(self.world.season)
-        all_year = [n for n in items if len(seasons.ITEMS[n]["seasons"]) == len(seasons.SEASONS)]
-        for title, names in (("All year", all_year),
-                             (f"This season ({self.world.season.title()})", [n for n in items if n not in all_year])):
-            m.addSection(title)
-            for name in sorted(names, key=lambda n: seasons.ITEMS[n]["label"]):
-                item = self.settings["items"].setdefault(name, {"out": False, "x": None})
-                self._check(m, seasons.ITEMS[name]["label"], item.get("out", False),
-                            lambda on, n=name: self._set_item(n, on))
-        m.addSection("Things to do")
-        if self.world.tree() is not None and self.world.season == "autumn":
-            m.addAction("Shake down an acorn", lambda: self.world.drop_acorn(self.world.tree()))
-        if self.world.season == "winter":
-            snow = m.addAction("Snow on the oak")
-            snow.setCheckable(True)
-            snow.setChecked(self.world.snowy)
-            snow.toggled.connect(self._set_snow)
-        if self.world.of("pumpkin"):
-            m.addAction("Plant new pumpkins", self._replant)
-        if self.world.decos_in_season():
-            m.addAction("Add a pumpkin (to decorate with)", lambda: self.world.add_deco())
-            m.addAction("Add a jack-o'-lantern", lambda: self.world.add_deco(jack=True))
-            if self.world.of("deco"):
-                m.addAction("Clear away the decorating pumpkins", self.world.clear_decos)
-        if self.world.of("corn"):
-            m.addAction("Plant new corn", self._replant_corn)
-        if self.world.of("melon"):
-            m.addAction("Plant new watermelons", self._replant_melons)
-        if self.world.of("crop"):
-            m.addAction("Replant the garden", self._replant_crops)
-        if self.world.taskbar_spots:
-            m.addAction("Dig up a taskbar treasure", self._dig)
-        if self.world.folder_spots and self.world.mischief("folders"):
-            m.addAction("Move a desktop folder", self._move_a_folder)
-        if self.settings.get("folder_homes"):
-            m.addAction("Put the desktop folders back", self.desktop.put_folders_back)
-        m.addAction("Zoomies!", self._zoomies)
-        m.addAction("Make it blustery", lambda: self.world.blustery())
-        m.addAction("Make it rain", lambda: self.world.make_it("rain"))
-        m.addAction("Make it snow", lambda: self.world.make_it("snow"))
-        m.addAction("Steal a Discord message", self._steal_discord)
+        m.addSeparator()
+        self._things_to_do(m.addMenu("Things to do"))
+        self._weather_menu(m.addMenu("Weather"))
         visit = m.addMenu("Invite a visitor")
         for kind in seasons.VISITORS.get(self.world.season, ()) + ("owl",):
-            label = {"jay": "Blue jay", "woolly": "Woolly bear caterpillar", "migrants": "Geese flying south",
-                     "geese": "Geese stopping by to honk", "squirrel": "Squirrel",
-                     "turkeys": "Wild turkeys", "crows": "Crows", "junebug": "June beetle",
-                     "ladybug": "Ladybug", "cicada": "Cicada", "butterflies": "Butterflies",
-                     "songbirds": "Songbirds", "owl": "Owl (it usually comes at night)",
-                     "winterbirds": "Cardinals and chickadees", "bunnies": "Baby bunnies",
-                     "frog": "A frog (by the water)"}.get(kind, kind.title())
-            visit.addAction(label, lambda k=kind: self.world.invite_visitor(k))
-
+            visit.addAction(seasons.VISITOR_LABELS.get(kind, kind.title()),
+                            lambda k=kind: self.world.invite_visitor(k))
+        self._mischief_menu(m.addMenu("Mischief"))
+        self._settings_menu(m.addMenu("Settings"))
         m.addSeparator()
-        season_menu = m.addMenu("Season")
+        self._check(m, "Pause", self.world.paused, self._set_paused)
+        m.addAction(f"Update to {newer} and restart" if newer else "Check for updates and restart", self._update)
+        m.addAction("Quit", self.quit)
+
+    def _things_to_do(self, menu):
+        """Zoomies, and the garden and seasonal jobs that fit what's out right now."""
+        w = self.world
+        menu.addAction("Zoomies!", self._zoomies)
+        if w.tree() is not None and w.season == "autumn":
+            menu.addAction("Shake down an acorn", lambda: w.drop_acorn(w.tree()))
+        if w.decos_in_season():
+            menu.addAction("Add a pumpkin (to decorate with)", lambda: w.add_deco())
+            menu.addAction("Add a jack-o'-lantern", lambda: w.add_deco(jack=True))
+            if w.of("deco"):
+                menu.addAction("Clear away the decorating pumpkins", w.clear_decos)
+        garden = [(kind, label, action) for kind, label, action in (
+            ("pumpkin", "Plant new pumpkins", self._replant), ("corn", "Plant new corn", self._replant_corn),
+            ("melon", "Plant new watermelons", self._replant_melons), ("crop", "Replant the garden", self._replant_crops))
+            if w.of(kind)]
+        if garden:
+            menu.addSection("Garden")
+            for _, label, action in garden:
+                menu.addAction(label, action)
+
+    def _weather_menu(self, menu):
+        w = self.world
+        menu.addAction("Make it rain", lambda: w.make_it("rain"))
+        menu.addAction("Make it snow", lambda: w.make_it("snow"))
+        menu.addAction("Make it blustery", lambda: w.blustery())
+        menu.addSeparator()
+        self._check(menu, self._weather_label(), self.settings.get("weather", True), self._set_weather)
+        if w.season == "winter":
+            self._check(menu, "Snow on the oak", w.snowy, self._set_snow)
+
+    def _mischief_menu(self, menu):
+        """Mischief to start now, then what the foxes are allowed to get up to by themselves."""
+        w = self.world
+        if w.mischief("discord"):
+            menu.addAction("Steal a Discord message", self._steal_discord)
+        if w.taskbar_spots and w.mischief("treasure"):
+            menu.addAction("Dig up a taskbar treasure", self._dig)
+        if w.folder_spots and w.mischief("folders"):
+            menu.addAction("Move a desktop folder", self._move_a_folder)
+        if self.settings.get("folder_homes"):
+            menu.addAction("Put the desktop folders back", self.desktop.put_folders_back)
+        menu.addSection("Allowed")
+        for key, label in MISCHIEF:
+            self._check(menu, label, bool(self.settings.get("mischief", {}).get(key, True)),
+                        lambda on, k=key: self._set_mischief(k, on))
+
+    def _settings_menu(self, menu):
+        season_menu = menu.addMenu("Season")
         group = QActionGroup(season_menu)
         current = self.settings.get("season", "auto")
         auto_label = f"Automatic (now {seasons.season_for(self.world.now().date()).title()})"
@@ -190,19 +115,15 @@ class ToyBox:
             action.setCheckable(True)
             action.setChecked(current == key)
             group.addAction(action)
-        self._check(m, self._weather_label(), self.settings.get("weather", True), self._set_weather)
-        self._check(m, "Sun and moon clock in the sky (sun 6 AM-6 PM, moon 6 PM-6 AM)",
-                    self.settings.get("sky", True), self._set_sky)
-        size_menu = m.addMenu("Size")
+        size_menu = menu.addMenu("Size")
         sizes = QActionGroup(size_menu)
         for value in (1, 2, 3):
             action = size_menu.addAction(f"{value}x", lambda v=value: self._set_scale(v))
             action.setCheckable(True)
             action.setChecked(self.world.scale == value)
             sizes.addAction(action)
-        self._check(m, "Pause", self.world.paused, self._set_paused)
-        m.addSeparator()
-        m.addAction("Quit", self.quit)
+        self._check(menu, "Sun and moon clock in the sky (sun 6 AM-6 PM, moon 6 PM-6 AM)",
+                    self.settings.get("sky", True), self._set_sky)
 
     def _check(self, menu, label, checked, on_toggle):
         action = QAction(label, menu)
@@ -224,13 +145,20 @@ class ToyBox:
         save.store(self.settings)
         if key == "discord" and not on:
             self.world.discord_spot = None
+        if self.window.isVisible():
+            self.window.refresh()
 
     def _set_fox(self, palette, on):
         self.settings["foxes"][palette] = on
         self._changed()
 
     def _set_item(self, name, on):
-        self.settings["items"].setdefault(name, {"out": on, "x": None})["out"] = on
+        self._set_items([name], on)
+
+    def _set_items(self, names, on):
+        """Put these items out (or take them in), all at once."""
+        for name in names:
+            self.settings["items"].setdefault(name, {"out": on, "x": None})["out"] = on
         self._changed()
 
     def _steal_discord(self):

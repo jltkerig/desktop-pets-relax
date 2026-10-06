@@ -3,6 +3,16 @@
 Every change to Pixel Fox gets a new version here, newest first. The version is also in
 `pet/__init__.py` (`__version__`) and shows in the tray icon's tooltip. See `CLAUDE.md`.
 
+## 1.20.1
+
+The winter oak is prettier too.
+
+- The ends of its branches are a fine lacework of thin twigs, instead of stubby forks.
+- Its limbs are rounded and lit from the top left.
+- The trunk flows smoothly into its fork, without the flat seam.
+- On snowy days, snow sits in clean caps along the tops of the branches with a dusting on the twigs, and none
+  on the sides of the trunk.
+
 ## 1.20.0
 
 More beautiful trees.

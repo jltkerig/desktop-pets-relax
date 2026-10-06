@@ -224,33 +224,45 @@ BARE_SEGMENTS, BARE_TIPS, BARE_PERCHES = bare_oak_shape()
 
 
 def oak_bare(sway=0.0, seed=7, snow=False):
-    """220 x 232: the oak without its leaves: a winter tree of bare, branching limbs and twigs. snow: snow
-    lying along the branches and in a drift round the roots."""
+    """220 x 232: the oak without its leaves: a winter tree of bare, branching limbs, and a fine lacework of
+    thin twigs at their ends (drawn without an outline, so they stay delicate). snow: snow lying in caps along
+    the tops of the branches, a dusting on the twigs, and a drift round the roots."""
     c = Canvas(OAK_W, OAK_H)
+    fine = Canvas(OAK_W, OAK_H)  # the thin twigs: no outline
     rng = random.Random(seed)
-    _oak_trunk(c, rng, sway, top=132, branches=False)
+    _oak_trunk(c, rng, sway, top=146, branches=False)  # (the fork's limbs make the crotch)
 
     def lean(y):
         return sway * max(0.0, (140 - y) / 140) * 1.6  # higher up sways more
 
-    for x1, y1, x2, y2, w1, w2 in BARE_FORK:  # the trunk forks into a thick V
-        _limb(c, x1 + lean(y1), y1, x2 + lean(y2), y2, w1, w2)
-
+    for x1, y1, x2, y2, w1, w2 in BARE_FORK:  # the trunk forks into a thick V (flaring out of the trunk)
+        bx = OAK_X + (x1 - OAK_X) * 0.5  # (its foot stays inside the trunk, so no ledge shows)
+        _limb(c, bx + lean(y1 + 16), y1 + 16, x2 + lean(y2), y2, w1 + 2, w2)
     for x1, y1, x2, y2, width in BARE_SEGMENTS:
-        if width >= 2:
-            _branch(c, x1 + lean(y1), y1, x2 + lean(y2), y2, width)
+        if width >= 2:  # (rounded and lit from the top left, whichever way it points)
+            c.capsule(x1 + lean(y1), y1, x2 + lean(y2), y2, width / 2 + 0.2, max(0.7, (width - 1) / 2 + 0.2), "bark")
         else:
-            _twig(c, x1 + lean(y1), y1, x2 + lean(y2), y2)
-    tips = [(x + lean(y), y) for x, y in BARE_TIPS]
+            _twig(fine, x1 + lean(y1), y1, x2 + lean(y2), y2, "bark", 1)
+    trng = random.Random(seed + 9)
+    for x, y in BARE_TIPS:  # each twig ends in a few finer twiglets, reaching out and up
+        for _ in range(2):
+            a = trng.uniform(0.4, 2.7)
+            length = trng.uniform(2.5, 5)
+            _twig(fine, x + lean(y), y, x + lean(y) + math.cos(a) * length, y - math.sin(a) * length, "bark",
+                  trng.choice((1, 2)))
     if snow:
-        # snow lying along the tops of the branches
-        for y in range(1, 228):
+        # snow in caps along the tops of the branches: two pixels deep on the thick ones
+        for x in range(OAK_W):
+            for y in range(2, 150):  # (not the trunk's sides)
+                if c.mat[y][x] == "bark" and c.mat[y - 1][x] is None:
+                    thick = all(c.mat[min(OAK_H - 1, y + k)][x] == "bark" for k in (1, 2, 3))
+                    _px(c, x, y - 1, "snow", 3 if thick else 2)
+                    if thick and c.mat[y - 2][x] is None and (x + y) % 5:
+                        _px(c, x, y - 2, "snow", 3)
+        for y in range(2, 200):  # and a dusting on the thin twigs
             for x in range(OAK_W):
-                if c.mat[y][x] == "bark" and c.mat[y - 1][x] is None and (y < 200 or rng.random() < 0.15):
-                    if rng.random() < 0.8:
-                        _px(c, x, y - 1, "snow", 3 if rng.random() < 0.5 else 2)
-                        if rng.random() < 0.35 and y > 2 and c.mat[y - 2][x] is None:
-                            _px(c, x, y - 2, "snow", 3)
+                if fine.mat[y][x] and fine.mat[y - 1][x] is None and c.mat[y - 1][x] is None and rng.random() < 0.55:
+                    _px(fine, x, y - 1, "snow", 3)
         # a deep, lumpy drift round the roots
         for x in range(OAK_W):
             d = abs(x - OAK_X) / 100
@@ -259,7 +271,9 @@ def oak_bare(sway=0.0, seed=7, snow=False):
             depth = int(round((1 - d * d) ** 0.7 * 9 + math.sin(x * 0.21) * 1.2 + math.sin(x * 0.07 + 1) * 1.0 + 1))
             for k in range(depth):
                 _px(c, x, OAK_GROUND - k, "snow", 3 if k == depth - 1 else 2 if k > depth - 3 else 1)
-    return c.to_image()
+    image = fine.to_image(outline=False)
+    image.alpha_composite(c.to_image())
+    return image
 
 
 def _spring_flowers(c, seed, sway):
